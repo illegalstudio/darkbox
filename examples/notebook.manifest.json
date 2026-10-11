@@ -1,0 +1,46 @@
+{
+  "darkbox": {
+    "id": "darkbox",
+    "version": "1.0.0"
+  },
+  "application": {
+    "id": "org.example.notebook",
+    "formatVersion": "3",
+    "profilePath": "docs/profile.md"
+  },
+  "folders": [
+    {
+      "path": "docs",
+      "description": "Application data-format documentation."
+    },
+    {
+      "path": "data",
+      "description": "Project database, including text and embedded attachment bytes."
+    }
+  ],
+  "databases": [
+    {
+      "path": "data/project.sqlite",
+      "description": "Notebook metadata, documents, attachments and a derived search index.",
+      "userVersion": 12,
+      "tables": [
+        {
+          "name": "project",
+          "description": "Project identity and title."
+        },
+        {
+          "name": "documents",
+          "description": "Ordered text documents with stable identifiers."
+        },
+        {
+          "name": "attachments",
+          "description": "Embedded binary resources with their original names and media types."
+        },
+        {
+          "name": "document_search",
+          "description": "Derived FTS5 virtual table for document search; SQLite shadow tables are excluded from this inventory."
+        }
+      ]
+    }
+  ]
+}

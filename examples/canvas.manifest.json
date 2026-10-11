@@ -1,0 +1,71 @@
+{
+  "darkbox": {
+    "id": "darkbox",
+    "version": "1.0.0"
+  },
+  "application": {
+    "id": "org.example.canvas",
+    "formatVersion": "7",
+    "profilePath": "docs/profile.md"
+  },
+  "creator": {
+    "id": "org.example.packager",
+    "version": "2.5.0",
+    "createdAt": "2026-10-11T12:00:00Z"
+  },
+  "folders": [
+    {
+      "path": "docs",
+      "description": "Application data-format documentation."
+    },
+    {
+      "path": "data",
+      "description": "Current project and revision-history databases."
+    },
+    {
+      "path": "media",
+      "description": "Resource files referenced by the project and retained revisions."
+    },
+    {
+      "path": "media/images",
+      "description": "Original image bytes stored under stable technical filenames."
+    }
+  ],
+  "databases": [
+    {
+      "path": "data/project.sqlite",
+      "description": "Current canvas state and resource-path mapping.",
+      "userVersion": 4,
+      "tables": [
+        {
+          "name": "project",
+          "description": "One JSON document with project identity, viewport and ordered canvas items."
+        },
+        {
+          "name": "resources",
+          "description": "Stable resource identifiers mapped to archive-relative image paths and media types."
+        }
+      ]
+    },
+    {
+      "path": "data/history.sqlite",
+      "description": "Immutable revisions of the canvas document.",
+      "userVersion": 2,
+      "tables": [
+        {
+          "name": "revisions",
+          "description": "Revision identifiers, timestamps and saved JSON documents."
+        }
+      ]
+    }
+  ],
+  "extensions": {
+    "org.example.presentation": {
+      "version": "1",
+      "required": false,
+      "data": {
+        "accentColor": "#335577"
+      }
+    }
+  }
+}
