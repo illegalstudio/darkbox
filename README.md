@@ -9,7 +9,7 @@
 <h1 align="center">Darkbox</h1>
 
 <p align="center">
-  <em>Your work should outlive its software.</em>
+  <em>The post-apocalyptic file format.</em>
 </p>
 
 <p align="center">
