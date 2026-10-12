@@ -18,6 +18,44 @@ import release
 import release_assets
 
 
+class ReleaseDiscovery(unittest.TestCase):
+    def test_tag_lookup_finds_public_releases_without_listing(self):
+        public = {"id": 1, "draft": False, "tag_name": "v1.0.0"}
+        response = subprocess.CompletedProcess([], 0, json.dumps(public), "")
+        with patch.object(publish_release.subprocess, "run", return_value=response), \
+                patch.object(publish_release, "gh") as github:
+            self.assertEqual(publish_release.existing_release("v1.0.0"), public)
+        github.assert_not_called()
+
+    def test_tag_endpoint_404_finds_draft_on_a_later_page(self):
+        draft = {"id": 2, "draft": True, "tag_name": "v1.0.0", "assets": []}
+        response = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)")
+        pages = [[{"id": 1, "tag_name": "v2.0.0"}], [draft]]
+        with patch.object(publish_release.subprocess, "run", return_value=response), \
+                patch.object(publish_release, "gh", return_value=json.dumps(pages)) as github:
+            self.assertEqual(publish_release.existing_release("v1.0.0"), draft)
+        github.assert_called_once_with("api", "repos/illegalstudio/darkbox/releases?per_page=100",
+                                      "--paginate", "--slurp")
+
+    def test_missing_release_requires_an_authenticated_listing(self):
+        response = subprocess.CompletedProcess([], 1, "", "gh: Not Found (HTTP 404)")
+        with patch.object(publish_release.subprocess, "run", return_value=response), \
+                patch.object(publish_release, "gh", return_value="[[]]"):
+            self.assertIsNone(publish_release.existing_release("v1.0.0"))
+        with patch.object(publish_release.subprocess, "run", return_value=response), \
+                patch.object(publish_release, "gh", side_effect=subprocess.CalledProcessError(1, ["gh"])):
+            with self.assertRaises(subprocess.CalledProcessError):
+                publish_release.existing_release("v1.0.0")
+
+    def test_query_errors_do_not_masquerade_as_missing_releases(self):
+        response = subprocess.CompletedProcess([], 1, "", "gh: Forbidden (HTTP 403)")
+        with patch.object(publish_release.subprocess, "run", return_value=response), \
+                patch.object(publish_release, "gh") as github:
+            with self.assertRaisesRegex(ValueError, "Cannot query"):
+                publish_release.existing_release("v1.0.0")
+        github.assert_not_called()
+
+
 class VersionPolicy(unittest.TestCase):
     def test_first_version_and_next_patch_are_proposed(self):
         self.assertEqual(release.propose("1.0.0", None), "1.0.0")

@@ -23,7 +23,14 @@ def existing_release(tag):
                             capture_output=True, text=True)
     if result.returncode:
         if "(HTTP 404)" in result.stderr:
-            return None
+            # The tag endpoint only finds published releases. Authenticated
+            # release listings also include drafts, including partial uploads.
+            pages = json.loads(gh("api", "repos/illegalstudio/darkbox/releases?per_page=100",
+                                  "--paginate", "--slurp"))
+            matches = [release for page in pages for release in page if release["tag_name"] == tag]
+            if len(matches) > 1:
+                raise ValueError("Multiple releases use this tag; review them manually")
+            return matches[0] if matches else None
         raise ValueError(f"Cannot query the release: {result.stderr.strip()}")
     return json.loads(result.stdout)
 
