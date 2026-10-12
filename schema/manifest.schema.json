@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:darkbox:manifest-schema:1.0.0",
   "title": "Darkbox 1.0.0 manifest",
-  "description": "Structural validation only. Archive, path identity, SQLite and application profile checks are additional requirements.",
+  "description": "Structural validation only. Archive, canonical documentation bytes, path identity, SQLite and application profile checks are additional requirements.",
   "type": "object",
   "required": ["darkbox", "application", "folders", "databases"],
   "additionalProperties": false,
@@ -27,16 +27,40 @@
           "type": "string",
           "$ref": "#/$defs/path",
           "pattern": "/[^/]+\\.md$",
+          "not": { "pattern": "^(?:extensions|docs/sqlite)(?:/|$)" },
           "description": "Archive-relative path to the required application data-format documentation.",
-          "$comment": "Also check declared parent folders, separation from databases and metadata, and exclusion from extensions/."
+          "$comment": "Also check declared parent folders and separation from databases and canonical metadata."
         }
       }
     },
     "folders": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 3,
       "uniqueItems": true,
-      "items": { "$ref": "#/$defs/folder" }
+      "items": { "$ref": "#/$defs/folder" },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["path"],
+            "properties": { "path": { "const": "docs" } }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["path"],
+            "properties": { "path": { "const": "docs/sqlite" } }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["path"],
+            "properties": { "path": { "const": "docs/sqlite/images" } }
+          }
+        }
+      ]
     },
     "databases": {
       "type": "array",
@@ -107,7 +131,11 @@
       "required": ["path", "description", "tables"],
       "additionalProperties": false,
       "properties": {
-        "path": { "$ref": "#/$defs/path" },
+        "path": {
+          "type": "string",
+          "$ref": "#/$defs/path",
+          "not": { "pattern": "^docs/sqlite(?:/|$)" }
+        },
         "description": { "$ref": "#/$defs/description" },
         "userVersion": {
           "type": "integer",

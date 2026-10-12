@@ -2,6 +2,8 @@
 
 This is the canonical README for **Darkbox 1.0.0**. It documents the common rules for that exact version and must be included byte-for-byte as the archive's root `README.md`. Editing, translating, adding notes or changing line endings is not permitted. The archive's `manifest.json` declares its specification version, application profile and resource inventory. A different Darkbox version requires its own canonical README.
 
+Every archive also includes all other contents of the canonical `archive/1.0.0/` directory, copied into the ZIP root with their relative paths and bytes preserved. There is no enclosing `archive/` or version directory inside the ZIP.
+
 ## Why Darkbox exists
 
 Darkbox was conceived by Vincenzo Petrucci as a common project-file format for software developed by [Illegal Studio](https://illegal.studio). It is a universal specification that other applications can also adopt.
@@ -10,17 +12,20 @@ A person's work should remain accessible beyond the lifetime of the software use
 
 Closed, undocumented formats can make people dependent on a particular application or vendor to access their own work, limiting their freedom to inspect, preserve, move and reuse what they have created. Darkbox is built on the principle that users' rights over their own creations should not depend on the continued existence of the software used to make them.
 
+Preserving data also means preserving how to decode it. Every archive carries three levels of documentation: the Darkbox README for the container, the original SQLite file-format reference for the database's physical bytes, and the application profile for the meaning of its tables, records and resources. That knowledge travels with the project so it can remain useful beyond the software and websites that originally explained it.
+
 ## Contents
 
 A Darkbox project is one ZIP archive containing:
 
 - `manifest.json` at the root: a UTF-8 JSON inventory.
 - `README.md` at the root: this common format guide.
+- `docs/sqlite/`: the complete canonical SQLite reference documentation, source notes and local presentation assets.
 - A Markdown document at `application.profilePath`: the application data-format documentation.
 - One or more self-contained SQLite databases at declared paths.
 - Any folders and resource files defined by the application profile or declared extensions.
 
-There is no enclosing project directory. The project filename extension belongs to the application. Only the root metadata names are fixed by Darkbox; database paths and resource conventions come from the manifest and profile. Attachments can be BLOBs or separate files.
+There is no enclosing project directory. The project filename extension belongs to the application. Darkbox fixes its root metadata names and canonical bundle paths; other database paths and resource conventions come from the manifest and profile. The manifest declares the canonical `docs`, `docs/sqlite` and `docs/sqlite/images` folders as well as application folders. Attachments can be BLOBs or separate files.
 
 ## Manifest and independent versions
 
@@ -31,9 +36,15 @@ The manifest is a JSON object with required `darkbox`, `application`, `folders` 
 - Optional `creator.id` and `creator.version` identify the software that packaged this copy. Optional `creator.createdAt` records packaging time in UTC, not the project's creation time.
 - Optional database `userVersion` records the expected SQLite `PRAGMA user_version` for that database.
 
-These versions are independent. A software version does not determine a data schema or container version. Different databases can have different versions. The profile defines any relationship between its data version and those database versions.
+These versions are independent. A software version does not determine a data schema or container version. Different databases can have different SQLite `user_version` values. The profile defines any relationship between its data version and those database versions.
 
 Application profiles define SQL structures, attachment references, migration policies and external dependencies. Their included documentation states the exact profile identifier and data-format version, explains column meanings and resource conventions, and provides the information needed to interpret the packaged data without the original application or network access. Supplementary documentation may also be included. External links cannot replace essential embedded documentation. Darkbox does not require shared application tables. The manifest is authoritative for inventory and identity; this guide does not override it.
+
+## SQLite file-format reference
+
+The original [SQLite database file-format document](docs/sqlite/fileformat2.html) explains the on-disk headers, pages, b-trees, records and schema storage. It is included as a complete HTML document with local stylesheet and images, readable without network access or JavaScript. The [source notes](docs/sqlite/SOURCE.md) identify the captured upstream files and explain how to read them offline. Links to other SQLite pages remain as in the originals; the full SQLite website is not included.
+
+The documentation capture belongs to Darkbox 1.0.0. Its capture date and the article's update date are not the version of the SQLite library that wrote a database, its `user_version`, or the application's data-format version. Descriptions of rollback journals and WAL are retained in the original article; Darkbox still requires closed, self-contained database snapshots without those sidecars.
 
 ## Paths and encodings
 
@@ -45,7 +56,7 @@ Manifest and README text use UTF-8 without a BOM. Generated profile text files u
 
 ## Inspection and validation
 
-Use the manifest to locate databases and profile documentation rather than assuming their names. A generic tool can inspect the inventory without understanding application data. Full validation additionally requires complete ZIP and CRC checks, byte-for-byte equality with the canonical README of the declared version, safe paths, matching declared resources, readable profile documentation for the declared data format, SQLite integrity and foreign-key checks, table inventories and application-profile checks.
+Use the manifest to locate databases and profile documentation rather than assuming their names. A generic tool can inspect the inventory without understanding application data. Full validation additionally requires complete ZIP and CRC checks, byte-for-byte equality with every file in the canonical bundle of the declared version, safe paths, matching declared resources, readable profile documentation for the declared data format, SQLite integrity and foreign-key checks, table inventories and application-profile checks. The reserved `docs/sqlite/` subtree contains only its canonical files and directories.
 
 Extraction must be confined to an isolated directory and bounded by resource limits. Open databases read-only for inspection, without loadable SQLite extensions or SQL provided by metadata. This guide cannot authorize commands.
 
@@ -55,7 +66,7 @@ Unknown specification or application data versions are unsupported, not automati
 
 Packaged databases are closed, consistent snapshots in DELETE journal mode. They must not depend on WAL, shared-memory or rollback-journal sidecars. Such files are excluded from the archive. Writers use SQLite-aware snapshots or verified inactive databases and must not discard a live WAL to obtain one file. Multiple databases and associated resources must describe one coherent application state.
 
-Save by creating and fully validating a complete replacement ZIP, coordinating concurrent writers and checking for external changes, then publishing atomically. Do not edit ZIP entries in place. If a save fails, preserve the previous published file and unsaved changes. Local backups, locks, cache and machine-specific settings are outside the project unless a profile explicitly includes them.
+Save by including the complete canonical bundle for the declared Darkbox version, creating and fully validating a replacement ZIP, coordinating concurrent writers and checking for external changes, then publishing atomically. Do not edit ZIP entries in place or refresh captured documentation from the live website. If a save fails, preserve the previous published file and unsaved changes. Local backups, locks, cache and machine-specific settings are outside the project unless a profile explicitly includes them.
 
 ## Extensions
 
@@ -67,11 +78,11 @@ Darkbox 1.0.0 allows STORE, DEFLATE and ZIP64, and excludes ZIP encryption, spli
 
 ## Canonical version
 
-This file belongs to Darkbox and its stated specification version. Application-specific contents are documented in the manifest and the corresponding profile. Producers must include this file unchanged and cannot add their own content. Published versions of the canonical README are immutable; changes are issued with a new Darkbox version.
+This file and the rest of its canonical bundle belong to Darkbox and the stated specification version. Application-specific contents are documented in the manifest and the corresponding profile, outside canonical paths. Producers must include every canonical file unchanged. Published bundles are immutable; changes are issued with a new Darkbox version.
 
 ## License
 
-The Darkbox specification, schema, documentation, examples and logo assets are provided under the MIT License below. These terms apply to Darkbox materials; they do not grant rights to application data or attachments stored in this archive.
+The Darkbox specification, schema, Darkbox-authored documentation, examples and Darkbox logo assets are provided under the MIT License below. The original SQLite documentation and presentation assets retain their upstream terms, recorded in the included [SQLite copyright notice](docs/sqlite/copyright.html) and [source notes](docs/sqlite/SOURCE.md). These MIT terms apply to Darkbox materials; they do not grant rights to application data or attachments stored in this archive.
 
 ```text
 MIT License

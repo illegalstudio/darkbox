@@ -41,19 +41,24 @@ A person's work should remain accessible beyond the lifetime of the software use
 
 Closed, undocumented formats can make people dependent on a particular application or vendor to access their own work, limiting their freedom to inspect, preserve, move and reuse what they have created. Darkbox is built on the principle that users' rights over their own creations should not depend on the continued existence of the software used to make them.
 
+Preserving data also means preserving how to decode it. Every archive carries three levels of documentation: the Darkbox README for the container, the original SQLite file-format reference for the database's physical bytes, and the application profile for the meaning of its tables, records and resources. That knowledge travels with the project so it can remain useful beyond the software and websites that originally explained it.
+
 ## Documents
 
 - [Specification](docs/specification.md)
 - [Canonical Darkbox 1.0.0 README](archive/1.0.0/README.md), copied byte-for-byte to the archive root as `README.md`
+- [Original SQLite file-format reference](archive/1.0.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.0.0/docs/sqlite/SOURCE.md)
 - [Manifest JSON Schema](schema/manifest.schema.json), using JSON Schema Draft 2020-12
 - [Example manifests](examples/README.md) for two fictional application profiles
 - [Application profile guidance](docs/profiles.md)
 
 ## Versioned archive documentation
 
-Canonical archive READMEs are stored under `archive/<darkbox.version>/README.md`. For version `1.0.0`, download or copy [archive/1.0.0/README.md](archive/1.0.0/README.md) and include those exact bytes at the ZIP root. Select the directory matching the declared version, rather than automatically using the newest README.
+The entire `archive/<darkbox.version>/` directory is the canonical documentation bundle for that version. Copy all its contents into the ZIP root, preserving every relative path and file's bytes. Do not add an enclosing `archive/` or version directory inside the ZIP. Then add the manifest, application profile documentation, databases and resources at their declared paths.
 
-Published version directories are retained unchanged. Each release provides the matching specification and manifest schema together with its canonical README. Repository text files use LF, enforced by `.gitattributes`, so checkout line-ending conversion cannot alter the canonical file.
+For version `1.0.0`, the [bundle](archive/1.0.0/) contains the canonical README and the captured SQLite documentation under `docs/sqlite/`, including its local presentation assets and upstream public-domain notice. Select the directory matching the declared version, rather than automatically using the newest bundle or fetching current SQLite pages while saving a project.
+
+Published version directories are retained unchanged. Each release provides the matching specification and manifest schema together with its complete canonical bundle. Darkbox-authored text uses LF; `.gitattributes` protects both its line endings and the exact captured upstream bytes from checkout conversion.
 
 ## Minimal archive
 
@@ -62,15 +67,16 @@ example.project
 ├── manifest.json
 ├── README.md
 ├── docs/
-│   └── profile.md
+│   ├── profile.md
+│   └── sqlite/           # complete canonical SQLite reference bundle
 └── data/
     └── project.sqlite
 ```
 
-Only the root metadata names are fixed by Darkbox. Database and folder paths are declared in the manifest. Required `application.profilePath` locates the included application data-format documentation; `docs/profile.md` is a recommended path. Attachments may remain database BLOBs or become separate files, as defined by a profile.
+Darkbox fixes its root metadata names and canonical bundle paths. Other database and folder paths are declared in the manifest. Required `application.profilePath` locates the included application data-format documentation; `docs/profile.md` is a recommended path. Attachments may remain database BLOBs or become separate files, as defined by a profile.
 
 The specification version, application data-format version and optional creator-software version are independent. This version of the specification is identified by `darkbox.version = "1.0.0"`. Application profiles define their own data-format versions.
 
 ## License
 
-The specification, schema, documentation, examples and logo assets are licensed under the [MIT License](LICENSE). The license covers Darkbox materials; it does not change ownership or licensing of project data packaged by applications. The canonical archive README includes the full license notice so it travels with distributed files. Permission to modify these materials does not alter Darkbox conformance requirements, including the exact canonical README.
+The specification, schema, Darkbox-authored documentation, examples and Darkbox logo assets are licensed under the [MIT License](LICENSE). The original SQLite materials retain their upstream terms, recorded in the included [SQLite copyright notice](archive/1.0.0/docs/sqlite/copyright.html) and [source notes](archive/1.0.0/docs/sqlite/SOURCE.md). The license does not change ownership or licensing of project data packaged by applications. The canonical README includes the full MIT notice so it travels with distributed files. Permission to modify Darkbox materials does not alter conformance requirements, including the exact canonical bundle.

@@ -17,7 +17,7 @@ An embedded profile document must state its application identifier and data-form
 
 The information needed to interpret packaged data must be available inside the archive without its original application or network access. Additional embedded documents can supplement the main profile document; external links cannot replace essential documentation. A table description in the manifest is an inventory entry, not a complete data-format definition.
 
-Profile documentation is Markdown encoded as UTF-8 without a BOM; writers use LF. `docs/profile.md` is the recommended archive path, with `docs` declared in `folders`. Other valid paths are allowed inside declared folders, outside extension namespaces. The document is separate from the unchanged, version-specific Darkbox README.
+Profile documentation is Markdown encoded as UTF-8 without a BOM; writers use LF. `docs/profile.md` is the recommended archive path, with `docs` declared in `folders`. Other valid paths are allowed inside declared folders, outside extension namespaces and the reserved `docs/sqlite/` subtree. The document is separate from the unchanged, version-specific Darkbox documentation bundle. Every archive includes all contents of `archive/<darkbox.version>/` in its ZIP root, including the original SQLite binary-format reference; the application profile explains the meaning of the data stored using that format.
 
 A version-specific validator should be accessible without running the application. Documentation does not authorize automatic execution of SQL or migrations. If a profile uses several databases or file attachments, it must specify a coherent snapshot across them. SQLite foreign-key checks on each database do not validate cross-database references.
 
@@ -25,7 +25,7 @@ A version-specific validator should be accessible without running the applicatio
 
 These profiles are fictional examples, not reconstructions of existing application formats. Their schemas, resource conventions and versions are not common Darkbox requirements.
 
-| Profile | Data-format version | SQLite versions | Resource model |
+| Profile | Data-format version | SQLite `user_version` | Resource model |
 | --- | --- | --- | --- |
 | [Notebook](../examples/profiles/notebook.md) | `"3"` | `12` | One database with embedded attachment BLOBs and an FTS5 index |
 | [Canvas](../examples/profiles/canvas.md) | `"7"` | Main `4`, history `2` | Two databases and image files with explicit resource mappings |

@@ -11,7 +11,15 @@
   "folders": [
     {
       "path": "docs",
-      "description": "Application data-format documentation."
+      "description": "Darkbox references and application data-format documentation."
+    },
+    {
+      "path": "docs/sqlite",
+      "description": "Canonical original SQLite file-format reference, upstream notice and capture provenance."
+    },
+    {
+      "path": "docs/sqlite/images",
+      "description": "Original local presentation assets for the included SQLite reference pages."
     },
     {
       "path": "data",

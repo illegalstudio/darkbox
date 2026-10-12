@@ -4,3 +4,6 @@
 LICENSE text eol=lf
 .gitattributes text eol=lf
 *.png binary
+*.gif binary
+# Preserve captured upstream documentation byte-for-byte.
+archive/*/docs/sqlite/** -text

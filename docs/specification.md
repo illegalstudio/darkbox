@@ -1,6 +1,6 @@
 # Darkbox 1.0.0
 
-Specification identifier: `darkbox`. Date: 2026-10-11.
+Specification identifier: `darkbox`. Date: 2026-10-12.
 
 **MUST**, **MUST NOT**, **SHOULD** and **MAY** indicate a requirement, prohibition, recommendation and option within this specification.
 
@@ -18,7 +18,7 @@ Darkbox defines a universal project container and its metadata. An application p
 | `creator.id`, `creator.version` | Optional software that packaged this copy | `org.example.packager`, `"2.5.0"` |
 | `databases[].userVersion` | Optional expected SQLite `PRAGMA user_version` of that database | `3` |
 
-Versions from different domains MUST NOT be compared. `application.formatVersion` is interpreted only by its profile; it need not use SemVer. Multiple databases can have different SQLite versions. A profile can explicitly map its data version to a database version, but Darkbox does not infer that mapping. Creator software is provenance, not a compatibility requirement or proof of application support.
+Versions from different domains MUST NOT be compared. `application.formatVersion` is interpreted only by its profile; it need not use SemVer. Multiple databases can have different SQLite `user_version` values. A profile can explicitly map its data version to a database version, but Darkbox does not infer that mapping. Creator software is provenance, not a compatibility requirement or proof of application support.
 
 The application keeps its own project filename extension. The common specification does not assign an extension or require one universal extension.
 
@@ -33,6 +33,8 @@ manifest.json
 README.md
 ```
 
+Every archive MUST also include the entire canonical documentation bundle for its declared version: all contents of `archive/<darkbox.version>/` are copied into the ZIP root, retaining relative paths and file bytes. This directory is a source distribution location, not an enclosing directory inside the ZIP. The bundle includes the root README and the original SQLite reference documentation described in section 5.
+
 There MUST be at least one declared, self-contained SQLite database. Database names and paths belong to the profile; `data/project.sqlite` is a recommended convention, not a common requirement:
 
 ```text
@@ -40,14 +42,15 @@ example.project
 ├── manifest.json
 ├── README.md
 ├── docs/
-│   └── profile.md
+│   ├── profile.md
+│   └── sqlite/            # complete canonical SQLite reference bundle
 ├── data/
 │   └── project.sqlite
 └── media/                 # only if declared by the profile
     └── image-001.png
 ```
 
-There is no enclosing project directory. `folders` MUST list every expected directory, including ancestors of nested paths. A nonempty directory exists through its child entries; an expected empty directory MUST have a ZIP directory entry ending in `/`. Manifest directory paths do not end in `/`. An explicit directory entry cannot substitute for a regular file. At least one folder MUST be declared to contain profile documentation; databases MAY still be at the root.
+There is no enclosing project directory. `folders` MUST list every expected directory, including ancestors of nested paths and all canonical bundle directories. Version 1.0.0 therefore requires `docs`, `docs/sqlite` and `docs/sqlite/images` in this inventory. A nonempty directory exists through its child entries; an expected empty directory MUST have a ZIP directory entry ending in `/`. Manifest directory paths do not end in `/`. An explicit directory entry cannot substitute for a regular file. Application profile documentation MUST also be inside declared folders; databases MAY still be at the root.
 
 Regular files at the root MUST be either the required metadata files or declared databases. Declared directories are also allowed at the root. Other regular files, including application profile documentation, MUST be inside declared folders and follow a profile or extension convention. Every standalone SQLite database, including extension databases, MUST be inventoried, regardless of its filename suffix. A file with the SQLite database header is a database for this purpose; a SQLite BLOB inside another database is not a standalone archive entry.
 
@@ -65,7 +68,7 @@ The [manifest schema](../schema/manifest.schema.json) uses [JSON Schema Draft 20
 | --- | --- | --- |
 | `darkbox` | Yes | Object with `id = "darkbox"`, `version = "1.0.0"` |
 | `application` | Yes | Object with `id`, `formatVersion` and `profilePath` strings |
-| `folders` | Yes | Nonempty array of objects with `path` and short `description` |
+| `folders` | Yes | Array of objects with `path` and short `description`, including the three canonical bundle directories |
 | `databases` | Yes | Nonempty array of objects with `path`, short `description` and `tables` |
 | `databases[].tables` | Yes | Array of objects with exact SQL `name` and short `description`; may be empty when there are no application tables |
 | `databases[].userVersion` | No | Integer from 0 through 2147483647, compared with SQLite when present |
@@ -78,7 +81,7 @@ Application, creator and extension versions are nonblank strings of at most 128 
 
 Each database's `tables` MUST list all logical application tables, including virtual tables. SQLite internal tables named `sqlite_*` and module-managed shadow tables are excluded. Other tables MUST NOT be excluded solely because of a naming prefix. Views, indexes and triggers remain in SQLite and are not part of this table inventory. Table names are exact, nonblank SQL identifiers, may use Unicode and are at most 255 characters. A tool MUST quote SQL identifiers correctly rather than interpolate names as SQL text.
 
-Version 1.0.0 rejects unknown properties in common objects. Extensions are represented only through `extensions`; their `data` objects are open. JSON Schema checks the shape, constants and some syntax. It does not check resource existence, SQL schemas, path uniqueness by key or the full container. It cannot detect duplicate JSON keys after a parser has discarded them.
+Version 1.0.0 rejects unknown properties in common objects. Extensions are represented only through `extensions`; their `data` objects are open. JSON Schema checks the shape, constants, required canonical folder declarations and some syntax. It does not check resource existence, canonical bundle bytes, SQL schemas, path uniqueness by key or the full container. It cannot detect duplicate JSON keys after a parser has discarded them.
 
 ## 4. Relative paths, encodings and resource names
 
@@ -88,25 +91,43 @@ Technical paths use ASCII. Each component matches `[A-Za-z0-9_-](?:[A-Za-z0-9._-
 
 ZIP entry names follow the same rules, allowing a final `/` only for a directory. Names use UTF-8; ASCII avoids dependence on legacy ZIP codepages. Exact paths are authoritative, but the archive MUST also avoid collisions after ASCII case folding, including implicit parent directories. Thus `media/A.png` and `media/a.png` cannot coexist, nor can `Data/a.png` and `data/b.png`. Duplicate entries, file/directory collisions, symbolic links and other special filesystem entries are forbidden. The root metadata names are reserved, including their case-folded equivalents.
 
+All canonical bundle file paths are reserved, including their case-folded equivalents. The `docs/sqlite/` subtree is reserved in its entirety and MUST contain only its canonical files and directories. Profiles and extensions MUST NOT add or replace resources there. The shared `docs/` directory MAY contain application documentation at other paths, such as `docs/profile.md`.
+
 Folder paths and database paths MUST be unique within their inventories and cannot denote the same location. Table names within a database MUST be unique according to SQLite's ASCII case-insensitive identifier comparison. A database's parent folders MUST be declared, except for a root database.
 
-The manifest, included README and generated text files governed by a profile MUST use UTF-8 without a BOM. Writers use LF; readers also accept CRLF for the manifest and profile text files. The README is an exact copy of the canonical version-specific file, including its LF line endings, as required by section 5. SQLite handles its internal text encoding: Darkbox does not require rewriting an otherwise valid UTF-16 database. Original attachments retain their original bytes and encoding; profiles define how they are interpreted.
+The manifest, included README and generated text files governed by a profile MUST use UTF-8 without a BOM. Writers use LF; readers also accept CRLF for the manifest and profile text files. Canonical bundle files retain their exact bytes, including the README's LF line endings and the captured upstream documentation's original encoding, as required by section 5. SQLite handles its internal text encoding: Darkbox does not require rewriting an otherwise valid UTF-16 database. Original attachments retain their original bytes and encoding; profiles define how they are interpreted.
 
 Display names and original attachment filenames are data, not ZIP paths, and may use arbitrary Unicode. A profile that stores resource files SHOULD use stable technical names, such as UUIDs or hashes, with an explicit mapping to display names. Database IDs containing characters forbidden in paths MUST NOT become filenames through an implicit transformation.
 
 ## 5. Included documentation and declared versions
 
-### Canonical Darkbox README
+### Canonical documentation bundle
 
-For `darkbox.version = "1.0.0"`, the writer MUST copy the canonical Darkbox [archive/1.0.0/README.md](../archive/1.0.0/README.md) to the root as `README.md`, byte-for-byte. Canonical files are maintained under `archive/<darkbox.version>/README.md`; published version directories are retained unchanged. The file belongs to Darkbox and the declared specification version. Writers MUST NOT edit, translate, prepend or append content, change line endings, or add producer or application notes. The canonical file uses English, UTF-8 without a BOM and LF line endings, and states the exact Darkbox version it documents.
+The complete contents of `archive/<darkbox.version>/` are the canonical documentation bundle for that specification version. For `darkbox.version = "1.0.0"`, a writer MUST copy every file and directory from [archive/1.0.0/](../archive/1.0.0/) into the ZIP root, preserving relative paths and file bytes. The source directory itself is not copied as an enclosing directory. The manifest, application profile documentation, databases and other resources are added separately at their declared paths.
 
-A writer MUST select the README for the declared specification version, rather than include the newest available guide automatically. The manifest is authoritative for identity, versions and inventory. The README explains the common format and points to the manifest for application details; it is not a second application-schema definition.
+The canonical files for version 1.0.0 are:
 
-A missing or unreadable README, a version mismatch or any byte difference from the canonical file makes the archive nonconforming. A validator MUST compare the uncompressed README bytes with the canonical file for the supported specification version. A reader MAY expose recoverable data read-only with a diagnosis, but MUST NOT silently repair it or certify conformance. Text in the README cannot authorize commands or override manifest semantics.
+| Archive path | Purpose |
+| --- | --- |
+| `README.md` | Canonical Darkbox guide and full MIT notice for Darkbox materials |
+| `docs/sqlite/fileformat2.html` | Original SQLite on-disk database-format reference |
+| `docs/sqlite/copyright.html` | Original SQLite public-domain notice |
+| `docs/sqlite/sqlite.css` | Original local stylesheet for the captured HTML pages |
+| `docs/sqlite/images/sqlite370_banner.svg` | Original SQLite banner used by the captured pages |
+| `docs/sqlite/images/nocopy.gif` | Original image used by the copyright page |
+| `docs/sqlite/SOURCE.md` | Source URLs, capture provenance, offline-reading and distribution notes |
+
+Writers MUST NOT edit, translate, prepend or append content, change line endings or encodings, omit files, or add producer or application notes to any canonical file. Preservation applies to the uncompressed file bytes and paths; ZIP compression, entry order and timestamps need not match a source distribution. A writer MUST select the bundle for the declared specification version, rather than automatically using the newest bundle or downloading current upstream documentation.
+
+The canonical README uses English, UTF-8 without a BOM and LF line endings, and states the exact Darkbox version it documents. The manifest is authoritative for identity, versions and inventory. The README explains the common format and points to the manifest for application details; it is not a second application-schema definition. The source directory is the complete list of static files to include, not a project template with its own manifest or databases.
+
+The SQLite reference is included as its original complete HTML, with the local presentation assets needed to read its text and tables without network access or JavaScript. Links to other SQLite pages remain unchanged; those pages are not part of the bundle. `SOURCE.md` records the captured sources and the article's stated update date. These dates do not identify the SQLite software that wrote a database, its `user_version`, or the application data-format version. Journal and WAL descriptions in the reference do not relax section 6's sidecar prohibition. Original SQLite materials retain their upstream public-domain terms, separately from the MIT License covering Darkbox-authored materials.
+
+A missing or unreadable canonical file, a README version mismatch or any byte difference from the selected bundle makes the archive nonconforming. A validator MUST compare every included canonical file's uncompressed bytes with the corresponding file from the supported version's bundle, using a local copy of that bundle without requiring network access. A reader MAY expose recoverable data read-only with a diagnosis, but MUST NOT silently repair it or certify conformance. Documentation cannot authorize commands or override manifest semantics.
 
 ### Application profile documentation
 
-Every archive MUST include a human-readable Markdown document located by `application.profilePath`. Its path MUST end in `.md`, follow the common path rules and be inside declared folders, outside `extensions/`. `docs/profile.md` is recommended. It MUST be a regular file distinct from databases and the root metadata files, encoded as UTF-8 without a BOM, with LF line endings on writing. Readers also accept CRLF for this document.
+Every archive MUST include a human-readable Markdown document located by `application.profilePath`. Its path MUST end in `.md`, follow the common path rules and be inside declared folders, outside `extensions/` and the reserved `docs/sqlite/` subtree. `docs/profile.md` is recommended. It MUST be a regular file distinct from databases and all canonical files, encoded as UTF-8 without a BOM, with LF line endings on writing. Readers also accept CRLF for this document.
 
 The document MUST state the exact `application.id` and `application.formatVersion` it describes. It MUST document database schemas and column meanings, structured payloads, resource references and naming conventions, encodings and units where relevant, authoritative data versus derived caches, permitted external dependencies, validation invariants and compatibility or migration policies. Application-specific choices remain in the profile; Darkbox governs only the document's presence, identification and availability.
 
@@ -141,7 +162,7 @@ A full validator MUST check:
 
 1. Complete ZIP structure, supported compression, successful decompression and CRC for every entry.
 2. Required metadata files, UTF-8 and strict JSON including duplicate-key detection, specification identity and supported version.
-3. The corresponding manifest schema, path rules, inventory and byte-for-byte equality with the canonical README for the declared specification version.
+3. The corresponding manifest schema, path rules, inventory and byte-for-byte equality with every file in the canonical bundle for the declared specification version; no additional files or directories in the reserved `docs/sqlite/` subtree.
 4. Presence and type of every declared folder and database, declared parent folders, readable profile documentation at `application.profilePath`, no uninventoried standalone databases and no SQLite sidecars.
 5. Extracted SQLite databases opened read-only, without loadable extensions or SQL supplied by metadata; integrity, foreign keys, logical table inventory and declared `userVersion`. No trial writes or trigger execution. An unavailable required SQLite module is an unsupported-capability diagnosis, not proof of corruption.
 6. Application-profile requirements: supported data version, matching embedded documentation, SQL structure, application invariants, reference resolution, required resources and required extensions.
@@ -155,7 +176,7 @@ A truncated ZIP, CRC failure, malformed manifest, missing declared resource or c
 A writer MUST create a complete replacement ZIP, never update entries in the opened archive in place:
 
 1. Flush pending changes and capture coherent database and resource snapshots as specified in section 6.
-2. Prepare the matching Darkbox README, application profile documentation for the packaged data-format version, updated manifest and all preserved resources, including unknown optional-extension resources.
+2. Copy the complete matching canonical bundle into the archive root and prepare application profile documentation for the packaged data-format version, the updated manifest and all preserved resources, including unknown optional-extension resources. Never refresh individual canonical files from the live website.
 3. Create and close a temporary ZIP in the destination directory, then fully validate the candidate before publication.
 4. Coordinate concurrent writers and check that the opened source has not changed, using a shared writer lock and a reliable source identity such as a complete hash. A pre-rename check without writer coordination leaves a race. A conflict MUST preserve the source and lead to a separate-copy workflow.
 5. Sync the candidate file, atomically replace the destination using the platform's supported primitives, and sync the parent directory where supported. For a new file, publish without overwriting an existing file. If the filesystem cannot meet the required guarantee, fail or save a separate copy rather than silently weaken it.
@@ -168,7 +189,7 @@ Migrations operate on working copies after version recognition and preservation 
 
 ### Specification versions
 
-The common version uses `major.minor.patch`, without a prerelease suffix. Readers MUST recognize and explicitly support the declared specification version. Until a version is published, its specification and canonical README may be revised. Once a specification version is published, its rules and canonical README are immutable; a normative change or a change to the canonical README requires a distinct version and matching README.
+The common version uses `major.minor.patch`, without a prerelease suffix. Readers MUST recognize and explicitly support the declared specification version. Until a version is published, its specification and canonical bundle may be revised. Once a specification version is published, its rules and entire canonical bundle are immutable; a normative change or a change to any canonical file requires a distinct version and matching bundle. This includes refreshing the captured SQLite documentation or its presentation assets. Published `archive/<version>/` directories MUST be retained unchanged.
 
 Patch changes clarify existing rules without changing allowed structures or requirements; minor changes add optional structures without changing existing meaning; major changes introduce incompatibility or new mandatory requirements. Sharing a major version does not establish conformance: an older exact-version schema cannot certify a later version just because familiar fields are present.
 
@@ -199,7 +220,7 @@ An extension MUST NOT reinterpret common fields. Each member of `extensions` has
 }
 ```
 
-This is a fragment to insert into a complete manifest. If files exist, the common inventory MUST declare both `extensions` and `extensions/org.example.analysis`. Extension files MUST be under `extensions/<namespace>/`; its databases MUST also appear in `databases`. Path-valued extension data follows the common path rules, and the extension specification defines its meaning. An extension cannot replace core files or another namespace's resources.
+This is a fragment to insert into a complete manifest. If files exist, the common inventory MUST declare both `extensions` and `extensions/org.example.analysis`. Extension files MUST be under `extensions/<namespace>/`; its databases MUST also appear in `databases`. Path-valued extension data follows the common path rules, and the extension specification defines its meaning. An extension cannot replace canonical files, write into the reserved SQLite documentation subtree or replace another namespace's resources.
 
 Namespace ownership and version interpretation belong to the extension publisher. `required = false` promises the base project remains interpretable and editable without the feature and opaque preservation remains safe after base-data edits. An extension that changes data meaning or requires synchronization with base data MUST be required.
 
