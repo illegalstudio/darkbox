@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  A universal specification for project files, designed to keep your work understandable and accessible even when the application that created it is no longer available.
+  A universal specification and an offline verification tool for project files, designed to keep your work understandable and accessible even when the application that created it is no longer available.
 </p>
 
 <p align="center">
@@ -45,20 +45,78 @@ Preserving data also means preserving how to decode it. Every archive carries th
 
 ## Documents
 
+- [Rust CLI: installation, commands and reports](docs/cli.md)
+- [Building and publishing releases](docs/releases.md)
 - [Specification](docs/specification.md)
 - [Canonical Darkbox 1.0.0 README](archive/1.0.0/README.md), copied byte-for-byte to the archive root as `README.md`
 - [Original SQLite file-format reference](archive/1.0.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.0.0/docs/sqlite/SOURCE.md)
 - [Manifest JSON Schema](schema/manifest.schema.json), using JSON Schema Draft 2020-12
+- [Canonical bundle catalog schema](schema/bundle.schema.json)
 - [Example manifests](examples/README.md) for two fictional application profiles
 - [Application profile guidance](docs/profiles.md)
+
+## Command-line tool
+
+The `darkbox` binary verifies and inspects archives offline. SQLite and all supported Darkbox references are included; the original application is not required.
+
+```sh
+darkbox verify example.project
+darkbox inspect example.project
+darkbox verify example.project --json
+darkbox versions
+```
+
+Verification checks common container rules, the exact canonical documentation and SQLite snapshots offline. It reports application-profile semantics as unchecked; passing these common checks does not certify full application conformance. Inspection reports metadata without certifying conformance. See the [CLI documentation](docs/cli.md) for reports, exit codes, resource limits and binary packages.
+
+## Install
+
+### Homebrew
+
+```bash
+brew install illegalstudio/tap/darkbox
+```
+
+### mise
+
+```bash
+mise use -g github:illegalstudio/darkbox
+```
+
+To pin a software version, use `mise use -g github:illegalstudio/darkbox@1.0.0`.
+
+### GitHub Releases
+
+Download the package for your platform from [GitHub Releases](https://github.com/illegalstudio/darkbox/releases), together with its `.sha256` file. Replace `<version>` with the CLI software version.
+
+| Platform | Package |
+| --- | --- |
+| Linux x86-64 | `darkbox_<version>_linux_amd64.tar.gz` |
+| Linux ARM64 | `darkbox_<version>_linux_arm64.tar.gz` |
+| macOS ARM64 (Apple Silicon) | `darkbox_<version>_darwin_arm64.zip` |
+
+Check the download with `sha256sum -c <package>.sha256` on Linux or `shasum -a 256 -c <package>.sha256` on macOS. Extract the package and put its `darkbox` executable in a directory on your `PATH`. Linux packages require glibc 2.35 or later; macOS packages target macOS 11 or later. Packages include documentation and dependency license notices.
+
+### From source
+
+With Rust 1.88 or later and a C compiler:
+
+```bash
+cargo install --path . --locked
+```
+
+## Releases
+
+Run `make release` from a clean `main` checkout. It proposes the next software version, prepares Cargo metadata, asks which specification versions to publish, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, publishes the complete release and updates the Illegal Studio Homebrew tap. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
 
 ## Versioned archive documentation
 
 The entire `archive/<darkbox.version>/` directory is the canonical documentation bundle for that version. Copy all its contents into the ZIP root, preserving every relative path and file's bytes. Do not add an enclosing `archive/` or version directory inside the ZIP. Then add the manifest, application profile documentation, databases and resources at their declared paths.
 
-For version `1.0.0`, the [bundle](archive/1.0.0/) contains the canonical README and the captured SQLite documentation under `docs/sqlite/`, including its local presentation assets and upstream public-domain notice. Select the directory matching the declared version, rather than automatically using the newest bundle or fetching current SQLite pages while saving a project.
+For version `1.0.0`, the [bundle](archive/1.0.0/) contains the canonical README, its [SHA-256 catalog](archive/1.0.0/docs/darkbox/bundle.json), and the captured SQLite documentation under `docs/sqlite/`, including its local presentation assets and upstream public-domain notice. Select the directory matching the declared version, rather than automatically using the newest bundle or fetching current SQLite pages while saving a project.
 
 Published version directories are retained unchanged. Each release provides the matching specification and manifest schema together with its complete canonical bundle. Darkbox-authored text uses LF; `.gitattributes` protects both its line endings and the exact captured upstream bytes from checkout conversion.
+
+Versioned specifications are retained in `specification/<version>.md` and manifest schemas in `schema/<version>/`. The main documentation links show the current version; the CLI selects references by the exact declared version.
 
 ## Minimal archive
 
@@ -68,6 +126,7 @@ example.project
 ├── README.md
 ├── docs/
 │   ├── profile.md
+│   ├── darkbox/bundle.json
 │   └── sqlite/           # complete canonical SQLite reference bundle
 └── data/
     └── project.sqlite
@@ -79,4 +138,4 @@ The specification version, application data-format version and optional creator-
 
 ## License
 
-The specification, schema, Darkbox-authored documentation, examples and Darkbox logo assets are licensed under the [MIT License](LICENSE). The original SQLite materials retain their upstream terms, recorded in the included [SQLite copyright notice](archive/1.0.0/docs/sqlite/copyright.html) and [source notes](archive/1.0.0/docs/sqlite/SOURCE.md). The license does not change ownership or licensing of project data packaged by applications. The canonical README includes the full MIT notice so it travels with distributed files. Permission to modify Darkbox materials does not alter conformance requirements, including the exact canonical bundle.
+The Rust implementation, specification, schema, Darkbox-authored documentation, examples and Darkbox logo assets are licensed under the [MIT License](LICENSE). The original SQLite materials retain their upstream terms, recorded in the included [SQLite copyright notice](archive/1.0.0/docs/sqlite/copyright.html) and [source notes](archive/1.0.0/docs/sqlite/SOURCE.md). The license does not change ownership or licensing of project data packaged by applications. The canonical README includes the full MIT notice so it travels with distributed files. Permission to modify Darkbox materials does not alter conformance requirements, including the exact canonical bundle.

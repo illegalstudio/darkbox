@@ -19,6 +19,10 @@
       "description": "Darkbox references and application data-format documentation."
     },
     {
+      "path": "docs/darkbox",
+      "description": "Canonical catalog of Darkbox documentation files and their SHA-256 digests."
+    },
+    {
       "path": "docs/sqlite",
       "description": "Canonical original SQLite file-format reference, upstream notice and capture provenance."
     },

@@ -4,30 +4,52 @@
   "title": "Darkbox 1.0.0 manifest",
   "description": "Structural validation only. Archive, canonical documentation bytes, path identity, SQLite and application profile checks are additional requirements.",
   "type": "object",
-  "required": ["darkbox", "application", "folders", "databases"],
+  "required": [
+    "darkbox",
+    "application",
+    "folders",
+    "databases"
+  ],
   "additionalProperties": false,
   "properties": {
     "darkbox": {
       "type": "object",
-      "required": ["id", "version"],
+      "required": [
+        "id",
+        "version"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "const": "darkbox" },
-        "version": { "const": "1.0.0" }
+        "id": {
+          "const": "darkbox"
+        },
+        "version": {
+          "const": "1.0.0"
+        }
       }
     },
     "application": {
       "type": "object",
-      "required": ["id", "formatVersion", "profilePath"],
+      "required": [
+        "id",
+        "formatVersion",
+        "profilePath"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "formatVersion": { "$ref": "#/$defs/version" },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "formatVersion": {
+          "$ref": "#/$defs/version"
+        },
         "profilePath": {
           "type": "string",
           "$ref": "#/$defs/path",
           "pattern": "/[^/]+\\.md$",
-          "not": { "pattern": "^(?:extensions|docs/sqlite)(?:/|$)" },
+          "not": {
+            "pattern": "^(?:extensions|docs/(?:sqlite|darkbox))(?:/|$)"
+          },
           "description": "Archive-relative path to the required application data-format documentation.",
           "$comment": "Also check declared parent folders and separation from databases and canonical metadata."
         }
@@ -35,29 +57,62 @@
     },
     "folders": {
       "type": "array",
-      "minItems": 3,
+      "minItems": 4,
       "uniqueItems": true,
-      "items": { "$ref": "#/$defs/folder" },
+      "items": {
+        "$ref": "#/$defs/folder"
+      },
       "allOf": [
         {
           "contains": {
             "type": "object",
-            "required": ["path"],
-            "properties": { "path": { "const": "docs" } }
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "const": "docs"
+              }
+            }
           }
         },
         {
           "contains": {
             "type": "object",
-            "required": ["path"],
-            "properties": { "path": { "const": "docs/sqlite" } }
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "const": "docs/darkbox"
+              }
+            }
           }
         },
         {
           "contains": {
             "type": "object",
-            "required": ["path"],
-            "properties": { "path": { "const": "docs/sqlite/images" } }
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "const": "docs/sqlite"
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "const": "docs/sqlite/images"
+              }
+            }
           }
         }
       ]
@@ -66,27 +121,42 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "$ref": "#/$defs/database" }
+      "items": {
+        "$ref": "#/$defs/database"
+      }
     },
     "creator": {
       "type": "object",
-      "required": ["id", "version"],
+      "required": [
+        "id",
+        "version"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "$ref": "#/$defs/identifier" },
-        "version": { "$ref": "#/$defs/version" },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$",
-          "not": { "pattern": "[^0-9TZ:.-]" }
+          "not": {
+            "pattern": "[^0-9TZ:.-]"
+          }
         }
       }
     },
     "extensions": {
       "type": "object",
-      "propertyNames": { "$ref": "#/$defs/identifier" },
-      "additionalProperties": { "$ref": "#/$defs/extension" }
+      "propertyNames": {
+        "$ref": "#/$defs/identifier"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/extension"
+      }
     }
   },
   "$defs": {
@@ -95,7 +165,9 @@
       "minLength": 3,
       "maxLength": 255,
       "pattern": "^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\\.)+[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
-      "not": { "pattern": "[^a-z0-9.-]" }
+      "not": {
+        "pattern": "[^a-z0-9.-]"
+      }
     },
     "version": {
       "type": "string",
@@ -114,29 +186,46 @@
       "minLength": 1,
       "maxLength": 1024,
       "pattern": "^[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)*$",
-      "not": { "pattern": "[^A-Za-z0-9_./-]" },
+      "not": {
+        "pattern": "[^A-Za-z0-9_./-]"
+      },
       "$comment": "Also check component byte length, device names, declared parents and case-folded collisions. These semantic checks are outside this schema."
     },
     "folder": {
       "type": "object",
-      "required": ["path", "description"],
+      "required": [
+        "path",
+        "description"
+      ],
       "additionalProperties": false,
       "properties": {
-        "path": { "$ref": "#/$defs/path" },
-        "description": { "$ref": "#/$defs/description" }
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "description": {
+          "$ref": "#/$defs/description"
+        }
       }
     },
     "database": {
       "type": "object",
-      "required": ["path", "description", "tables"],
+      "required": [
+        "path",
+        "description",
+        "tables"
+      ],
       "additionalProperties": false,
       "properties": {
         "path": {
           "type": "string",
           "$ref": "#/$defs/path",
-          "not": { "pattern": "^docs/sqlite(?:/|$)" }
+          "not": {
+            "pattern": "^docs/(?:sqlite|darkbox)(?:/|$)"
+          }
         },
-        "description": { "$ref": "#/$defs/description" },
+        "description": {
+          "$ref": "#/$defs/description"
+        },
         "userVersion": {
           "type": "integer",
           "minimum": 0,
@@ -145,13 +234,18 @@
         "tables": {
           "type": "array",
           "uniqueItems": true,
-          "items": { "$ref": "#/$defs/table" }
+          "items": {
+            "$ref": "#/$defs/table"
+          }
         }
       }
     },
     "table": {
       "type": "object",
-      "required": ["name", "description"],
+      "required": [
+        "name",
+        "description"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -160,17 +254,29 @@
           "maxLength": 255,
           "pattern": "\\S"
         },
-        "description": { "$ref": "#/$defs/description" }
+        "description": {
+          "$ref": "#/$defs/description"
+        }
       }
     },
     "extension": {
       "type": "object",
-      "required": ["version", "required", "data"],
+      "required": [
+        "version",
+        "required",
+        "data"
+      ],
       "additionalProperties": false,
       "properties": {
-        "version": { "$ref": "#/$defs/version" },
-        "required": { "type": "boolean" },
-        "data": { "type": "object" }
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "data": {
+          "type": "object"
+        }
       }
     }
   }

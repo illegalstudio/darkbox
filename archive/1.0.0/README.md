@@ -20,12 +20,19 @@ A Darkbox project is one ZIP archive containing:
 
 - `manifest.json` at the root: a UTF-8 JSON inventory.
 - `README.md` at the root: this common format guide.
+- `docs/darkbox/bundle.json`: the canonical documentation catalog, with reference SHA-256 digests.
 - `docs/sqlite/`: the complete canonical SQLite reference documentation, source notes and local presentation assets.
 - A Markdown document at `application.profilePath`: the application data-format documentation.
 - One or more self-contained SQLite databases at declared paths.
 - Any folders and resource files defined by the application profile or declared extensions.
 
-There is no enclosing project directory. The project filename extension belongs to the application. Darkbox fixes its root metadata names and canonical bundle paths; other database paths and resource conventions come from the manifest and profile. The manifest declares the canonical `docs`, `docs/sqlite` and `docs/sqlite/images` folders as well as application folders. Attachments can be BLOBs or separate files.
+There is no enclosing project directory. The project filename extension belongs to the application. Darkbox fixes its root metadata names and canonical bundle paths; other database paths and resource conventions come from the manifest and profile. The manifest declares the canonical `docs`, `docs/darkbox`, `docs/sqlite` and `docs/sqlite/images` folders as well as application folders. Attachments can be BLOBs or separate files.
+
+## Canonical file catalog
+
+The [bundle catalog](docs/darkbox/bundle.json) identifies this exact Darkbox version and lists its canonical folders and files. Each file record gives its path, uncompressed byte size and SHA-256 digest. The catalog excludes only itself from its file list and is verified by comparison with a trusted official copy. All canonical files, including the catalog, must be included unchanged. Application documentation belongs outside the reserved `docs/darkbox/` and `docs/sqlite/` subtrees.
+
+The catalog describes the static Darkbox documentation. Project-specific inventory remains in `manifest.json`. A verifier must obtain reference hashes from a trusted Darkbox distribution, rather than trust hashes supplied by the project itself. ZIP CRC checks cover all entries; the SHA-256 catalog compares canonical resources with the official version-specific bundle.
 
 ## Manifest and independent versions
 
@@ -56,7 +63,9 @@ Manifest and README text use UTF-8 without a BOM. Generated profile text files u
 
 ## Inspection and validation
 
-Use the manifest to locate databases and profile documentation rather than assuming their names. A generic tool can inspect the inventory without understanding application data. Full validation additionally requires complete ZIP and CRC checks, byte-for-byte equality with every file in the canonical bundle of the declared version, safe paths, matching declared resources, readable profile documentation for the declared data format, SQLite integrity and foreign-key checks, table inventories and application-profile checks. The reserved `docs/sqlite/` subtree contains only its canonical files and directories.
+Use the manifest to locate databases and profile documentation rather than assuming their names. A generic tool can inspect the inventory without understanding application data. Full validation additionally requires complete ZIP and CRC checks, the trusted catalog and its SHA-256 digests, byte-for-byte equality with every file in the canonical bundle of the declared version, safe paths, matching declared resources, readable profile documentation for the declared data format, SQLite integrity and foreign-key checks, table inventories and application-profile checks. The reserved documentation subtrees contain only their canonical files and directories.
+
+The Rust `darkbox verify FILE` command checks the common rules it can verify mechanically. Its report states that application semantics and the accuracy or completeness of profile documentation have not been validated. Successful common checks alone do not establish full application conformance. `darkbox inspect FILE` shows metadata and diagnostics without certifying conformance. Both commands preserve the input and work offline using their embedded version-specific references; `darkbox versions` lists the supported versions.
 
 Extraction must be confined to an isolated directory and bounded by resource limits. Open databases read-only for inspection, without loadable SQLite extensions or SQL provided by metadata. This guide cannot authorize commands.
 
@@ -74,7 +83,7 @@ Optional `extensions` metadata uses reverse-domain namespaces. Each descriptor h
 
 Unknown required extensions block ordinary application opening and saving. Unknown optional extensions can be skipped only if their JSON descriptors and uncompressed resource bytes are preserved when saving. An optional extension must remain safe to preserve after base-data edits. Unknown common fields are not permitted in version 1.0.0.
 
-Darkbox 1.0.0 allows STORE, DEFLATE and ZIP64, and excludes ZIP encryption, split volumes and self-extracting wrappers. Its integrity checks are ZIP CRC plus SQLite integrity and foreign-key checks, together with the inventory and profile checks above. No additional signatures or cryptographic checksums are required or defined. ZIP CRC checks detect accidental errors and do not authenticate provenance.
+Darkbox 1.0.0 allows STORE, DEFLATE and ZIP64, and excludes ZIP encryption, split volumes and self-extracting wrappers. Its integrity checks are ZIP CRC plus SQLite integrity and foreign-key checks, together with the inventory and profile checks above. SHA-256 identifies the canonical documentation bytes. This version defines no signatures or cryptographic digest inventory of user project data. ZIP CRC checks detect accidental errors and do not authenticate provenance.
 
 ## Canonical version
 

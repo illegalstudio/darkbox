@@ -1,0 +1,49 @@
+{
+  "darkbox": {
+    "id": "darkbox",
+    "version": "1.0.0"
+  },
+  "folders": [
+    "docs",
+    "docs/darkbox",
+    "docs/sqlite",
+    "docs/sqlite/images"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "size": 13975,
+      "sha256": "c33459f70792e3a74fad5f460e83f25c936f7b360f7bd1af44e357ad7d9af171"
+    },
+    {
+      "path": "docs/sqlite/SOURCE.md",
+      "size": 2724,
+      "sha256": "eba9b8a1392a46c734c666e595a1c52a0ee8f94e8d9805c85bc528766afde1b1"
+    },
+    {
+      "path": "docs/sqlite/copyright.html",
+      "size": 8351,
+      "sha256": "44ca9f793055c8e32fc65f65a4f5bcf813a33f5bdaaa084067dd617a4ed3cc70"
+    },
+    {
+      "path": "docs/sqlite/fileformat2.html",
+      "size": 110473,
+      "sha256": "905067afacc30583c9ee86778b532094cc1830c7ec7b5f019bcfd2eb9ded97a2"
+    },
+    {
+      "path": "docs/sqlite/images/nocopy.gif",
+      "size": 3449,
+      "sha256": "7c3c04918ca0a9cc5b7e6d1f195895fad18a438779da0e7f17814dadafa57f8d"
+    },
+    {
+      "path": "docs/sqlite/images/sqlite370_banner.svg",
+      "size": 12707,
+      "sha256": "462c4ce8229b585dd6880cd308b121d9de63eb619db05e469598594e80d7b151"
+    },
+    {
+      "path": "docs/sqlite/sqlite.css",
+      "size": 7650,
+      "sha256": "df6c3feeaa715f05028e5c9ee958d6ac7df3b7c9a11551f2852fac8f4a1d9896"
+    }
+  ]
+}
