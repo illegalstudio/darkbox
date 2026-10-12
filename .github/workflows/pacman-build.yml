@@ -61,7 +61,9 @@ jobs:
         run: |
           version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
           echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
-          echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+          source_date_epoch=$(git -c safe.directory="$GITHUB_WORKSPACE" show -s --format=%ct HEAD)
+          [[ "$source_date_epoch" =~ ^[0-9]+$ ]]
+          echo "SOURCE_DATE_EPOCH=$source_date_epoch" >> "$GITHUB_ENV"
           python3 scripts/pacman_package.py prepare --version "$version" --arch "$PACKAGE_ARCH" \
             --directory dist --destination dist/arch-build
       - name: Build without changing the upstream executable
@@ -69,8 +71,12 @@ jobs:
         run: |
           useradd -m builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
-          sudo --preserve-env=SOURCE_DATE_EPOCH,PACKAGER -u builder makepkg --nosign --noconfirm --cleanbuild
-          cp ./*.pkg.tar.zst ..
+          # Arch Linux ARM defaults to a different compression format.
+          # Pin the output format and paths after sudo sanitizes the environment.
+          sudo --preserve-env=SOURCE_DATE_EPOCH,PACKAGER -u builder env \
+            PKGEXT=.pkg.tar.zst PKGDEST="$GITHUB_WORKSPACE/dist" \
+            SRCDEST="$PWD" BUILDDIR="$PWD" \
+            makepkg --nosign --noconfirm --cleanbuild
       - name: Verify package metadata, notices and executable bytes
         env:
           PACKAGE_ARCH: ${{ matrix.arch }}
