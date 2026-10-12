@@ -83,6 +83,21 @@ def checksums(directory, version):
     return results
 
 
+def pacman_checksums(directory, version):
+    from pacman_package import ARCHES, check, names
+    expected = {names(version, arch)[1] for arch in ARCHES}
+    actual = {path.name for path in directory.glob("*.pkg.tar.*") if not path.name.endswith(".sha256")}
+    if actual != expected:
+        raise ValueError("Expected exactly the x86_64 and aarch64 pacman packages")
+    results = {}
+    for arch in ARCHES:
+        name, digest = check(directory, version, arch)
+        if (directory / (name + ".sha256")).read_text() != f"{digest}  {name}\n":
+            raise ValueError(f"Pacman package checksum mismatch: {name}")
+        results[name] = digest
+    return dict(sorted(results.items()))
+
+
 def formula(version, digests):
     if set(digests) != set(asset_names(version)) or any(not re.fullmatch(r"[a-f0-9]{64}", value) for value in digests.values()):
         raise ValueError("Formula requires all three SHA-256 package digests")
@@ -129,6 +144,7 @@ def main():
     parser.add_argument("--version", required=True)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--formula", type=Path)
+    parser.add_argument("--pacman", action="store_true", help="Also require both native Arch packages")
     args = parser.parse_args()
     digests = checksums(args.directory, args.version)
     combined = args.directory / f"darkbox_{args.version}_checksums.txt"
@@ -136,10 +152,17 @@ def main():
     if combined.exists() and combined.read_text() != content:
         raise ValueError("The existing combined checksums do not match the final packages")
     combined.write_text(content)
+    if args.pacman:
+        arch = pacman_checksums(args.directory, args.version)
+        combined = args.directory / f"darkbox_{args.version}_pacman_checksums.txt"
+        content = "".join(f"{digest}  {name}\n" for name, digest in arch.items())
+        if combined.exists() and combined.read_text() != content:
+            raise ValueError("The existing pacman checksums do not match the final packages")
+        combined.write_text(content)
     if args.formula:
         args.formula.parent.mkdir(parents=True, exist_ok=True)
         args.formula.write_text(formula(args.version, digests))
-    print(f"Validated three packages for {args.version}")
+    print(f"Validated {'five' if args.pacman else 'three'} packages for {args.version}")
 
 
 if __name__ == "__main__":

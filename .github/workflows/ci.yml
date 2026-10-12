@@ -12,3 +12,7 @@ permissions:
 jobs:
   build:
     uses: ./.github/workflows/build.yml
+
+  pacman:
+    needs: build
+    uses: ./.github/workflows/pacman-build.yml

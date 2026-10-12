@@ -1,0 +1,22 @@
+# Generated for a release with pinned upstream package bytes.
+pkgname=darkbox
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc='Offline inspection and verification of Darkbox project archives'
+arch=('@ARCH@')
+url='https://illegal.studio/en/products/darkbox'
+license=('MIT')
+depends=('glibc>=2.35' 'gcc-libs')
+options=('!strip' '!debug')
+source=('https://github.com/illegalstudio/darkbox/releases/download/v@VERSION@/@SOURCE@')
+sha256sums=('@SHA256@')
+
+package() {
+  local upstream="$srcdir/@DIRECTORY@"
+  install -Dm755 "$upstream/darkbox" "$pkgdir/usr/bin/darkbox"
+  install -Dm644 "$upstream/LICENSE" "$pkgdir/usr/share/licenses/darkbox/LICENSE"
+  install -dm755 "$pkgdir/usr/share/doc/darkbox"
+  install -m644 "$upstream/CLI.md" "$upstream/Cargo.lock" \
+    "$upstream/THIRD_PARTY_NOTICES.md" "$pkgdir/usr/share/doc/darkbox/"
+  cp -r "$upstream/licenses" "$pkgdir/usr/share/doc/darkbox/licenses"
+}

@@ -11,7 +11,7 @@ import sys
 import tempfile
 
 from release import VERSION, ROOT
-from release_assets import checksums
+from release_assets import checksums, pacman_checksums
 
 
 def gh(*args):
@@ -28,7 +28,7 @@ def existing_release(tag):
     return json.loads(result.stdout)
 
 
-def publish(tag, commit, directory):
+def publish(tag, commit, directory, pacman=False):
     if not re.fullmatch("v" + VERSION, tag) or not re.fullmatch(r"[a-f0-9]{40}", commit):
         raise ValueError("Invalid tag or commit")
     version = tag[1:]
@@ -43,7 +43,15 @@ def publish(tag, commit, directory):
     annotation = json.loads(gh("api", f"repos/illegalstudio/darkbox/git/tags/{ref['object']['sha']}"))
     if annotation["object"]["type"] != "commit" or annotation["object"]["sha"] != commit:
         raise ValueError("The remote release tag no longer points to the checked commit")
-    assets = sorted([*digests, *(name + ".sha256" for name in digests), checksum_name])
+    checksum_names = [checksum_name]
+    if pacman:
+        arch = pacman_checksums(directory, version)
+        name = f"darkbox_{version}_pacman_checksums.txt"
+        if (directory / name).read_text() != "".join(f"{digest}  {asset}\n" for asset, digest in arch.items()):
+            raise ValueError("Combined pacman checksums do not match the final packages")
+        digests.update(arch)
+        checksum_names.append(name)
+    assets = sorted([*digests, *(name + ".sha256" for name in digests), *checksum_names])
     existing = existing_release(tag)
     if existing:
         if not existing["draft"]:
@@ -58,6 +66,7 @@ def publish(tag, commit, directory):
         notes = (f"Darkbox CLI {version}\n\n"
                  f"Published specification versions supported: {supported}. The CLI software version is independent of specification versions.\n\n"
                  "Packages: Linux x86-64, Linux ARM64 and macOS ARM64. SQLite and offline Darkbox references are included.\n\n"
+                 + ("Native Arch Linux packages for x86_64 and aarch64 are also included. After enabling the Illegal Studio pacman repository, install with `sudo pacman -Syu darkbox`.\n\n" if pacman else "") +
                  "Install with `brew install illegalstudio/tap/darkbox` or `mise use -g github:illegalstudio/darkbox`. "
                  f"For a pinned mise installation use `mise use -g github:illegalstudio/darkbox@{version}`.\n\n"
                  f"Verify downloads against `darkbox_{version}_checksums.txt`. "
@@ -88,8 +97,9 @@ def main():
     parser.add_argument("--tag", required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument("--pacman", action="store_true", help="Require and publish both Arch packages")
     args = parser.parse_args()
-    publish(args.tag, args.commit, args.directory)
+    publish(args.tag, args.commit, args.directory, args.pacman)
 
 
 if __name__ == "__main__":

@@ -77,8 +77,14 @@ jobs:
       source-commit: ${{ needs.prepare.outputs.commit }}
     secrets: inherit
 
-  publish:
+  pacman-build:
     needs: [prepare, build]
+    uses: ./.github/workflows/pacman-build.yml
+    with:
+      source-commit: ${{ needs.prepare.outputs.commit }}
+
+  publish:
+    needs: [prepare, build, pacman-build]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -97,10 +103,14 @@ jobs:
           pattern: darkbox-*
           path: dist
           merge-multiple: true
+      - name: Install Arch package inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes libarchive-tools
       - name: Validate final packages and collect checksums
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-        run: python3 scripts/release_assets.py --version "$RELEASE_VERSION" --directory dist
+        run: python3 scripts/release_assets.py --version "$RELEASE_VERSION" --directory dist --pacman
       - name: Publish release after all checks pass
         env:
           GH_TOKEN: ${{ github.token }}
@@ -109,7 +119,7 @@ jobs:
           RELEASE_COMMIT: ${{ needs.prepare.outputs.commit }}
           GH_REPO: illegalstudio/darkbox
         run: |
-          python3 scripts/publish_release.py --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --directory dist
+          python3 scripts/publish_release.py --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT" --directory dist --pacman
 
   homebrew:
     needs: [prepare, publish]
@@ -117,3 +127,12 @@ jobs:
     with:
       tag: ${{ needs.prepare.outputs.tag }}
     secrets: inherit
+
+  pacman:
+    needs: [prepare, publish]
+    uses: ./.github/workflows/pacman.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets:
+      ILLEGAL_BOT_APP_ID: ${{ secrets.ILLEGAL_BOT_APP_ID }}
+      ILLEGAL_BOT_PRIVATE_KEY: ${{ secrets.ILLEGAL_BOT_PRIVATE_KEY }}

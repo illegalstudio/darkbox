@@ -76,6 +76,24 @@ Verification checks common container rules, the exact canonical documentation an
 brew install illegalstudio/tap/darkbox
 ```
 
+### pacman (Arch Linux)
+
+Enable the [Illegal Studio pacman repository](https://github.com/illegalstudio/pacman#install) by adding this section to `/etc/pacman.conf`:
+
+```ini
+[illegalstudio]
+SigLevel = Optional TrustAll
+Server = https://illegalstudio.github.io/pacman/$arch
+```
+
+Then install Darkbox together with a full system update:
+
+```bash
+sudo pacman -Syu darkbox
+```
+
+The repository serves x86-64 and ARM64 packages. Packages follow its existing unsigned distribution policy and preserve Darkbox's dependency notices.
+
 ### mise
 
 ```bash
@@ -106,7 +124,7 @@ cargo install --path . --locked
 
 ## Releases
 
-Run `make release` from a clean `main` checkout. It proposes the next software version, prepares Cargo metadata, asks which specification versions to publish, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, publishes the complete release and updates the Illegal Studio Homebrew tap. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
+Run `make release` from a clean `main` checkout. It proposes the next software version, prepares Cargo metadata, asks which specification versions to publish, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, builds native Arch packages for both Linux architectures, publishes the complete release, updates the Illegal Studio Homebrew tap and notifies its pacman repository. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
 
 ## Versioned archive documentation
 

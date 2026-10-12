@@ -12,6 +12,8 @@ brew install illegalstudio/tap/darkbox
 mise use -g github:illegalstudio/darkbox
 ```
 
+On Arch Linux, enable the [Illegal Studio pacman repository](https://github.com/illegalstudio/pacman#install), then install with `sudo pacman -Syu darkbox`. It serves x86_64 and aarch64 packages.
+
 The [repository installation guide](https://github.com/illegalstudio/darkbox#install) covers version pinning and direct GitHub downloads. Published binaries support Linux x86-64 and ARM64 with glibc 2.35 or later, and macOS ARM64 with macOS 11 or later. Software release numbers are independent of the embedded common specification versions. Packages preserve dependency notices and bundle SQLite.
 
 Build from this repository with Rust 1.88 or later and a C compiler:
@@ -36,7 +38,7 @@ To create a package locally after building, install `rustup component add rust-d
 python3 scripts/package.py --target x86_64-unknown-linux-gnu
 ```
 
-The output is written under `dist/`, with a SHA-256 checksum for the package. Each GitHub release also includes `darkbox_<version>_checksums.txt` listing all three packages. These checksums cover downloadable software packages; the canonical catalog inside a project covers only its static documentation. Checksums are not signatures. See [release maintenance](https://github.com/illegalstudio/darkbox/blob/main/docs/releases.md) for `make release` and workflow setup.
+The output is written under `dist/`, with a SHA-256 checksum for the package. Each GitHub release also includes `darkbox_<version>_checksums.txt` listing the three portable packages and `darkbox_<version>_pacman_checksums.txt` listing the two native Arch packages. These checksums cover downloadable software packages; the canonical catalog inside a project covers only its static documentation. Checksums are not signatures. See [release maintenance](https://github.com/illegalstudio/darkbox/blob/main/docs/releases.md) for `make release` and workflow setup.
 
 ## Commands
 
