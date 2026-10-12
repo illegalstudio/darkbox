@@ -33,7 +33,20 @@ jobs:
       PACKAGER: 'illegal-studio[bot] <327907755+illegal-studio[bot]@users.noreply.github.com>'
     steps:
       - name: Install package tools before checkout
-        run: pacman -Syu --noconfirm --needed git sudo python libarchive zstd glibc gcc-libs
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          download_options=()
+          if [[ "$PACKAGE_ARCH" == aarch64 ]]; then
+            # The hosted ARM container cannot apply pacman's Landlock rules.
+            if pacman --sync --help | grep -Fq -- '--disable-sandbox-filesystem'; then
+              download_options+=(--disable-sandbox-filesystem)
+            else
+              # Older pacman versions expose only the combined sandbox switch.
+              download_options+=(--disable-sandbox)
+            fi
+          fi
+          pacman -Syu --noconfirm --needed "${download_options[@]}" git sudo python libarchive zstd glibc gcc-libs
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.source-commit || github.sha }}
