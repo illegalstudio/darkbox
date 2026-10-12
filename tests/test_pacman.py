@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -106,27 +107,60 @@ class ArchPackaging(unittest.TestCase):
         with patch.object(pacman_package, "check", side_effect=checked), self.assertRaisesRegex(ValueError, "checksum mismatch"):
             release_assets.pacman_checksums(self.root, "1.0.0")
 
-    def test_publisher_uploads_both_arch_packages_before_becoming_public(self):
+    def test_complete_publication_handles_draft_tag_endpoint_404(self):
         native = self.arch_files()
         portable = release_assets.checksums(self.root, "1.0.0")
         for suffix, digests in (("checksums", portable), ("pacman_checksums", native)):
             (self.root / f"darkbox_1.0.0_{suffix}.txt").write_text("".join(f"{digest}  {name}\n" for name, digest in digests.items()))
         files = [*portable, *native, *(name + ".sha256" for name in [*portable, *native]),
                  "darkbox_1.0.0_checksums.txt", "darkbox_1.0.0_pacman_checksums.txt"]
-        uploaded = {"assets": [{"name": name, "size": (self.root / name).stat().st_size,
-                               "digest": "sha256:" + hashlib.sha256((self.root / name).read_bytes()).hexdigest()}
-                              for name in files]}
-        responses = [json.dumps({"object": {"type": "tag", "sha": "b" * 40}}),
-                     json.dumps({"object": {"type": "commit", "sha": "a" * 40}}), "", "", ""]
-        with patch.object(publish_release, "gh", side_effect=responses) as github, \
-                patch.object(publish_release, "pacman_checksums", return_value=native), \
-                patch.object(publish_release, "existing_release", side_effect=[None, uploaded]):
+        draft = None
+        commands = []
+
+        def github(command, **kwargs):
+            nonlocal draft
+            self.assertEqual(command[0], "gh")
+            args = tuple(command[1:])
+            commands.append(args)
+            response = ""
+            if args == ("api", "repos/illegalstudio/darkbox/git/ref/tags/v1.0.0"):
+                response = json.dumps({"object": {"type": "tag", "sha": "b" * 40}})
+            elif args == ("api", "repos/illegalstudio/darkbox/git/tags/" + "b" * 40):
+                response = json.dumps({"object": {"type": "commit", "sha": "a" * 40}})
+            elif args == ("api", "repos/illegalstudio/darkbox/releases/tags/v1.0.0"):
+                return subprocess.CompletedProcess(command, 1, "", "gh: Not Found (HTTP 404)")
+            elif args == ("api", "repos/illegalstudio/darkbox/releases?per_page=100", "--paginate", "--slurp"):
+                response = json.dumps([[draft] if draft else []])
+            elif args[:2] == ("release", "create"):
+                self.assertIsNone(draft)
+                self.assertIn("--draft", args)
+                draft = {"draft": True, "prerelease": False, "tag_name": "v1.0.0",
+                         "target_commitish": "a" * 40, "assets": []}
+            elif args[:2] == ("release", "upload"):
+                self.assertTrue(draft["draft"])
+                self.assertEqual(set(args[6:]), {str(self.root / name) for name in files})
+                draft["assets"] = [{"name": name, "size": (self.root / name).stat().st_size,
+                                    "digest": "sha256:" + hashlib.sha256((self.root / name).read_bytes()).hexdigest()}
+                                   for name in files]
+            elif args[:2] == ("release", "edit"):
+                self.assertEqual(len(draft["assets"]), 12)
+                self.assertIn("--draft=false", args)
+                draft["draft"] = False
+            else:
+                self.fail(f"Unexpected GitHub command: {args}")
+            return subprocess.CompletedProcess(command, 0, response, "")
+
+        with patch.object(publish_release.subprocess, "run", side_effect=github), \
+                patch.object(publish_release, "pacman_checksums", return_value=native):
             publish_release.publish("v1.0.0", "a" * 40, self.root, pacman=True)
-        upload = next(call.args for call in github.call_args_list if call.args[:2] == ("release", "upload"))
+        upload = next(args for args in commands if args[:2] == ("release", "upload"))
         self.assertEqual(len(upload) - 6, 12)
         for name in native:
             self.assertIn(str(self.root / name), upload)
-        self.assertEqual(github.call_args_list[-1].args[:2], ("release", "edit"))
+        self.assertFalse(draft["draft"])
+        self.assertEqual(commands[-1][:2], ("release", "edit"))
+        self.assertEqual(sum(args[:2] == ("api", "repos/illegalstudio/darkbox/releases/tags/v1.0.0")
+                             for args in commands), 2)
 
 
 if __name__ == "__main__":
