@@ -42,7 +42,7 @@ impl Status {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Diagnostic {
     pub severity: &'static str,
     pub code: String,
@@ -56,6 +56,9 @@ pub struct Failure {
     pub code: &'static str,
     pub path: Option<String>,
     pub message: String,
+    /// Full checked candidate/opening report when verification blocks an operation.
+    /// No secret keys or decrypted bytes are added by built-in checks.
+    pub report: Option<Box<Report>>,
 }
 
 impl Failure {
@@ -65,11 +68,17 @@ impl Failure {
             code,
             path: None,
             message: message.into(),
+            report: None,
         }
     }
 
     pub fn at(mut self, path: impl Into<String>) -> Self {
         self.path = Some(path.into());
+        self
+    }
+
+    pub fn with_report(mut self, report: Report) -> Self {
+        self.report = Some(Box::new(report));
         self
     }
 
@@ -125,7 +134,7 @@ pub struct EntryInfo {
     pub crc_verified: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct DatabaseInfo {
     pub path: String,
     pub user_version: i64,
@@ -135,7 +144,7 @@ pub struct DatabaseInfo {
     pub foreign_keys_checked: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Report {
     pub report_version: u32,
     pub cli_version: &'static str,

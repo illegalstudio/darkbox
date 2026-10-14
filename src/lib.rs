@@ -1,21 +1,32 @@
-//! Offline, read-only checks for the common Darkbox container rules.
-//! Application-profile semantics are always reported separately.
+//! Offline Darkbox container SDK: verified snapshots, resource streams, isolated
+//! SQLite/resource edits and validated atomic publication. Application-profile
+//! semantics are reported separately and validated only by registered application code.
 
 mod container;
+mod creation;
 pub mod extensions;
 mod json;
+pub mod manifest;
 mod model;
+mod package;
 mod paths;
+pub mod profiles;
 pub mod protection;
 mod sqlite;
 mod versions;
 mod writer;
 
+pub use creation::PackageWriter;
 pub use extensions::{ExtensionRegistry, ExtensionVerifier, VerificationOptions};
+pub use manifest::ManifestBuilder;
 pub use model::{
     DatabaseInfo, Diagnostic, EntryInfo, Failure as Error, Limits, Mode, Report, Status,
 };
 use model::{Failure, Manifest, Result};
+pub use package::{
+    DatabaseReader, DiagnosticPackage, Package, PackageEditor, ResourceReader, ValueAddress,
+};
+pub use profiles::{ApplicationProfile, ProfileContext, ProfileRegistry};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
@@ -25,6 +36,8 @@ use std::time::{Duration, Instant};
 use versions::{CATALOG_PATH, Catalog, RuleSet, VersionSpec};
 pub use writer::{PackageUpdate, open, save};
 use zip::{CompressionMethod, ZipArchive};
+/// Use the same SQLite and JSON types as the SDK without dependency-version ambiguity.
+pub use {rusqlite, serde_json, zeroize};
 
 pub fn supported_versions() -> impl Iterator<Item = (&'static str, bool)> {
     versions::VERSIONS
@@ -42,7 +55,22 @@ pub fn analyze_with(
     limits: Limits,
     options: &VerificationOptions<'_>,
 ) -> Report {
-    let path = path.as_ref();
+    analyze_captured(path.as_ref(), mode, limits, options, false).0
+}
+
+pub(crate) struct Staging {
+    pub _directory: tempfile::TempDir,
+    pub files: BTreeMap<String, std::path::PathBuf>,
+    pub digests: BTreeMap<String, extensions::EntryDigest>,
+}
+
+pub(crate) fn analyze_captured(
+    path: &Path,
+    mode: Mode,
+    limits: Limits,
+    options: &VerificationOptions<'_>,
+    capture: bool,
+) -> (Report, Option<Staging>) {
     let mut report = Report {
         report_version: 2,
         cli_version: env!("CARGO_PKG_VERSION"),
@@ -68,7 +96,8 @@ pub fn analyze_with(
         diagnostics: Vec::new(),
         limits,
     };
-    if let Err(error) = run(path, mode, &mut report, options) {
+    let mut staging = None;
+    if let Err(error) = run(path, mode, &mut report, options, capture, &mut staging) {
         report.record(error);
     }
     if report.protection.is_none()
@@ -79,8 +108,10 @@ pub fn analyze_with(
     {
         report.note("protection.not_checked", "Protection signature, inventory and encrypted content authentication were not checked; this report does not authorize ordinary protected opening or saving");
     }
-    report.note("profile.not_validated", "Application data semantics and the accuracy or completeness of profile documentation have not been validated");
-    report
+    if report.application_validation == "not_performed" {
+        report.note("profile.not_validated", "Application data semantics and the accuracy or completeness of profile documentation have not been validated");
+    }
+    (report, staging)
 }
 
 pub fn verify(path: impl AsRef<Path>) -> Report {
@@ -120,6 +151,8 @@ fn run(
     mode: Mode,
     report: &mut Report,
     options: &VerificationOptions<'_>,
+    capture_all: bool,
+    captured: &mut Option<Staging>,
 ) -> Result<()> {
     let limits = report.limits.clone();
     if limits.max_entries == 0
@@ -361,15 +394,16 @@ fn run(
             .is_some_and(|manifest| manifest.application.profile_path == *name);
         let capture =
             name == "manifest.json" || profile || (common && (expected.is_some() || catalog));
-        let destination =
-            if !name.ends_with('/') && (common || databases.contains_key(name.as_str())) {
-                let destination = temporary.path().join(format!("entry-{index}"));
-                let handle = File::create(&destination).map_err(io_failure)?;
-                staged.insert(name.clone(), destination);
-                Some(handle)
-            } else {
-                None
-            };
+        let destination = if !name.ends_with('/')
+            && (capture_all || common || databases.contains_key(name.as_str()))
+        {
+            let destination = temporary.path().join(format!("entry-{index}"));
+            let handle = File::create(&destination).map_err(io_failure)?;
+            staged.insert(name.clone(), destination);
+            Some(handle)
+        } else {
+            None
+        };
         let expected_crc = file.crc32();
         let expected_size = file.size();
         let scan = stream(
@@ -561,7 +595,50 @@ fn run(
             ),
         );
     }
+    if common && report.status == Status::Passed {
+        let metadata = report.manifest.as_ref().unwrap().clone();
+        let context = profiles::ProfileContext {
+            manifest: &metadata,
+            inventory: &digests,
+            limits: &limits,
+            deadline,
+            options,
+            staged: &staged,
+        };
+        if let Some(profile) = options.profiles.get(
+            metadata["application"]["id"].as_str().unwrap(),
+            metadata["application"]["formatVersion"].as_str().unwrap(),
+        ) {
+            match profile.validate(&context) {
+                Ok(()) => {
+                    report.application_validation = "passed";
+                    report.checks.push("profile.application");
+                }
+                Err(mut error) => {
+                    report.application_validation = "failed";
+                    if matches!(error.status, Status::Passed | Status::Inspected) {
+                        error.status = Status::Invalid;
+                    }
+                    report.record(error);
+                }
+            }
+        } else if options.require_profile {
+            report.application_validation = "unsupported";
+            report.record(Failure::new(
+                Status::Unsupported,
+                "profile.unsupported",
+                "Application policy requires a registered verifier for this exact profile version",
+            ));
+        }
+    }
     container::check_deadline(deadline)?;
+    if capture_all {
+        *captured = Some(Staging {
+            _directory: temporary,
+            files: staged,
+            digests,
+        });
+    }
     Ok(())
 }
 

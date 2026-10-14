@@ -1,5 +1,5 @@
 use clap::{Args, Parser, Subcommand};
-use darkbox::{Limits, Mode, Report, Status};
+use darkbox::{Limits, Mode, Report};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -181,7 +181,11 @@ fn text_report(report: &Report, writer: &mut impl Write) -> io::Result<()> {
             )?;
         }
     }
-    writeln!(writer, "Application-profile validation: not performed")
+    writeln!(
+        writer,
+        "Application-profile validation: {}",
+        report.application_validation
+    )
 }
 
 fn run() -> io::Result<u8> {
@@ -229,6 +233,7 @@ fn run() -> io::Result<u8> {
     let keys = input.decryption_keys.as_ref().map(load_keys).transpose()?;
     let mut options = darkbox::VerificationOptions {
         require_protection: input.require_protection,
+        require_profile,
         ..Default::default()
     };
     options.decryption_keys = keys
@@ -241,14 +246,7 @@ fn run() -> io::Result<u8> {
             .map(|(id, key)| (id, *key))
             .collect();
     }
-    let mut report = darkbox::analyze_with(&input.file, mode, limits, &options);
-    if require_profile && report.status == Status::Passed {
-        report.status = Status::Unsupported;
-        report.diagnostics.push(darkbox::Diagnostic {
-            severity: "error", code: "profile.required".into(), path: None,
-            message: "This binary has no application-profile validators; common checks alone do not satisfy --require-profile".into(),
-        });
-    }
+    let report = darkbox::analyze_with(&input.file, mode, limits, &options);
     let mut output = io::stdout().lock();
     if input.json {
         serde_json::to_writer_pretty(&mut output, &report)?;

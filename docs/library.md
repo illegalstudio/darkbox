@@ -1,6 +1,8 @@
 # Rust library and selective protection
 
-The `darkbox` crate provides read-only `verify`, `inspect`, `analyze` and configurable `analyze_with`, plus ordinary `open` and validated atomic `save`. `analyze` uses the official protection verifier and an empty trust/key configuration. All runtime checks operate offline. `Error` exposes status, stable code, public resource path and message, implements the standard Rust error interfaces and never contains keys or decrypted plaintext from built-in checks.
+For the complete read/edit/save lifecycle, typed metadata, managed SQLite, resource CRUD and application-profile hooks, start with the [embedding guide](sdk.md). This page documents the compatible lower-level verification, protection and writer APIs.
+
+The `darkbox` crate provides read-only `verify`, `inspect`, `analyze` and configurable `analyze_with`, ordinary `open`, validated atomic `save` and progressive package creation with `PackageWriter`. `analyze` uses the official protection verifier and an empty trust/key configuration. All runtime checks operate offline. `Error` exposes status, stable code, public resource path and message, implements the standard Rust error interfaces and never contains keys or decrypted plaintext from built-in checks.
 
 ## Application-owned keys and extensions
 
@@ -49,8 +51,48 @@ Implement `NonceSequence::next_nonce` with a durable nonce allocator belonging t
 
 Applications supply `ManifestSigner` with signer identifier, public key and a signature callback for exact bytes. The public key must match the externally trusted key under that identifier. A protected save requires the callback even for public-only edits. The writer retains required extension presence/version, invokes recognized extension writer callbacks, preserves unknown optional descriptors/resources, rebuilds the full inventory, serializes final manifest bytes and signs them. It validates the completed ZIP before publication. An unchanged encrypted block may be preserved without keys only in its exact original context. New encrypted bytes require successful authentication with a supplied key. Authentication establishes bytes/context, not application semantics.
 
-The current writer preserves the source common version, package identity and protected file/column declarations. Context changes to row identifiers are accepted only with newly encrypted, successfully authenticated blocks. An unchanged block moved to a different row is refused even when keys are absent. Changed blocks cannot reuse a nonce observed under the same key in the source revision, even if that old block is removed. Historical uniqueness across other packages and older revisions remains the nonce allocator's responsibility. Broader declaration/identity or common-version migrations require building and verifying a separate new package; they cannot silently declassify existing content through this API. A newly added required extension must have a registered verifier and writer capability.
+The in-memory `save` API preserves the source common version, package identity and protected file/column declarations. Context changes to row identifiers are accepted only with newly encrypted, successfully authenticated blocks. An unchanged block moved to a different row is refused even when keys are absent. Changed blocks cannot reuse a nonce observed under the same key in the source revision, even if that old block is removed. Historical uniqueness across other packages and older revisions remains the nonce allocator's responsibility. Use `PackageWriter` below for complete new editions with resource additions/removals. A newly added required extension must have a registered verifier and writer capability.
 
-The caller MUST coordinate exclusive source/destination access throughout save, such as an application-level writer lock. Source hashes detect observed changes but cannot close a race without caller coordination. Existing source paths can be replaced atomically; a separate destination must be absent and is published without overwriting any file. Symlinks are refused. The writer syncs the candidate, validates it, rechecks the source and publishes atomically, then syncs the parent directory on Unix. Ordinary preparation/verification/conflict failures leave source and any existing destination intact and clean up task staging. A `save.durability` failure means publication occurred but final directory sync failed, so crash durability is uncertain. This is reported distinctly, since a successful rename cannot safely be rolled back without caller coordination.
+The SDK holds a stable advisory destination lock throughout save. The caller MUST coordinate source snapshots and external writers that bypass that lock. Source hashes detect observed changes but cannot close a race with an uncoordinated external writer. Existing source paths can be replaced atomically; a separate destination must be absent and is published without overwriting any file. Symlinks are refused. The writer syncs the candidate, validates it, rechecks the source and publishes atomically, then syncs the parent directory on Unix. Ordinary preparation/verification/conflict failures leave source and any existing destination intact and clean up task staging. A `save.durability` warning in a successful report means publication occurred but final directory sync failed, so crash durability is uncertain. All returned save errors precede publication.
 
 See [the complete executable example](../examples/protected.rs) and the [normative extension](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) for descriptor, binary format, AAD, trust, failure rules and independent test vectors.
+
+## Progressive package creation
+
+`PackageWriter::new(destination, manifest, limits, options, signer)` begins a new package or a complete replacement edition. It automatically streams the exact embedded canonical bundle for the manifest's supported common version. The manifest still declares every required canonical directory and the application folders, databases and public profile document. Supply only dynamic resources, never the canonical files, manifest or signature. Prepared common versions remain usable before publication; published bundles are never edited.
+
+```rust
+use darkbox::{Limits, PackageWriter, VerificationOptions};
+use std::io::{self, Read};
+
+// manifest is application-prepared serde_json::Value metadata. SQLite is closed
+// and coherent, and any protected attachments/BLOBs are already encrypted.
+let options = VerificationOptions::default();
+let mut writer = PackageWriter::new("project.darkbox", manifest,
+    Limits::default(), &options, None)?;
+writer.add_path("data/project.sqlite", "prepared/snapshot.sqlite")?;
+writer.add_path("docs/profile.md", "prepared/profile.md")?;
+let resource = writer.add_reader("assets/generated.bin",
+    io::repeat(0).take(16 * 1024 * 1024))?;
+assert_eq!(resource.size, 16 * 1024 * 1024);
+let report = writer.finish()?;
+```
+
+`add_path` accepts a regular filesystem source and copies it into the named ZIP entry. `add_reader` accepts any `Read`, including a borrowed reader, and consumes from its current position through EOF. It supports unknown lengths with ZIP64 and never asks readers to seek or rewind. A 64 KiB buffer feeds compression and SHA-256 together. Each addition returns its actual `EntryDigest`; the writer retains only paths, sizes, hashes and metadata. The caller keeps all source resources stable and captures one coherent application revision. The API performs no SQLite snapshots, encryption, profile migrations or plaintext insertion on the caller's behalf.
+
+Resource/total byte counts, metadata size, entry count, output archive bytes and deadline are bounded, including final manifest/signature and ZIP directory writes. Safe path identity and case-folding checks run during addition. A failed addition poisons the candidate, so catching its error and continuing cannot publish incomplete data. Dropping the writer discards its private candidate. Filesystem staging for final validation is bounded by the normal uncompressed limits. The existing AEAD verifier can buffer one encrypted attachment or SQLite BLOB at a time, up to `max_entry_bytes`; the entire package is never collected in memory. Custom readers/verifiers must return promptly and honor the cooperative deadline.
+
+For protected packages pass a trusted `ManifestSigner` and the decryption provider in `VerificationOptions`. The writer ignores/replaces the input protection inventory, computes a complete sorted inventory from copied bytes, serializes the final manifest and signs those exact bytes. Creating new encrypted blocks requires successful AEAD verification with their keys. An existing destination must first pass verification; its unchanged ciphertext can be retained without decryption keys only with its exact context. Required protection cannot be removed or downgraded. File and database resources may be added or omitted in the next edition, with corresponding updated declarations. A retained encrypted file cannot become an undeclared public resource. Removing a protected column declaration requires removing its containing database resource; the streaming API does not implement column declassification or schema migration. Context or key/identity changes require newly encrypted, authenticated blocks, with nonces distinct from those observed in the previous destination. Historical nonce uniqueness remains application-managed.
+
+All resources for an edition are supplied again, including unchanged resources. Omitted resources are removed. Unknown optional extension descriptors and namespace resource bytes must still be preserved. Recognized extensions explicitly implement `ExtensionVerifier::prepare_streamed_package` to synchronize their descriptors using the complete actual resource-digest map. Its default refuses writing even if `prepare_save` or verification is implemented. Bytes already streamed cannot be rewritten by this callback; applications prepare extension resources before adding them. The official protection extension implements this capability. Callbacks cannot introduce unprepared required extensions or change the protection feature's presence. Final registered verifiers validate the whole candidate.
+
+Before publication `finish` completes and syncs the ZIP, verifies common/canonical/SQLite/extension/protection rules, checks retained ciphertext contexts and source nonces, and rehashes any previous destination. The builder holds a stable advisory destination lock throughout its lifetime; callers coordinate external writers that bypass it. New destinations use no-clobber publication; an existing valid destination is replaced atomically. Every returned `Err` precedes publication and preserves the previous destination. Final parent-directory synchronization on Unix occurs after the atomic commit; if that sync fails the operation returns the published report with a `create.durability` warning, since crash durability is uncertain and the already completed replacement cannot safely be undone. This differs from the legacy `save` post-publication error convention.
+
+Run the [streaming example](../examples/streaming.rs) twice to exercise a generated 16 MiB reader, prepared SQLite/file paths, and removal/addition of a protected resource:
+
+```sh
+cargo run --example streaming -- example.project
+cargo run --example streaming -- example.project replacement
+```
+
+The example uses publicly known test keys and deterministic test blocks; production applications provide durable coordinated nonces and private key management.

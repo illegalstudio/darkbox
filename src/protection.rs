@@ -33,6 +33,55 @@ pub trait ManifestSigner {
     fn sign(&self, manifest_bytes: &[u8]) -> Result<[u8; 64], Error>;
 }
 
+/// An application-owned, zeroizing in-memory key provider. Keys are never serialized.
+#[derive(Default)]
+pub struct KeyRing {
+    keys: BTreeMap<String, Zeroizing<[u8; 32]>>,
+}
+impl KeyRing {
+    pub fn insert(&mut self, id: impl Into<String>, key: Zeroizing<[u8; 32]>) {
+        self.keys.insert(id.into(), key);
+    }
+    pub fn remove(&mut self, id: &str) -> bool {
+        self.keys.remove(id).is_some()
+    }
+    pub fn contains(&self, id: &str) -> bool {
+        self.keys.contains_key(id)
+    }
+}
+impl DecryptionKeys for KeyRing {
+    fn key(&self, id: &str) -> Option<Zeroizing<[u8; 32]>> {
+        self.keys.get(id).map(|key| Zeroizing::new(**key))
+    }
+}
+
+/// Local pure Ed25519 signing. Applications can instead implement ManifestSigner
+/// with an external signer or secure key storage.
+pub struct Ed25519Signer {
+    id: String,
+    key: ed25519_dalek::SigningKey,
+}
+impl Ed25519Signer {
+    pub fn from_seed(id: impl Into<String>, seed: Zeroizing<[u8; 32]>) -> Self {
+        Self {
+            id: id.into(),
+            key: ed25519_dalek::SigningKey::from_bytes(&seed),
+        }
+    }
+}
+impl ManifestSigner for Ed25519Signer {
+    fn signer_id(&self) -> &str {
+        &self.id
+    }
+    fn public_key(&self) -> [u8; 32] {
+        self.key.verifying_key().to_bytes()
+    }
+    fn sign(&self, bytes: &[u8]) -> Result<[u8; 64], Error> {
+        use ed25519_dalek::Signer;
+        Ok(self.key.sign(bytes).to_bytes())
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BlockLocation {
@@ -243,7 +292,7 @@ pub struct EncryptedContent {
     pub plaintext_validation: &'static str,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ProtectionReport {
     pub extension_version: String,
     pub signature: &'static str,
@@ -297,6 +346,14 @@ impl ExtensionVerifier for ProtectionVerifier {
         _: &Value,
         _: &mut Value,
         _: &mut BTreeMap<String, Vec<u8>>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+    fn prepare_streamed_package(
+        &self,
+        _: Option<&Value>,
+        _: &mut Value,
+        _: &BTreeMap<String, EntryDigest>,
     ) -> Result<(), Error> {
         Ok(())
     }

@@ -46,7 +46,8 @@ Preserving data also means preserving how to decode it. Every archive carries th
 ## Documents
 
 - [Rust CLI: installation, commands and reports](docs/cli.md)
-- [Rust library: key providers, extension registration and validated saving](docs/library.md)
+- [Rust SDK: reading, editing, SQLite, protection and atomic saving](docs/sdk.md)
+- [Low-level library: verification, extension registration and progressive creation](docs/library.md)
 - [Building and publishing releases](docs/releases.md)
 - [Specification](docs/specification.md)
 - [Canonical Darkbox 1.1.0 README](archive/1.1.0/README.md), copied byte-for-byte to the archive root as `README.md`

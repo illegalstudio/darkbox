@@ -109,3 +109,4 @@ jobs:
         run: |
           rustup toolchain install 1.88.0 --profile minimal
           cargo +1.88.0 check --all-targets --locked
+          cargo +1.88.0 check --all-targets --no-default-features --locked

@@ -3,11 +3,20 @@ name = "darkbox"
 version = "1.1.0"
 edition = "2024"
 rust-version = "1.88"
-description = "Offline inspection and verification of Darkbox project archives"
+description = "Read, edit, verify and atomically write Darkbox project archives"
 license = "MIT"
 repository = "https://github.com/illegalstudio/darkbox"
 homepage = "https://illegal.studio/en/products/darkbox"
 default-run = "darkbox"
+
+[features]
+default = ["cli"]
+cli = ["dep:clap"]
+
+[[bin]]
+name = "darkbox"
+path = "src/main.rs"
+required-features = ["cli"]
 
 [dependencies]
 # Enable expanded AES key zeroization through feature unification.
@@ -15,10 +24,11 @@ aes = { version = "0.8.4", features = ["zeroize"] }
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 ed25519-dalek = "2.2.0"
 zeroize = { version = "1.8", features = ["serde"] }
-clap = { version = "4.6.7", features = ["derive"] }
+clap = { version = "4.6.7", features = ["derive"], optional = true }
+fs2 = "0.4.3"
 crc32fast = "1.5"
 jsonschema = { version = "0.58.6", default-features = false, features = ["arbitrary-precision"] }
-rusqlite = { version = "0.40.2", features = ["bundled", "hooks", "limits", "load_extension"] }
+rusqlite = { version = "0.40.2", features = ["bundled", "hooks", "limits", "load_extension", "backup"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["arbitrary_precision"] }
 sha2 = "0.10.9"

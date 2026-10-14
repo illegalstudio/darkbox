@@ -1,4 +1,6 @@
-use darkbox::{Limits, Mode, Status};
+use darkbox::Status;
+#[cfg(feature = "cli")]
+use darkbox::{Limits, Mode};
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -6,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
+#[cfg(feature = "cli")]
 use std::process::Command;
 use tempfile::TempDir;
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
@@ -660,6 +663,7 @@ fn missing_virtual_table_modules_are_unsupported() {
 }
 
 #[test]
+#[cfg(feature = "cli")]
 fn limits_operational_failures_and_cli_exit_codes_are_distinct() {
     let fixture = Fixture::new("notebook");
     let path = fixture.archive(CompressionMethod::Deflated, false);
@@ -720,7 +724,14 @@ fn limits_operational_failures_and_cli_exit_codes_are_distinct() {
         );
         let report: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(report["status"], status);
-        assert_eq!(report["application_validation"], "not_performed");
+        assert_eq!(
+            report["application_validation"],
+            if status == "unsupported" {
+                "unsupported"
+            } else {
+                "not_performed"
+            }
+        );
         assert!(!fs::read_dir(fixture.dir.path()).unwrap().any(|entry| {
             entry
                 .unwrap()

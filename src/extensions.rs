@@ -57,6 +57,22 @@ pub trait ExtensionVerifier {
             "The registered verifier has no writer capability",
         ))
     }
+
+    /// Approve a complete streamed edition and synchronize its descriptor.
+    /// Resource bytes have already been written; only metadata can be changed.
+    /// The default does not imply creation capability from a registered verifier.
+    fn prepare_streamed_package(
+        &self,
+        _previous: Option<&Value>,
+        _manifest: &mut Value,
+        _inventory: &BTreeMap<String, EntryDigest>,
+    ) -> Result<(), Error> {
+        Err(Error::new(
+            Status::Unsupported,
+            "create.extension_capability",
+            "The registered verifier has no streaming writer capability",
+        ))
+    }
 }
 
 pub struct ExtensionRegistry {
@@ -94,6 +110,8 @@ impl Default for ExtensionRegistry {
 #[derive(Default)]
 pub struct VerificationOptions<'a> {
     pub extensions: ExtensionRegistry,
+    pub profiles: crate::profiles::ProfileRegistry,
+    pub require_profile: bool,
     pub decryption_keys: Option<&'a dyn crate::protection::DecryptionKeys>,
     /// Only application-supplied keys are trusted. Archive keys are never consulted.
     pub trusted_signers: BTreeMap<String, [u8; 32]>,

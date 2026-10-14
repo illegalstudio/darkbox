@@ -1,0 +1,11 @@
+# Streaming notes profile
+
+Identifier: `org.example.streaming-notes`. Data-format version: `1`.
+
+This fictional profile uses Darkbox 1.1.0 and requires protection extension 1.0.0. The ordinary SQLite snapshot `data/project.sqlite` has `user_version = 1` and one `notes` table with stored columns `id TEXT PRIMARY KEY NOT NULL`, `label TEXT`, `secret BLOB`. Identifiers are stable public UTF-8 TEXT, unique by exact bytes. Labels are public UTF-8. `secret` is NULL or one protection block containing UTF-8 text, encrypted before insertion. The extension identifies the column and uses `id` as its record identifier. Generic validation authenticates bytes/context; the application validates plaintext UTF-8 and meaning.
+
+`assets/public.bin` is a required opaque public resource. Each file declared in the protection extension's `files` array is a required opaque encrypted attachment. Edition one uses `assets/private.bin`; a replacement edition can remove that resource and include `assets/new.bin`. The manifest is authoritative for the current protected resource list. There are no external references or cross-resource constraints. The profile permits attachment additions/removals between editions without changing its data-format version.
+
+The executable example uses fixed publicly known test keys and deterministic ciphertext solely for demonstration. Real applications supply authorized decryption/signing capabilities, trusted public keys and durable coordinated nonce allocation. Every new encryption under an actual key reserves a fresh nonce across all packages and revisions. The example retains identical test BLOBs with identical authenticated contexts and uses a different test nonce for the replacement attachment.
+
+Producers supply closed coherent SQLite snapshots, already encrypted attachment bytes and public profile documentation to the streaming writer. They coordinate exclusive destination access and stable resource snapshots. Every edition regenerates the complete inventory and manifest signature, includes the canonical bundle unchanged, validates the complete candidate and publishes atomically. Old ciphertext can be retained only in its unchanged context; changed context requires fresh encryption. Keys and decrypted plaintext do not belong in the package or reports.

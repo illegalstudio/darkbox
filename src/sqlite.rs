@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-fn classify(error: Error) -> Failure {
+pub(crate) fn classify(error: Error) -> Failure {
     let message = error.to_string();
     let status = match &error {
         Error::SqliteFailure(code, _)
@@ -40,7 +40,7 @@ fn classify(error: Error) -> Failure {
     )
 }
 
-fn open(path: &Path, limits: &Limits, deadline: Instant) -> Result<Connection> {
+pub(crate) fn open(path: &Path, limits: &Limits, deadline: Instant) -> Result<Connection> {
     let db = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,

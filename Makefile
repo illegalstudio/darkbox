@@ -8,6 +8,7 @@ build:
 test:
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
 	cargo test --all-targets --locked
+	cargo test --all-targets --no-default-features --locked
 
 check:
 	$(PYTHON) scripts/bundle_catalog.py --check

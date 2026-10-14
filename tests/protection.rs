@@ -710,6 +710,7 @@ fn writer_refuses_downgrade_moved_blocks_and_invalid_candidates_without_replacin
 }
 
 #[test]
+#[cfg(feature = "cli")]
 fn cli_uses_external_key_files_and_never_reports_secret_keys() {
     let fixture = Fixture::new();
     let path = fixture.path();

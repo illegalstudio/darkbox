@@ -31,7 +31,7 @@ pub fn open(
             report.status,
             "open.refused",
             "Ordinary opening requires successful verification; use diagnostic inspection for unsupported or invalid packages",
-        ));
+        ).with_report(report));
     }
     Ok(report)
 }
@@ -40,7 +40,7 @@ fn refused(message: &str) -> Error {
     Error::new(Status::Unsupported, "save.refused", message)
 }
 
-fn file_digest(path: &Path, limit: u64, deadline: Instant) -> Result<[u8; 32], Error> {
+pub(crate) fn file_digest(path: &Path, limit: u64, deadline: Instant) -> Result<[u8; 32], Error> {
     let mut source = File::open(path).map_err(crate::io_failure)?;
     if source.metadata().map_err(crate::io_failure)?.len() > limit {
         return Err(Error::limit("Save source exceeds configured archive limit"));
@@ -63,8 +63,8 @@ fn file_digest(path: &Path, limit: u64, deadline: Instant) -> Result<[u8; 32], E
     Ok(sha.finalize().into())
 }
 
-/// Save an already encrypted candidate. The caller coordinates exclusive access
-/// to source/destination throughout this operation. No signing keys are stored.
+/// Save an already encrypted candidate. SDK writers coordinate destination access
+/// through a stable advisory lock. No signing keys are stored.
 /// Existing output is replaced only after complete validation and fsync.
 pub fn save(
     source: impl AsRef<Path>,
@@ -76,6 +76,8 @@ pub fn save(
 ) -> Result<Report, Error> {
     let source = source.as_ref();
     let destination = destination.as_ref();
+    let resolved_destination = crate::package::destination(destination)?;
+    let _destination_lock = crate::package::lock_destination(&resolved_destination)?;
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(limits.timeout_seconds))
         .ok_or_else(|| Error::limit("Save timeout is too large"))?;
@@ -335,19 +337,59 @@ pub fn save(
     }
     candidate.as_file().sync_all().map_err(crate::io_failure)?;
     // Preserve custom verifier registrations by using the original registry.
-    let candidate_report =
+    let mut candidate_report =
         crate::analyze_with(candidate.path(), Mode::Verify, limits.clone(), options);
     if candidate_report.status != Status::Passed {
+        candidate_report.file = destination.display().to_string();
         return Err(Error::new(
             candidate_report.status,
             "save.validation",
             "Candidate verification failed; original and destination remain unchanged",
+        )
+        .with_report(candidate_report));
+    }
+    check_protected_blocks(Some(&previous_report), &candidate_report, options, deadline)?;
+    if file_digest(source, limits.max_archive_bytes, deadline)? != source_digest {
+        return Err(Error::new(
+            Status::OperationalError,
+            "save.source_changed",
+            "Source changed during save; candidate was discarded",
         ));
     }
-    if let Some(protection) = &candidate_report.protection {
-        let old_blocks = previous_report
-            .protection
-            .as_ref()
+    #[cfg(unix)]
+    let parent_handle = File::open(parent).map_err(crate::io_failure)?;
+    #[cfg(unix)]
+    parent_handle.sync_all().map_err(crate::io_failure)?;
+    if replace_source {
+        candidate
+            .persist(destination)
+            .map_err(|error| crate::io_failure(error.error))?;
+    } else {
+        candidate
+            .persist_noclobber(destination)
+            .map_err(|error| crate::io_failure(error.error))?;
+    }
+    let mut report = candidate_report;
+    report.file = destination.display().to_string();
+    #[cfg(unix)]
+    if parent_handle.sync_all().is_err() {
+        report.diagnostics.push(crate::Diagnostic {
+            severity: "warning", code: "save.durability".into(), path: None,
+            message: "Candidate was published but directory synchronization failed; crash durability is uncertain".into(),
+        });
+    }
+    Ok(report)
+}
+
+pub(crate) fn check_protected_blocks(
+    previous: Option<&Report>,
+    candidate: &Report,
+    options: &VerificationOptions<'_>,
+    deadline: Instant,
+) -> Result<(), Error> {
+    if let Some(protection) = &candidate.protection {
+        let old_blocks = previous
+            .and_then(|report| report.protection.as_ref())
             .map(|report| report.encrypted.as_slice())
             .unwrap_or(&[]);
         let mut old_by_digest: BTreeMap<&str, Vec<&protection::EncryptedContent>> = BTreeMap::new();
@@ -408,35 +450,5 @@ pub fn save(
             }
         }
     }
-    if file_digest(source, limits.max_archive_bytes, deadline)? != source_digest {
-        return Err(Error::new(
-            Status::OperationalError,
-            "save.source_changed",
-            "Source changed during save; candidate was discarded",
-        ));
-    }
-    #[cfg(unix)]
-    let parent_handle = File::open(parent).map_err(crate::io_failure)?;
-    #[cfg(unix)]
-    parent_handle.sync_all().map_err(crate::io_failure)?;
-    if replace_source {
-        candidate
-            .persist(destination)
-            .map_err(|error| crate::io_failure(error.error))?;
-    } else {
-        candidate
-            .persist_noclobber(destination)
-            .map_err(|error| crate::io_failure(error.error))?;
-    }
-    #[cfg(unix)]
-    parent_handle.sync_all().map_err(|_| {
-        Error::new(
-            Status::OperationalError,
-            "save.durability",
-            "Candidate was published but directory synchronization failed; durability is uncertain",
-        )
-    })?;
-    let mut report = candidate_report;
-    report.file = destination.display().to_string();
-    Ok(report)
+    Ok(())
 }
