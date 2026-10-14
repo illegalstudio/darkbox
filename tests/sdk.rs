@@ -189,7 +189,8 @@ fn complete_public_lifecycle_supports_both_common_versions_and_reader_inputs() {
         let copy = editor
             .save_as(fixture.path("copy.project"), &fixture.options(false), None)
             .unwrap();
-        assert_eq!(copy.path(), Some(fixture.path("copy.project").as_path()));
+        let resolved_copy = fs::canonicalize(fixture.path("copy.project")).unwrap();
+        assert_eq!(copy.path(), Some(resolved_copy.as_path()));
         assert!(copy.resource("assets/nested/new.txt").is_err());
         let mut archive = Vec::new();
         copy.copy_to(&mut archive).unwrap();
@@ -622,6 +623,65 @@ fn stale_editors_and_simultaneous_writers_cannot_overwrite_new_editions() {
         "package.destination_exists"
     );
     assert_eq!(fs::read(existing).unwrap(), b"Unrelated");
+}
+
+#[cfg(unix)]
+#[test]
+fn parent_directory_aliases_resolve_saved_paths_and_share_writer_locks() {
+    let fixture = Fixture::new();
+    let alias = fixture.path("parent-alias");
+    std::os::unix::fs::symlink(fixture.directory.path(), &alias).unwrap();
+    let aliased_path = alias.join("original.project");
+    let options = fixture.options(false);
+    let package = fixture
+        .editor(false, "1.1.0")
+        .save_as(&aliased_path, &options, None)
+        .unwrap();
+    let resolved_path = fs::canonicalize(&aliased_path).unwrap();
+    assert_eq!(package.path(), Some(resolved_path.as_path()));
+
+    let writer = PackageWriter::new(
+        &aliased_path,
+        package.manifest().clone(),
+        Limits::default(),
+        &options,
+        None,
+    )
+    .unwrap();
+    let mut editor = package.edit();
+    assert_eq!(
+        editor.save(&options, None).err().unwrap().code,
+        "package.busy"
+    );
+    assert_eq!(
+        darkbox::save(
+            &resolved_path,
+            &aliased_path,
+            darkbox::PackageUpdate::default(),
+            Limits::default(),
+            &options,
+            None
+        )
+        .err()
+        .unwrap()
+        .code,
+        "package.busy"
+    );
+    drop(writer);
+
+    editor
+        .put_reader(
+            "assets/public.bin",
+            Cursor::new(b"Saved through a parent alias"),
+        )
+        .unwrap();
+    let saved = editor.save(&options, None).unwrap();
+    let reopened = Package::open(&aliased_path, Limits::default(), &options).unwrap();
+    assert_eq!(saved.path(), reopened.path());
+    assert_eq!(
+        bytes(reopened.resource("assets/public.bin").unwrap()),
+        b"Saved through a parent alias"
+    );
 }
 
 struct Profile {
