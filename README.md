@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.0.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.0.0"></a>
+  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.1.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.1.0"></a>
   <a href="schema/manifest.schema.json"><img src="https://img.shields.io/static/v1?label=JSON%20Schema&amp;message=2020-12&amp;color=303A46&amp;style=flat-square" alt="JSON Schema 2020-12"></a>
 </p>
 
@@ -46,9 +46,11 @@ Preserving data also means preserving how to decode it. Every archive carries th
 ## Documents
 
 - [Rust CLI: installation, commands and reports](docs/cli.md)
+- [Rust library: key providers, extension registration and validated saving](docs/library.md)
 - [Building and publishing releases](docs/releases.md)
 - [Specification](docs/specification.md)
-- [Canonical Darkbox 1.0.0 README](archive/1.0.0/README.md), copied byte-for-byte to the archive root as `README.md`
+- [Canonical Darkbox 1.1.0 README](archive/1.1.0/README.md), copied byte-for-byte to the archive root as `README.md`
+- [Selective protection extension 1.0.0](archive/1.1.0/docs/darkbox/protection/1.0.0.md), with its schema and interoperable test vectors
 - [Original SQLite file-format reference](archive/1.0.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.0.0/docs/sqlite/SOURCE.md)
 - [Manifest JSON Schema](schema/manifest.schema.json), using JSON Schema Draft 2020-12
 - [Canonical bundle catalog schema](schema/bundle.schema.json)
@@ -67,6 +69,8 @@ darkbox versions
 ```
 
 Verification checks common container rules, the exact canonical documentation and SQLite snapshots offline. It reports application-profile semantics as unchecked; passing these common checks does not certify full application conformance. Inspection reports metadata without certifying conformance. See the [CLI documentation](docs/cli.md) for reports, exit codes, resource limits and binary packages.
+
+Darkbox 1.1.0 supports selective AES-256-GCM encryption of individual attachments and BLOB values in ordinary SQLite databases. Its official required protection extension signs the exact manifest with Ed25519 and inventories every payload file with SHA-256. Public information remains readable. Applications supply trusted signer keys and decryption keys; missing decryption keys leave protected content locked without marking it corrupt. Earlier published versions remain supported with their unchanged canonical bundles.
 
 ## Install
 

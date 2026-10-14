@@ -11,6 +11,18 @@ The different numbers deliberately show that a common specification version, app
 
 The [profile guidance](../docs/profiles.md) explains how to document an application format. Each example includes a self-contained profile document: [Notebook](profiles/notebook.md) or [Canvas](profiles/canvas.md).
 
-To build an archive, copy all contents of the [canonical Darkbox 1.0.0 bundle](../archive/1.0.0/) into the ZIP root, preserving relative paths and every file's bytes. Do not include an enclosing `archive/` or version directory. Then add `manifest.json`, copy the matching application profile document to `application.profilePath`, which is `docs/profile.md` in both examples, and provide the declared SQLite databases and resource folders. The manifests declare all canonical documentation directories as well as their application directories. Perform container and profile validation in addition to JSON Schema validation.
+To build an archive, copy all contents of the [canonical Darkbox 1.1.0 bundle](../archive/1.1.0/) into the ZIP root, preserving relative paths and every file's bytes. Do not include an enclosing `archive/` or version directory. Then add `manifest.json`, copy the matching application profile document to `application.profilePath`, which is `docs/profile.md` in both examples, and provide the declared SQLite databases and resource folders. The manifests declare all canonical documentation directories as well as their application directories. Perform container and profile validation in addition to JSON Schema validation.
 
 The Canvas presentation extension is metadata-only. Its accent color can be preserved after ordinary project edits, so it is safe to mark it optional. It does not imply a directory or database of its own.
+
+## Protected example
+
+`cargo run --example protected -- example.project` creates a complete protected archive using the [protected-notes profile](profiles/protected-notes.md). It writes public test-key files alongside it for CLI verification. These deterministic, publicly known keys and nonces are strictly for demonstration. The example refuses existing output paths and cleans up staging files. Use a fresh destination directory for each run.
+
+```sh
+cargo run --example protected -- example.project
+cargo run -- verify example.project --trust-store example.trust.json --require-protection
+cargo run -- verify example.project --trust-store example.trust.json --decryption-keys example.keys.json --require-protection
+```
+
+The first verification checks the trusted signature, complete ciphertext inventory, public resources and SQLite integrity. The second additionally authenticates the encrypted attachment and SQLite BLOBs. Neither checks application plaintext semantics. The [binary/AAD/signature vectors](../archive/1.1.0/docs/darkbox/protection/1.0.0.vectors.json) provide exact independent interoperability inputs.

@@ -22,6 +22,7 @@ class PublishedReferences(unittest.TestCase):
         self.addCleanup(setattr, GUARD, "ROOT", original)
         GUARD.ROOT = self.root
         self.git("init", "-q")
+        self.git("config", "commit.gpgsign", "false")
         self.registry = {"versions": [{"version": "1.0.0", "released": True, "rules": "v1"}]}
         self.write("versions.json", json.dumps(self.registry))
         self.write("archive/1.0.0/README.md", "Published bytes\n")

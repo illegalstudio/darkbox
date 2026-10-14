@@ -2,13 +2,19 @@
 //! Application-profile semantics are always reported separately.
 
 mod container;
+pub mod extensions;
 mod json;
 mod model;
 mod paths;
+pub mod protection;
 mod sqlite;
 mod versions;
+mod writer;
 
-pub use model::{DatabaseInfo, Diagnostic, EntryInfo, Limits, Mode, Report, Status};
+pub use extensions::{ExtensionRegistry, ExtensionVerifier, VerificationOptions};
+pub use model::{
+    DatabaseInfo, Diagnostic, EntryInfo, Failure as Error, Limits, Mode, Report, Status,
+};
 use model::{Failure, Manifest, Result};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,6 +23,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use versions::{CATALOG_PATH, Catalog, RuleSet, VersionSpec};
+pub use writer::{PackageUpdate, open, save};
 use zip::{CompressionMethod, ZipArchive};
 
 pub fn supported_versions() -> impl Iterator<Item = (&'static str, bool)> {
@@ -26,9 +33,18 @@ pub fn supported_versions() -> impl Iterator<Item = (&'static str, bool)> {
 }
 
 pub fn analyze(path: impl AsRef<Path>, mode: Mode, limits: Limits) -> Report {
+    analyze_with(path, mode, limits, &VerificationOptions::default())
+}
+
+pub fn analyze_with(
+    path: impl AsRef<Path>,
+    mode: Mode,
+    limits: Limits,
+    options: &VerificationOptions<'_>,
+) -> Report {
     let path = path.as_ref();
     let mut report = Report {
-        report_version: 1,
+        report_version: 2,
         cli_version: env!("CARGO_PKG_VERSION"),
         command: mode,
         file: path.display().to_string(),
@@ -47,12 +63,21 @@ pub fn analyze(path: impl AsRef<Path>, mode: Mode, limits: Limits) -> Report {
         manifest: None,
         entries: Vec::new(),
         databases: Vec::new(),
+        protection: None,
         checks: Vec::new(),
         diagnostics: Vec::new(),
         limits,
     };
-    if let Err(error) = run(path, mode, &mut report) {
+    if let Err(error) = run(path, mode, &mut report, options) {
         report.record(error);
+    }
+    if report.protection.is_none()
+        && report
+            .manifest
+            .as_ref()
+            .is_some_and(|manifest| manifest["extensions"].get(protection::NAMESPACE).is_some())
+    {
+        report.note("protection.not_checked", "Protection signature, inventory and encrypted content authentication were not checked; this report does not authorize ordinary protected opening or saving");
     }
     report.note("profile.not_validated", "Application data semantics and the accuracy or completeness of profile documentation have not been validated");
     report
@@ -90,7 +115,12 @@ fn read_failure(error: std::io::Error) -> Failure {
     }
 }
 
-fn run(path: &Path, mode: Mode, report: &mut Report) -> Result<()> {
+fn run(
+    path: &Path,
+    mode: Mode,
+    report: &mut Report,
+    options: &VerificationOptions<'_>,
+) -> Result<()> {
     let limits = report.limits.clone();
     if limits.max_entries == 0
         || limits.max_entry_bytes == 0
@@ -204,6 +234,12 @@ fn run(path: &Path, mode: Mode, report: &mut Report) -> Result<()> {
     };
     let value = json::parse(&manifest_bytes)?;
     report.manifest = Some(value.clone());
+    if options.require_protection && value["extensions"].get(protection::NAMESPACE).is_none() {
+        report.record(Failure::invalid(
+            "protection.missing",
+            "Application policy requires the protection extension",
+        ));
+    }
     report.checks.push("manifest.json");
     let id = value
         .pointer("/darkbox/id")
@@ -310,6 +346,7 @@ fn run(path: &Path, mode: Mode, report: &mut Report) -> Result<()> {
         .unwrap_or_default();
     let mut staged = BTreeMap::new();
     let mut signatures = BTreeMap::new();
+    let mut digests = BTreeMap::new();
     let mut total_actual = 0u64;
     let mut canonical_ok = common;
     let mut profile_ok = common;
@@ -324,14 +361,15 @@ fn run(path: &Path, mode: Mode, report: &mut Report) -> Result<()> {
             .is_some_and(|manifest| manifest.application.profile_path == *name);
         let capture =
             name == "manifest.json" || profile || (common && (expected.is_some() || catalog));
-        let destination = if let Some((db_index, _)) = databases.get(name.as_str()) {
-            let destination = temporary.path().join(format!("database-{db_index}.sqlite"));
-            let handle = File::create(&destination).map_err(io_failure)?;
-            staged.insert(name.clone(), destination);
-            Some(handle)
-        } else {
-            None
-        };
+        let destination =
+            if !name.ends_with('/') && (common || databases.contains_key(name.as_str())) {
+                let destination = temporary.path().join(format!("entry-{index}"));
+                let handle = File::create(&destination).map_err(io_failure)?;
+                staged.insert(name.clone(), destination);
+                Some(handle)
+            } else {
+                None
+            };
         let expected_crc = file.crc32();
         let expected_size = file.size();
         let scan = stream(
@@ -360,6 +398,14 @@ fn run(path: &Path, mode: Mode, report: &mut Report) -> Result<()> {
         }
         if !name.ends_with('/') {
             signatures.insert(name.clone(), scan.prefix);
+            digests.insert(
+                name.clone(),
+                extensions::EntryDigest {
+                    path: name.clone(),
+                    size: scan.size,
+                    sha256: scan.sha256.clone(),
+                },
+            );
         }
         if common {
             if let Some(expected) = expected
@@ -440,11 +486,38 @@ fn run(path: &Path, mode: Mode, report: &mut Report) -> Result<()> {
         if profile_ok {
             report.checks.push("profile.presence_and_encoding");
         }
+        let extension_manifest = report.manifest.as_ref().unwrap().clone();
+        let context = extensions::ExtensionContext {
+            manifest: &extension_manifest,
+            manifest_bytes: &manifest_bytes,
+            inventory: &digests,
+            options,
+            limits: &limits,
+            deadline,
+            staged: &staged,
+        };
         for (namespace, extension) in &manifest.as_ref().unwrap().extensions {
-            if extension.required {
+            if namespace == protection::NAMESPACE && !extension.required {
+                report.record(Failure::invalid(
+                    "protection.required",
+                    "Protection must be a required extension",
+                ));
+                continue;
+            }
+            if let Some(verifier) = options.extensions.get(namespace, &extension.version) {
+                if let Err(error) = verifier.verify(&context, report) {
+                    report.record(error);
+                }
+            } else if extension.required {
                 report.record(Failure::new(
                     Status::Unsupported,
-                    "extension.required",
+                    if namespace == protection::NAMESPACE
+                        && extension.version != protection::VERSION
+                    {
+                        "protection.version"
+                    } else {
+                        "extension.required"
+                    },
                     format!("Required extension is not implemented: {namespace}"),
                 ));
             } else {

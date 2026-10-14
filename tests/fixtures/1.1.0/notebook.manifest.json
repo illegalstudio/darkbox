@@ -1,0 +1,62 @@
+{
+  "darkbox": {
+    "id": "darkbox",
+    "version": "1.1.0"
+  },
+  "application": {
+    "id": "org.example.notebook",
+    "formatVersion": "3",
+    "profilePath": "docs/profile.md"
+  },
+  "folders": [
+    {
+      "path": "docs",
+      "description": "Darkbox references and application data-format documentation."
+    },
+    {
+      "path": "docs/darkbox",
+      "description": "Canonical catalog of Darkbox documentation files and their SHA-256 digests."
+    },
+    {
+      "path": "docs/sqlite",
+      "description": "Canonical original SQLite file-format reference, upstream notice and capture provenance."
+    },
+    {
+      "path": "docs/sqlite/images",
+      "description": "Original local presentation assets for the included SQLite reference pages."
+    },
+    {
+      "path": "data",
+      "description": "Project database, including text and embedded attachment bytes."
+    },
+    {
+      "path": "docs/darkbox/protection",
+      "description": "Official protection extension documentation and vectors"
+    }
+  ],
+  "databases": [
+    {
+      "path": "data/project.sqlite",
+      "description": "Notebook metadata, documents, attachments and a derived search index.",
+      "userVersion": 12,
+      "tables": [
+        {
+          "name": "project",
+          "description": "Project identity and title."
+        },
+        {
+          "name": "documents",
+          "description": "Ordered text documents with stable identifiers."
+        },
+        {
+          "name": "attachments",
+          "description": "Embedded binary resources with their original names and media types."
+        },
+        {
+          "name": "document_search",
+          "description": "Derived FTS5 virtual table for document search; SQLite shadow tables are excluded from this inventory."
+        }
+      ]
+    }
+  ]
+}

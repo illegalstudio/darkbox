@@ -49,11 +49,19 @@ darkbox verify example.project --json
 darkbox inspect example.project --json
 darkbox versions
 darkbox versions --json
+darkbox verify protected.project --trust-store trust.json --require-protection
+darkbox verify protected.project --trust-store trust.json --decryption-keys keys.json --json
 ```
 
 The input filename extension is irrelevant. Both analysis commands leave the original untouched, validate safe ZIP structure and read every entry to check decompression, sizes and CRC. Database bytes are staged under generated names in one private temporary directory. SQLite opens those copies read-only, disables loadable extensions, distrusts database-supplied functions and removes the staging directory on completion or ordinary error return.
 
 `verify` checks the exact supported common version, strict JSON, its schema, path and inventory rules, canonical documentation, profile-document presence and UTF-8 encoding, SQLite snapshot independence, logical table inventory, declared `userVersion`, `integrity_check` and `foreign_key_check`. The archive catalog is compared with the embedded official catalog; its hashes cannot authorize changed documentation. Unknown required extensions and unavailable SQLite capabilities are reported as unsupported.
+
+For Darkbox 1.1.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
+
+`--trust-store PATH` reads a JSON object mapping signer identifiers to 64 hexadecimal characters representing raw 32-byte Ed25519 public keys. `--decryption-keys PATH` reads an application-supplied private JSON object mapping key identifiers to 64 hexadecimal characters representing raw 32-byte AES keys. These files stay outside the package. No command accepts secret keys directly as command-line values, and reports never include supplied key bytes or decrypted plaintext. Key files are limited to 4 MiB. Malformed key configuration returns a usage error without echoing its contents. Inspect does not authenticate protection, even when these options are supplied.
+
+`--require-protection` is an external expectation: verification fails if the official descriptor is absent. This detects removal of protection metadata when your workflow requires it. Without such an expectation an intentionally unprotected project cannot be distinguished from one whose entire protection descriptor was removed. An unknown signer returns unsupported and prevents ordinary opening/saving. With trusted signer keys but no decryption key, common and public protection checks can pass with encrypted contents explicitly reported as `key_absent`. Missing keys are not corruption. Wrong keys or substituted ciphertext/context yield `protection.authentication`; removed or invalid signatures yield separate signature diagnostics.
 
 Application profiles are not implemented by this binary. A successful result is **passed common machine checks**, with `application_validation = "not_performed"`. It does not certify the embedded profile's accuracy, SQL column semantics, application invariants, resource references or full project conformance. Use `verify --require-profile` when your workflow requires full profile validation: this binary returns unsupported instead of accepting common checks alone.
 
@@ -65,7 +73,9 @@ Application profiles are not implemented by this binary. A successful result is 
 
 Human-readable output is the default. `--json` writes one JSON object to standard output, including on analysis failures. Usage errors and output-write failures are written to standard error. Applications should use JSON rather than parse display text.
 
-JSON reports include `report_version`, `cli_version`, `command`, `file`, `status`, `scope`, `application_validation`, `supported_versions`, `manifest`, `entries`, `databases`, `checks`, `diagnostics` and effective `limits`. Entry records indicate whether their CRC was checked; database records indicate whether integrity and foreign keys were checked. `checks` identifies completed check groups, not application-profile certification. Diagnostics have a severity, stable code, optional archive path and explanatory message. Reports may acquire additional fields; consumers should ignore fields they do not use and explicitly support the report version.
+JSON report version 2 includes `report_version`, `cli_version`, `command`, `file`, `status`, `scope`, `application_validation`, `supported_versions`, `manifest`, `entries`, `databases`, `protection`, `checks`, `diagnostics` and effective `limits`. Entry records indicate whether their CRC was checked; database records indicate whether integrity and foreign keys were checked. `protection` is null when protection was not checked; otherwise it reports the extension version, signature state, inventory result and every encrypted block with public context, block SHA-256, public `nonce_hex`, authentication state and `plaintext_validation = "not_performed"`. Authentication is `verified`, `key_absent`, `failed` or `not_verified`. A verified inventory with an unknown or invalid signature is not an authenticated inventory. `checks` identifies completed check groups, not application-profile certification. Diagnostics have a severity, stable code, optional archive path and explanatory message. Reports may acquire additional fields; consumers should ignore fields they do not use and explicitly support the report version.
+
+Protection diagnostic codes include `protection.key_absent`, `protection.signer_unknown`, `protection.version`, `protection.block_version`, `protection.signature_missing`, `protection.signature_invalid`, `protection.authentication`, `protection.inventory`, `protection.nonce_reuse`, `protection.required` and `protection.missing`. Missing decryption keys are informational; trust and unsupported-version errors are unsupported; invalid signature, inventory and AEAD errors are invalid. Independent public and SQLite checks continue where structurally safe. Diagnostic inspection never claims cryptographic conformance.
 
 | Exit code | Status | Meaning |
 | --- | --- | --- |
@@ -91,7 +101,7 @@ Both analysis commands accept these reader policies. Sizes are bytes, not decima
 | `--max-metadata-bytes` | `4194304` (4 MiB per manifest or captured text/reference file) |
 | `--timeout-seconds` | `60` for the entire analysis |
 
-ZIP counts are bounded before constructing the ZIP library's index. Advertised sizes and actual streamed bytes are checked separately. JSON nesting is limited to 128 levels; numeric literals are limited to 4096 bytes and exponent magnitude 4096 before schema arithmetic. SQLite also limits SQL size, value size and expression depth, uses a small page cache and an interrupt handler tied to the analysis deadline. The deadline is checked cooperatively while parsing, streaming and executing SQLite operations; it is not an operating-system process quota. Temporary disk use remains bounded by the configured uncompressed limits. Abrupt termination such as a killed process can leave temporary files for the operating system to clean up.
+ZIP counts are bounded before constructing the ZIP library's index. Advertised sizes and actual streamed bytes are checked separately. JSON nesting is limited to 128 levels; numeric literals are limited to 4096 bytes and exponent magnitude 4096 before schema arithmetic. SQLite also limits SQL size, value size and expression depth, uses a small page cache and an interrupt handler tied to the analysis deadline. `max_entries` additionally bounds each protected table's row count and the total reported encrypted block count. For extension verification, regular files are staged under generated names in the same private directory, bounded by total uncompressed limits; plaintext from AEAD verification stays in memory. The deadline is checked cooperatively while parsing, streaming and executing SQLite operations; it is not an operating-system process quota. Temporary disk use remains bounded by the configured uncompressed limits. Abrupt termination such as a killed process can leave temporary files for the operating system to clean up.
 
 ## Maintaining version support
 
@@ -102,7 +112,7 @@ Every binary release must retain support for all specification versions publishe
 For a new specification version, add its bundle, schema, fixtures and registry entry, implement any new rules, then regenerate its catalog while `released` is false:
 
 ```sh
-python3 scripts/bundle_catalog.py --write --version 1.0.0
+python3 scripts/bundle_catalog.py --write --version 1.1.0
 python3 scripts/bundle_catalog.py --check
 python3 -m unittest discover -s tests -p 'test_*.py'
 cargo test --all-targets --locked

@@ -51,7 +51,7 @@ pub struct Diagnostic {
 }
 
 #[derive(Debug)]
-pub(crate) struct Failure {
+pub struct Failure {
     pub status: Status,
     pub code: &'static str,
     pub path: Option<String>,
@@ -81,6 +81,14 @@ impl Failure {
         Self::new(Status::ResourceLimit, "limits.exceeded", message)
     }
 }
+
+impl std::fmt::Display for Failure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for Failure {}
 
 pub(crate) type Result<T> = std::result::Result<T, Failure>;
 
@@ -140,13 +148,14 @@ pub struct Report {
     pub manifest: Option<Value>,
     pub entries: Vec<EntryInfo>,
     pub databases: Vec<DatabaseInfo>,
+    pub protection: Option<crate::protection::ProtectionReport>,
     pub checks: Vec<&'static str>,
     pub diagnostics: Vec<Diagnostic>,
     pub limits: Limits,
 }
 
 impl Report {
-    pub(crate) fn record(&mut self, error: Failure) {
+    pub fn record(&mut self, error: Failure) {
         if error.status.rank() > self.status.rank() {
             self.status = error.status;
         }
@@ -158,7 +167,7 @@ impl Report {
         });
     }
 
-    pub(crate) fn note(&mut self, code: &str, message: impl Into<String>) {
+    pub fn note(&mut self, code: &str, message: impl Into<String>) {
         self.diagnostics.push(Diagnostic {
             severity: "info",
             code: code.into(),
@@ -197,6 +206,7 @@ pub(crate) struct Database {
 #[derive(Clone, Deserialize)]
 pub(crate) struct Extension {
     pub required: bool,
+    pub version: String,
 }
 
 #[derive(Clone, Deserialize)]

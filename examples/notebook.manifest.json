@@ -1,7 +1,7 @@
 {
   "darkbox": {
     "id": "darkbox",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "application": {
     "id": "org.example.notebook",
@@ -28,6 +28,10 @@
     {
       "path": "data",
       "description": "Project database, including text and embedded attachment bytes."
+    },
+    {
+      "path": "docs/darkbox/protection",
+      "description": "Official protection extension documentation and vectors"
     }
   ],
   "databases": [

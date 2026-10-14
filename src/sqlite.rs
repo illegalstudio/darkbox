@@ -40,13 +40,7 @@ fn classify(error: Error) -> Failure {
     )
 }
 
-pub(crate) fn examine(
-    path: &Path,
-    declaration: &Database,
-    mode: Mode,
-    limits: &Limits,
-    deadline: Instant,
-) -> Result<DatabaseInfo> {
+fn open(path: &Path, limits: &Limits, deadline: Instant) -> Result<Connection> {
     let db = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -74,6 +68,125 @@ pub(crate) fn examine(
         .map_err(classify)?;
     db.execute_batch("PRAGMA query_only=ON; PRAGMA cache_size=-2048;")
         .map_err(classify)?;
+    Ok(db)
+}
+
+pub(crate) fn encrypted_values(
+    path: &Path,
+    declaration: &crate::protection::SqliteProtection,
+    limits: &Limits,
+    deadline: Instant,
+    mut visit: impl FnMut(&str, &[u8]) -> Result<()>,
+) -> Result<()> {
+    use rusqlite::types::ValueRef;
+    let db = open(path, limits, deadline)?;
+    let mut tables = db.prepare("PRAGMA main.table_list").map_err(classify)?;
+    let ordinary = tables
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(classify)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(classify)?
+        .into_iter()
+        .any(|(schema, name, kind)| {
+            schema == "main"
+                && name == declaration.table
+                && kind == "table"
+                && !name.starts_with("sqlite_")
+        });
+    if !ordinary {
+        return Err(Failure::invalid(
+            "protection.sqlite_table",
+            "Protected columns require an ordinary application table",
+        ));
+    }
+    let quote = |name: &str| format!("\"{}\"", name.replace('"', "\"\""));
+    let mut columns = db
+        .prepare(&format!(
+            "PRAGMA main.table_xinfo({})",
+            quote(&declaration.table)
+        ))
+        .map_err(classify)?;
+    let names = columns
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(1)?, row.get::<_, i64>(6)?))
+        })
+        .map_err(classify)?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(classify)?;
+    if [&declaration.column, &declaration.record_id_column]
+        .iter()
+        .any(|name| {
+            !names
+                .iter()
+                .any(|(actual, hidden)| actual == *name && *hidden == 0)
+        })
+    {
+        return Err(Failure::invalid(
+            "protection.sqlite_column",
+            "Protected and identifier columns must exist with exact names and cannot be generated or hidden",
+        ));
+    }
+    let query = format!(
+        "SELECT {}, {} FROM main.{}",
+        quote(&declaration.record_id_column),
+        quote(&declaration.column),
+        quote(&declaration.table)
+    );
+    let mut statement = db.prepare(&query).map_err(classify)?;
+    let mut rows = statement.query([]).map_err(classify)?;
+    let mut ids = BTreeSet::new();
+    while let Some(row) = rows.next().map_err(classify)? {
+        crate::container::check_deadline(deadline)?;
+        let id = match row.get_ref(0).map_err(classify)? {
+            ValueRef::Text(text) => std::str::from_utf8(text).ok(),
+            _ => None,
+        }
+        .filter(|id| !id.is_empty() && id.len() <= 1024 && !id.contains('\0'))
+        .ok_or_else(|| {
+            Failure::invalid(
+                "protection.record_id",
+                "Record identifiers must be nonempty UTF-8 TEXT without NUL, at most 1024 bytes",
+            )
+        })?;
+        if ids.len() >= limits.max_entries {
+            return Err(Failure::limit(
+                "Protected table row count exceeds configured entry limit",
+            ));
+        }
+        if !ids.insert(id.to_owned()) {
+            return Err(Failure::invalid(
+                "protection.record_id",
+                "Record identifiers must be unique using exact UTF-8 bytes",
+            ));
+        }
+        match row.get_ref(1).map_err(classify)? {
+            ValueRef::Null => {}
+            ValueRef::Blob(block) => visit(id, block)?,
+            _ => {
+                return Err(Failure::invalid(
+                    "protection.sqlite_blob",
+                    "Protected values must be encrypted BLOBs or SQL NULL",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn examine(
+    path: &Path,
+    declaration: &Database,
+    mode: Mode,
+    limits: &Limits,
+    deadline: Instant,
+) -> Result<DatabaseInfo> {
+    let db = open(path, limits, deadline)?;
     let user_version = db
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .map_err(classify)?;
