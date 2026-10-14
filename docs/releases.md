@@ -12,7 +12,7 @@ make release
 
 The command fetches `origin/main` and tags, checks that the local branch contains the remote branch, and proposes the current Cargo version when it is newer than existing release tags. Otherwise it proposes the next patch version. For the first release it proposes `1.0.0`. Stable versions only are supported.
 
-Select the software version and which unpublished specification versions to publish. The first release defaults to the prepared specification versions because a public binary must support at least one published specification. Later software releases default to publishing no new specification. An explicit specification selection sets `released: true` without rewriting its canonical files. Those references become immutable when the release is published.
+Select the proposed software version, or enter a different one. Every release automatically includes all registered specification versions whose `released` flag is false, including later releases. There is no separate specification-selection prompt. The release summary lists every version being published, and preparation sets `released: true` without rewriting its canonical files. Those references become immutable when the release is published. Previously published versions retain their exact bytes and support.
 
 The command updates only `Cargo.toml`, the Darkbox entry in `Cargo.lock`, and `versions.json`, then runs `make check` and the published-reference guard. Review its diff summary and confirm the final commit, tag and push. It commits changed preparation files, creates an annotated tag, and pushes the branch and tag together with `git push --atomic`. Cancelling or failing checks restores the preparation files. A failed push retains the local release commit and tag and prints the retry command.
 
@@ -22,11 +22,13 @@ Preview the proposed release without changing files, Git refs or the remote:
 make release ARGS="--dry-run"
 ```
 
-An explicit version or specification selection still requires the final interactive confirmation:
+Normally `make release` needs no arguments. To override the software version or publish only selected specifications, use explicit arguments; the final interactive confirmation still applies:
 
 ```sh
-make release ARGS="--version 1.0.0 --publish-spec 1.0.0"
+make release ARGS="--version 1.1.0 --publish-spec 1.1.0"
 ```
+
+Repeat `--publish-spec` to select multiple versions. For an intentional software-only release while specifications are still unpublished, use `make release ARGS="--no-publish-spec"`. This option and `--publish-spec` are mutually exclusive. A first public release must still publish at least one specification. Dry-run previews use the same automatic selection and overrides as real releases.
 
 The command does not bypass branch protections. If `main` requires a pull request, prepare and review the release metadata through that process, then create an annotated matching tag on the merged commit and push that tag. Tagged CI requires the release commit to belong to `origin/main`.
 

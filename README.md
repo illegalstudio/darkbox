@@ -129,7 +129,7 @@ cargo install --path . --locked
 
 ## Releases
 
-Run `make release` from a clean `main` checkout. It proposes the next software version, prepares Cargo metadata, asks which specification versions to publish, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, builds native Arch packages for both Linux architectures, publishes the complete release, updates the Illegal Studio Homebrew tap and notifies its pacman repository. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
+Run `make release` from a clean `main` checkout. It proposes the next software version, includes every unpublished specification automatically, prepares release metadata, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, builds native Arch packages for both Linux architectures, publishes the complete release, updates the Illegal Studio Homebrew tap and notifies its pacman repository. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
 
 ## Versioned archive documentation
 

@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -68,7 +69,7 @@ class VersionPolicy(unittest.TestCase):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 release.version_tuple(version)
 
-    def test_specification_publication_is_explicit(self):
+    def test_only_selected_specification_versions_are_frozen(self):
         registry = {"versions": [{"version": "1.0.0", "released": True},
                                  {"version": "2.0.0", "released": False}]}
         release.publication_versions(registry, [])
@@ -101,6 +102,8 @@ class InteractiveRelease(unittest.TestCase):
         self.git("remote", "add", "origin", str(self.origin))
         self.git("push", "-q", "origin", "main")
         self.original = {name: (self.root / name).read_bytes() for name in release.OWNED}
+        self.original_head = self.git("rev-parse", "HEAD")
+        self.original_tags = self.git("tag", "--list")
         self.addCleanup(patch.stopall)
         patch.object(release, "ROOT", self.root).start()
         self.real_run = release.run
@@ -110,7 +113,28 @@ class InteractiveRelease(unittest.TestCase):
         return subprocess.check_output(["git", *args], cwd=self.root, text=True).strip()
 
     def write(self, name, value):
-        (self.root / name).write_text(value)
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(value)
+
+    def published_then_pending(self):
+        registry = {"versions": [{"version": "1.0.0", "released": True, "rules": "v1"}]}
+        self.write("versions.json", json.dumps(registry))
+        self.write("archive/1.0.0/README.md", "Published canonical bytes\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "Published fixture")
+        self.git("tag", "-a", "v1.0.0", "-m", "Published fixture")
+        for version in ("1.1.0", "2.0.0"):
+            registry["versions"].append({"version": version, "released": False, "rules": "v1"})
+            self.write(f"archive/{version}/README.md", f"Prepared canonical bytes for {version}\n")
+        self.write("versions.json", json.dumps(registry))
+        release.prepare("1.1.0", [])
+        self.git("add", ".")
+        self.git("commit", "-qm", "Prepare future specifications")
+        self.git("push", "-q", "origin", "main", "refs/tags/v1.0.0")
+        self.original = {name: (self.root / name).read_bytes() for name in release.OWNED}
+        self.original_head = self.git("rev-parse", "HEAD")
+        self.original_tags = self.git("tag", "--list")
 
     def run_command(self, *args, **kwargs):
         if args[0] in ("make", sys.executable):
@@ -118,17 +142,93 @@ class InteractiveRelease(unittest.TestCase):
         return self.real_run(*args, **kwargs)
 
     def args(self, **overrides):
-        return argparse.Namespace(**({"version": "1.0.1", "publish_spec": ["1.0.0"], "dry_run": False} | overrides))
+        return argparse.Namespace(**({"version": "1.0.1", "publish_spec": None, "dry_run": False} | overrides))
 
     def assert_restored(self):
         for name, content in self.original.items():
             self.assertEqual((self.root / name).read_bytes(), content)
         self.assertEqual(self.git("status", "--porcelain"), "")
-        self.assertEqual(self.git("tag", "--list"), "")
+        self.assertEqual(self.git("tag", "--list"), self.original_tags)
+        self.assertEqual(self.git("rev-parse", "HEAD"), self.original_head)
 
     def test_dry_run_does_not_write_files_or_refs(self):
         release.release(self.args(dry_run=True))
         self.assert_restored()
+
+    def test_later_release_automatically_publishes_all_pending_specifications(self):
+        self.published_then_pending()
+        references = {path: path.read_bytes() for path in (self.root / "archive").rglob("*") if path.is_file()}
+        with patch("builtins.input", side_effect=["", "y"]) as answers:
+            release.release(self.args(version=None))
+        self.assertEqual(answers.call_count, 2)
+        self.assertEqual(answers.call_args_list[0].args, ("Software version [1.1.0]: ",))
+        self.assertEqual(answers.call_args_list[1].args, ("Commit, tag and publish v1.1.0? [y/N]: ",))
+        self.assertTrue(all(row["released"] for row in json.loads((self.root / "versions.json").read_bytes())["versions"]))
+        self.assertEqual(self.git("cat-file", "-t", "v1.1.0"), "tag")
+        refs = self.git("ls-remote", "origin", "refs/heads/main", "refs/tags/v1.1.0^{}")
+        self.assertEqual({line.split()[0] for line in refs.splitlines()}, {self.git("rev-parse", "HEAD")})
+        for path, content in references.items():
+            self.assertEqual(path.read_bytes(), content)
+
+    def test_default_preview_lists_all_pending_versions_without_prompts_or_writes(self):
+        self.published_then_pending()
+        output = io.StringIO()
+        with patch("builtins.input") as answers, patch("sys.stdout", output):
+            release.release(self.args(version=None, dry_run=True))
+        answers.assert_not_called()
+        self.assertIn("Software release: v1.1.0", output.getvalue())
+        self.assertIn("Specification versions to freeze: 1.1.0, 2.0.0", output.getvalue())
+        self.assert_restored()
+
+    def test_explicit_selection_can_publish_only_one_pending_specification(self):
+        self.published_then_pending()
+        with patch("builtins.input", return_value="y") as answers:
+            release.release(self.args(version="1.1.0", publish_spec=["1.1.0"]))
+        answers.assert_called_once()
+        rows = {row["version"]: row["released"] for row in json.loads((self.root / "versions.json").read_bytes())["versions"]}
+        self.assertEqual(rows, {"1.0.0": True, "1.1.0": True, "2.0.0": False})
+
+    def test_software_only_override_preserves_pending_versions(self):
+        self.published_then_pending()
+        original_registry = (self.root / "versions.json").read_bytes()
+        with patch("builtins.input", return_value="y") as answers:
+            release.release(self.args(version="1.1.0", publish_spec=[]))
+        answers.assert_called_once()
+        self.assertEqual((self.root / "versions.json").read_bytes(), original_registry)
+        self.assertEqual(self.git("cat-file", "-t", "v1.1.0"), "tag")
+
+    def test_cli_overrides_share_the_same_preview_selection(self):
+        self.published_then_pending()
+        for arguments, expected in (([], "1.1.0, 2.0.0"),
+                                    (["--publish-spec", "2.0.0"], "2.0.0"),
+                                    (["--publish-spec", "1.1.0", "--publish-spec", "2.0.0"], "1.1.0, 2.0.0"),
+                                    (["--no-publish-spec"], "none")):
+            with self.subTest(arguments=arguments):
+                output = io.StringIO()
+                with patch.object(sys, "argv", ["release.py", "--dry-run", *arguments]), patch("sys.stdout", output):
+                    release.main()
+                self.assertIn(f"Specification versions to freeze: {expected}", output.getvalue())
+                self.assert_restored()
+        with patch.object(sys, "argv", ["release.py", "--dry-run", "--no-publish-spec", "--publish-spec", "1.1.0"]), patch("sys.stderr", io.StringIO()), self.assertRaises(SystemExit) as error:
+            release.main()
+        self.assertEqual(error.exception.code, 2)
+
+    def test_software_only_first_release_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "at least one published specification"):
+            release.release(self.args(publish_spec=[]))
+        self.assert_restored()
+
+    def test_no_pending_specifications_still_allows_a_software_release(self):
+        self.write("versions.json", json.dumps({"versions": [{"version": "1.0.0", "released": True, "rules": "v1"}]}))
+        self.git("add", ".")
+        self.git("commit", "-qm", "Published specification fixture")
+        self.git("tag", "-a", "v1.0.0", "-m", "Published fixture")
+        self.git("push", "-q", "origin", "main", "refs/tags/v1.0.0")
+        with patch("builtins.input", return_value="y") as answers:
+            release.release(self.args())
+        answers.assert_called_once()
+        self.assertEqual(self.git("cat-file", "-t", "v1.0.1"), "tag")
+        self.assertTrue(json.loads((self.root / "versions.json").read_bytes())["versions"][0]["released"])
 
     def test_cancellation_restores_versions_without_publishing(self):
         with patch("builtins.input", return_value="n"):

@@ -129,14 +129,8 @@ def release(args):
     registry = json.loads((ROOT / "versions.json").read_bytes())
     selected = args.publish_spec
     if selected is None:
-        pending = [row["version"] for row in registry["versions"] if not row["released"]]
-        default = pending if not any(row["released"] for row in registry["versions"]) else []
-        print(f"Unpublished specifications: {', '.join(pending) or 'none'}")
-        if args.dry_run:
-            selected = default
-        else:
-            response = input(f"Publish specifications (comma separated, '-' for none) [{','.join(default) or '-'}]: ").strip()
-            selected = default if not response else [] if response == "-" else [v.strip() for v in response.split(",")]
+        selected = [row["version"] for row in registry["versions"] if not row["released"]]
+        print(f"Unpublished specifications: {', '.join(selected) or 'none'}")
     publication_versions(registry, selected)
     print(f"Software release: {tag}")
     print(f"Specification versions to freeze: {', '.join(selected) or 'none'}")
@@ -182,7 +176,9 @@ def release(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", help="Software version; still requires final confirmation")
-    parser.add_argument("--publish-spec", action="append", help="Specification to freeze; repeat for multiple versions")
+    specifications = parser.add_mutually_exclusive_group()
+    specifications.add_argument("--publish-spec", action="append", help="Freeze only these specifications instead of all unpublished versions; repeat for multiple versions")
+    specifications.add_argument("--no-publish-spec", dest="publish_spec", action="store_const", const=[], help="Release software without publishing new specifications")
     parser.add_argument("--dry-run", action="store_true", help="Show the proposed release without modifying files, refs or the remote")
     parser.add_argument("--check-tag", help="CI: validate the checked-out release tag only")
     args = parser.parse_args()
