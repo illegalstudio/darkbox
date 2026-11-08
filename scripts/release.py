@@ -154,7 +154,7 @@ def release(args):
             return
         if changed:
             run("git", "add", "--", *changed)
-            run("git", "commit", "-m", f"Prepare release {tag}")
+            run("git", "commit", "-m", f"chore(release): prepare {tag}")
             committed = True
         run("git", "tag", "-a", tag, "-m", f"Release {tag}")
         committed = True
