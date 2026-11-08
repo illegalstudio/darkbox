@@ -12,7 +12,7 @@
     },
     {
       "version": "1.2.0",
-      "released": false,
+      "released": true,
       "rules": "v1"
     }
   ]
