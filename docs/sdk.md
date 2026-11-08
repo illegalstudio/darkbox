@@ -53,7 +53,7 @@ assert!(!editor.is_dirty());
 
 `Package` freezes compressed input on disk and verifies/extracts that exact snapshot under generated filenames in private staging. Reads never reopen a mutable original ZIP. `manifest`, `report`, `path` and `resources` expose metadata, checked state, an optional original path and actual file digests. `resource` includes manifest, signature and canonical files. It returns ZIP bytes after decompression, including ciphertext, and never implicitly decrypts data. Resource readers and database guards own their backing storage and survive dropping the package/editor or replacing its original file. Staging paths are not exposed.
 
-`from_reader` accepts any `Read` at its current position, without `Seek`, and bounds the copied ZIP bytes. `path` resolves aliases in parent directories, so its spelling may differ from the supplied filename. Compare resolved paths when checking filesystem identity. Reader-backed packages need `save_as` to select a filesystem destination. `copy_to` streams the exact frozen ZIP to any `Write`; output-stream publication belongs to the caller. `export_resource` atomically exports raw bytes to an absent filename and refuses overwriting. The SDK does not automatically extract archive paths into a user-selected filesystem tree or execute archive contents.
+`from_reader` accepts any `Read` at its current position, without `Seek`, and bounds the copied ZIP bytes. `path` resolves aliases in parent directories, so its spelling may differ from the supplied filename. Compare resolved paths when checking filesystem identity. Reader-backed packages need `save_as` to select a filesystem destination. `copy_to` streams the exact frozen ZIP to any `Write`; output-stream publication belongs to the caller. `export_resource` atomically exports raw bytes to an absent filename and refuses overwriting. The explicit `unpack` conversion validates a complete package before extracting into a private tree and publishing an absent destination. The SDK never executes archive contents.
 
 `DiagnosticPackage` runs verification and retains safe resources even when versions, required extensions, signatures, canonical data or application rules prevent ordinary opening. Its report describes failures. Malformed ZIP/manifest data or an incomplete bounded scan can leave no complete resource snapshot; `resource` then returns `package.diagnostic_unavailable`. This handle has no edit/save capability. `Package::open` accepts only a passed report, including valid public/locked views with absent private keys. Its `package.open` error carries the complete verification report in `Error::report`, including distinct signer, signature, version and authentication diagnoses. Candidate verification errors also attach their report. Diagnostic opening additionally exposes safe resource bytes.
 
@@ -106,4 +106,82 @@ All example keys and deterministic nonces are public test data, unsuitable for p
 
 Packages/editors/writers never accumulate the entire archive in memory. Resource I/O uses 64 KiB buffers. AEAD can buffer one encrypted attachment/BLOB and its plaintext under `max_entry_bytes`; JSON/reports retain bounded metadata. Compressed snapshots, uncompressed staging, replacements and candidate validation need disk space. Retained old handles can keep several editions alive. Dropping the final resource/database/package/editor owner removes private storage. Normal failures clean owned candidates/journal directories. Abrupt termination can leave operating-system temporary files.
 
-Configure `Limits` for compressed/entry/total bytes, entry counts, metadata and cooperative deadlines. Set the process temporary directory to suitable storage for large projects. Application SQL, readers, validators and signers must return promptly; the SDK cannot preempt arbitrary blocking callbacks. Application profile validation can intentionally reject an otherwise valid common-format package.
+Configure `Limits` for compressed/entry/total bytes, entry counts, metadata and cooperative deadlines. Set `Limits::staging_directory` to an existing private directory on suitable storage for large projects; `None` uses the operating-system temporary directory. Output candidates remain beside the destination for atomic publication. `Limits::large()` provides a bounded media-library preset, with individual fields still controlled by the application. Application SQL, readers, validators and signers must return promptly; the SDK cannot preempt arbitrary blocking callbacks. Application profile validation can intentionally reject an otherwise valid common-format package.
+
+## Directory libraries and incremental editions (1.2.0)
+
+Use `ManifestBuilder::package_id(id).resource_inventory()` to opt into stable
+library identity and an unsigned resource inventory under common version 1.2.0.
+The builder's `build` validates structure; `PackageWriter` and editor publication
+recompute actual inventory digests before signing the final manifest. Root
+`packageId` must match the protection extension's package ID when both are used.
+SDK writers preserve existing common versions; conversion never invents migrations.
+
+`analyze_with`/`verify` and `inspect` accept quiescent directories as well as ZIPs.
+Directory reports use compression `none`, `crc_verified = false`, and
+`directory.structure`/`directory.bytes` checks. Full verification still streams
+all files, compares canonical bytes and hashes, and checks isolated SQLite
+snapshots. Running working directories are application-owned; stop every writer,
+normalize and close SQLite to DELETE mode, and finish metadata/signatures before
+claiming snapshot conformance. Source inputs must remain stable throughout an
+operation. Staging/output locations must be outside every input directory.
+
+The lossless APIs accept `Limits` and `VerificationOptions` and return `Report`:
+
+```rust
+use darkbox::{Limits, VerificationOptions};
+let limits = Limits {
+    staging_directory: Some("/disk/private-staging".into()),
+    ..Limits::large()
+};
+let options = VerificationOptions::default();
+darkbox::unpack("snapshot.project", "library", limits.clone(), &options)?;
+darkbox::pack("library", "backup.project", limits.clone(), &options)?;
+darkbox::create_delta("snapshot.project", "backup.project", "changes.delta", limits.clone(), &options)?;
+darkbox::verify_delta("snapshot.project", "changes.delta", limits.clone(), &options)?;
+darkbox::merge("snapshot.project", "changes.delta", "restored.project", limits, &options)?;
+```
+
+All output destinations must be absent. Conversion/reconstruction preserve exact
+manifest, signature, canonical and opaque resource bytes. ZIP representation
+metadata need not survive. Required extension versions cannot disappear in a
+delta. A transport delta is not a standalone project; it requires its exact base.
+Chains apply one link at a time to the preceding verified complete edition.
+Readers check base/target manifest and full logical-inventory hashes, all transport
+CRCs, exact changed/removed paths and the fully reconstructed target before
+publication. Signed copies need external public trust, without signing keys.
+SQLite changes transfer whole database files. Complete editions are still read
+for verification; unchanged ordinary media is streamed without private copies.
+
+`Package::open` also accepts a quiescent 1.2.0 directory. It packs and freezes a
+private ZIP, then retains its verified resource snapshot. That immutable handle
+has `path() = None`; edits require `save_as` to a new ZIP. It does not write staged
+edits back into a live directory. Applications own live SQL/media operations and
+quiescence, and use `pack` for backup snapshots. `DiagnosticPackage::open` can
+report invalid directory checks without an editable handle. Unsafe/incomplete
+inputs may have no complete diagnostic resource snapshot.
+
+`inspect_inventory(path, limits)` returns an `inspected` report with scope
+`inventory_claims`, never `passed`. It checks structure, schema, path coverage and
+size claims from optional `resourceInventory` without reading all payloads. It
+explicitly leaves CRC, SHA-256, canonical bytes, SQLite, signatures and profiles
+unchecked. Applications may reuse trusted cached verification results only when
+they independently guarantee object immutability; timestamps/sizes alone are
+insufficient. This API is not an integrity gate for opening or saving.
+
+`StoredResource::open(zip_path, entry_path, limits, options)` fully verifies an
+archive through the same open file descriptor and returns bounded `Read + Seek`
+access to a STORE entry, with `len`, `is_empty`, `data_offset` and `report` methods.
+The caller must prevent archive mutation for the lifetime of this handle. Ordinary
+media is not copied or extracted; databases and registered callback requirements
+may still use staging. Protected entries expose raw ciphertext. DEFLATE entries
+return `media.compression`; use ordinary package resource access to decompress.
+Writers STORE and align common compressed media to 4096 bytes, while readers
+also accept unaligned inputs. ZIP64 sizes and offsets remain 64-bit throughout.
+
+Extension verifiers can override `resources_to_stage(manifest)` to return a set of only
+resources they read from staging, computed once per scan. Digests always cover every file. Returning `None` by default
+retains access to every resource for existing custom verifiers; the built-in
+protection verifier stages its signature, encrypted files and declared databases,
+leaving ordinary public media streaming. Registered profile validators retain
+access to all resources. Staging limits and cleanup apply to every path.

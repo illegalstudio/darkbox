@@ -249,6 +249,20 @@ pub fn save(
         }
     }
     let protected = manifest["extensions"].get(protection::NAMESPACE).is_some();
+    let inventory = files
+        .iter()
+        .map(|(path, bytes)| {
+            (
+                path.clone(),
+                crate::extensions::EntryDigest {
+                    path: path.clone(),
+                    size: bytes.len() as u64,
+                    sha256: format!("{:x}", Sha256::digest(bytes)),
+                },
+            )
+        })
+        .collect();
+    crate::resource_inventory::update(&mut manifest, &inventory);
     if protected {
         let signer = signer.ok_or_else(|| {
             refused("Saving a protected package requires a manifest signing capability")
@@ -330,7 +344,8 @@ pub fn save(
                 .map_err(crate::zip_failure)?;
         }
         for (path, bytes) in &files {
-            zip.start_file(path, options).map_err(crate::zip_failure)?;
+            zip.start_file(path, crate::media::file_options(path))
+                .map_err(crate::zip_failure)?;
             zip.write_all(bytes).map_err(crate::io_failure)?;
         }
         zip.finish().map_err(crate::zip_failure)?;

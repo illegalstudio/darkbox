@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use darkbox::{Limits, Mode, Report};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
@@ -22,14 +22,64 @@ enum Command {
         /// Fail unless application-profile semantics can also be validated.
         #[arg(long)]
         require_profile: bool,
+        /// Verify a delta against its exact complete base edition.
+        #[arg(long)]
+        base: Option<PathBuf>,
     },
     /// Show archive metadata and SQLite inventories without certifying conformance.
-    Inspect(Input),
+    Inspect {
+        #[command(flatten)]
+        input: Input,
+        /// Inspect unsigned inventory claims without verifying payload bytes.
+        #[arg(long)]
+        inventory_only: bool,
+    },
+    /// Pack a quiescent directory into a new ZIP package.
+    Pack {
+        #[command(flatten)]
+        input: Input,
+        destination: PathBuf,
+    },
+    /// Unpack a ZIP into a new quiescent directory package.
+    Unpack {
+        #[command(flatten)]
+        input: Input,
+        destination: PathBuf,
+    },
+    /// Create an incremental transfer between complete base and target editions.
+    Delta {
+        #[command(flatten)]
+        input: Input,
+        target: PathBuf,
+        destination: PathBuf,
+    },
+    /// Reconstruct and verify a complete new edition from a base and one delta.
+    Merge {
+        #[command(flatten)]
+        input: Input,
+        delta: PathBuf,
+        destination: PathBuf,
+    },
     /// List the exact specification versions embedded in this binary.
     Versions {
         #[arg(long)]
         json: bool,
     },
+}
+
+#[derive(Clone, Copy, Default, ValueEnum)]
+enum LimitPreset {
+    #[default]
+    Default,
+    Large,
+}
+enum Action {
+    Analyze,
+    VerifyDelta(PathBuf),
+    Pack(PathBuf),
+    Unpack(PathBuf),
+    Delta(PathBuf, PathBuf),
+    Merge(PathBuf, PathBuf),
 }
 
 #[derive(Args)]
@@ -47,18 +97,24 @@ struct Input {
     /// Require the official protection extension by external application policy.
     #[arg(long)]
     require_protection: bool,
-    #[arg(long, default_value_t = 536_870_912)]
-    max_archive_bytes: u64,
-    #[arg(long, default_value_t = 268_435_456)]
-    max_entry_bytes: u64,
-    #[arg(long, default_value_t = 1_073_741_824)]
-    max_total_bytes: u64,
-    #[arg(long, default_value_t = 10_000)]
-    max_entries: usize,
-    #[arg(long, default_value_t = 4_194_304)]
-    max_metadata_bytes: u64,
-    #[arg(long, default_value_t = 60)]
-    timeout_seconds: u64,
+    #[arg(long)]
+    max_archive_bytes: Option<u64>,
+    #[arg(long)]
+    max_entry_bytes: Option<u64>,
+    #[arg(long)]
+    max_total_bytes: Option<u64>,
+    #[arg(long)]
+    max_entries: Option<usize>,
+    #[arg(long)]
+    max_metadata_bytes: Option<u64>,
+    #[arg(long)]
+    timeout_seconds: Option<u64>,
+    /// Reader-owned bounded policy; individual flags override the preset.
+    #[arg(long, value_enum, default_value = "default")]
+    limits: LimitPreset,
+    /// Private staging on suitable storage, independent of process TMPDIR.
+    #[arg(long)]
+    staging_directory: Option<PathBuf>,
 }
 
 struct KeyStore(BTreeMap<String, Zeroizing<[u8; 32]>>);
@@ -190,12 +246,56 @@ fn text_report(report: &Report, writer: &mut impl Write) -> io::Result<()> {
 
 fn run() -> io::Result<u8> {
     let cli = Cli::parse();
-    let (mode, input, require_profile) = match cli.command {
+    let (mode, input, require_profile, action) = match cli.command {
         Command::Verify {
             input,
             require_profile,
-        } => (Mode::Verify, input, require_profile),
-        Command::Inspect(input) => (Mode::Inspect, input, false),
+            base,
+        } => (
+            Mode::Verify,
+            input,
+            require_profile,
+            base.map(Action::VerifyDelta).unwrap_or(Action::Analyze),
+        ),
+        Command::Inspect {
+            input,
+            inventory_only,
+        } => (
+            if inventory_only {
+                Mode::Inventory
+            } else {
+                Mode::Inspect
+            },
+            input,
+            false,
+            Action::Analyze,
+        ),
+        Command::Pack { input, destination } => {
+            (Mode::Verify, input, false, Action::Pack(destination))
+        }
+        Command::Unpack { input, destination } => {
+            (Mode::Verify, input, false, Action::Unpack(destination))
+        }
+        Command::Delta {
+            input,
+            target,
+            destination,
+        } => (
+            Mode::Verify,
+            input,
+            false,
+            Action::Delta(target, destination),
+        ),
+        Command::Merge {
+            input,
+            delta,
+            destination,
+        } => (
+            Mode::Verify,
+            input,
+            false,
+            Action::Merge(delta, destination),
+        ),
         Command::Versions { json } => {
             let mut output = io::stdout().lock();
             let versions: Vec<_> = darkbox::supported_versions().map(|(version, released)| serde_json::json!({"version": version, "released": released})).collect();
@@ -222,14 +322,29 @@ fn run() -> io::Result<u8> {
             return Ok(0);
         }
     };
-    let limits = Limits {
-        max_archive_bytes: input.max_archive_bytes,
-        max_entry_bytes: input.max_entry_bytes,
-        max_total_bytes: input.max_total_bytes,
-        max_entries: input.max_entries,
-        max_metadata_bytes: input.max_metadata_bytes,
-        timeout_seconds: input.timeout_seconds,
+    let mut limits = match input.limits {
+        LimitPreset::Default => Limits::default(),
+        LimitPreset::Large => Limits::large(),
     };
+    if let Some(value) = input.max_archive_bytes {
+        limits.max_archive_bytes = value;
+    }
+    if let Some(value) = input.max_entry_bytes {
+        limits.max_entry_bytes = value;
+    }
+    if let Some(value) = input.max_total_bytes {
+        limits.max_total_bytes = value;
+    }
+    if let Some(value) = input.max_entries {
+        limits.max_entries = value;
+    }
+    if let Some(value) = input.max_metadata_bytes {
+        limits.max_metadata_bytes = value;
+    }
+    if let Some(value) = input.timeout_seconds {
+        limits.timeout_seconds = value;
+    }
+    limits.staging_directory = input.staging_directory.clone();
     let keys = input.decryption_keys.as_ref().map(load_keys).transpose()?;
     let mut options = darkbox::VerificationOptions {
         require_protection: input.require_protection,
@@ -246,7 +361,57 @@ fn run() -> io::Result<u8> {
             .map(|(id, key)| (id, *key))
             .collect();
     }
-    let report = darkbox::analyze_with(&input.file, mode, limits, &options);
+    let result = match action {
+        Action::Analyze => Ok(darkbox::analyze_with(
+            &input.file,
+            mode,
+            limits.clone(),
+            &options,
+        )),
+        Action::VerifyDelta(base) => {
+            darkbox::verify_delta(base, &input.file, limits.clone(), &options)
+        }
+        Action::Pack(destination) => {
+            darkbox::pack(&input.file, destination, limits.clone(), &options)
+        }
+        Action::Unpack(destination) => {
+            darkbox::unpack(&input.file, destination, limits.clone(), &options)
+        }
+        Action::Delta(target, destination) => {
+            darkbox::create_delta(&input.file, target, destination, limits.clone(), &options)
+        }
+        Action::Merge(delta, destination) => {
+            darkbox::merge(&input.file, delta, destination, limits.clone(), &options)
+        }
+    };
+    let report = match result {
+        Ok(report) => report,
+        Err(mut error) => {
+            if let Some(report) = error.report.take() {
+                *report
+            } else {
+                let mut report = Report {
+                    report_version: 2,
+                    cli_version: env!("CARGO_PKG_VERSION"),
+                    command: mode,
+                    file: input.file.display().to_string(),
+                    status: error.status,
+                    scope: "transfer",
+                    application_validation: "not_performed",
+                    supported_versions: darkbox::supported_versions().map(|(v, _)| v).collect(),
+                    manifest: None,
+                    entries: vec![],
+                    databases: vec![],
+                    protection: None,
+                    checks: vec![],
+                    diagnostics: vec![],
+                    limits,
+                };
+                report.record(error);
+                report
+            }
+        }
+    };
     let mut output = io::stdout().lock();
     if input.json {
         serde_json::to_writer_pretty(&mut output, &report)?;

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.1.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.1.0"></a>
+  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.2.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.2.0"></a>
   <a href="schema/manifest.schema.json"><img src="https://img.shields.io/static/v1?label=JSON%20Schema&amp;message=2020-12&amp;color=303A46&amp;style=flat-square" alt="JSON Schema 2020-12"></a>
 </p>
 
@@ -50,7 +50,7 @@ Preserving data also means preserving how to decode it. Every archive carries th
 - [Low-level library: verification, extension registration and progressive creation](docs/library.md)
 - [Building and publishing releases](docs/releases.md)
 - [Specification](docs/specification.md)
-- [Canonical Darkbox 1.1.0 README](archive/1.1.0/README.md), copied byte-for-byte to the archive root as `README.md`
+- [Canonical Darkbox 1.2.0 README](archive/1.2.0/README.md), copied byte-for-byte to the archive root as `README.md`
 - [Selective protection extension 1.0.0](archive/1.1.0/docs/darkbox/protection/1.0.0.md), with its schema and interoperable test vectors
 - [Original SQLite file-format reference](archive/1.0.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.0.0/docs/sqlite/SOURCE.md)
 - [Manifest JSON Schema](schema/manifest.schema.json), using JSON Schema Draft 2020-12
@@ -72,6 +72,13 @@ darkbox versions
 Verification checks common container rules, the exact canonical documentation and SQLite snapshots offline. It reports application-profile semantics as unchecked; passing these common checks does not certify full application conformance. Inspection reports metadata without certifying conformance. See the [CLI documentation](docs/cli.md) for reports, exit codes, resource limits and binary packages.
 
 Darkbox 1.1.0 supports selective AES-256-GCM encryption of individual attachments and BLOB values in ordinary SQLite databases. Its official required protection extension signs the exact manifest with Ed25519 and inventories every payload file with SHA-256. Public information remains readable. Applications supply trusted signer keys and decryption keys; missing decryption keys leave protected content locked without marking it corrupt. Earlier published versions remain supported with their unchanged canonical bundles.
+
+Darkbox 1.2.0 also supports quiescent directory libraries and incremental backup
+transfers. `pack` and `unpack` preserve every file byte; `delta`, `verify --base`
+and `merge` bind exact base and target editions. Optional unsigned inventories,
+`--limits large`, explicit staging storage and seekable STORE media access support
+large libraries. See the [CLI workflows](docs/cli.md#live-library-snapshots-and-incremental-backups)
+and [Rust APIs](docs/sdk.md#directory-libraries-and-incremental-editions-120).
 
 ## Install
 
@@ -157,7 +164,7 @@ example.project
 
 Darkbox fixes its root metadata names and canonical bundle paths. Other database and folder paths are declared in the manifest. Required `application.profilePath` locates the included application data-format documentation; `docs/profile.md` is a recommended path. Attachments may remain database BLOBs or become separate files, as defined by a profile.
 
-The specification version, application data-format version and optional creator-software version are independent. This version of the specification is identified by `darkbox.version = "1.0.0"`. Application profiles define their own data-format versions.
+The specification version, application data-format version and optional creator-software version are independent. The current specification is identified by `darkbox.version = "1.2.0"`. Application profiles define their own data-format versions.
 
 ## License
 

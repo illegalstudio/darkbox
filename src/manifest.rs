@@ -44,6 +44,16 @@ impl ManifestBuilder {
             value: json!({"darkbox":{"id":"darkbox","version":version},"application":{"id":application_id,"formatVersion":format_version,"profilePath":"docs/profile.md"},"folders":folders,"databases":[]}),
         })
     }
+    /// Stable library identity for Darkbox 1.2.0 delta editions.
+    pub fn package_id(mut self, id: &str) -> Self {
+        self.value["packageId"] = json!(id);
+        self
+    }
+    /// Include an unsigned inventory, automatically rebuilt by SDK writers.
+    pub fn resource_inventory(mut self) -> Self {
+        self.value["resourceInventory"] = json!([]);
+        self
+    }
     pub fn profile_path(mut self, path: &str) -> Self {
         self.value["application"]["profilePath"] = json!(path);
         self

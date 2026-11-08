@@ -18,13 +18,13 @@ use std::time::{Duration, Instant};
 use tempfile::NamedTempFile;
 use zip::{ZipWriter, write::SimpleFileOptions};
 
-struct BoundedFile {
-    file: File,
-    position: u64,
-    end: u64,
-    limit: u64,
-    deadline: Instant,
-    discarded: Arc<AtomicBool>,
+pub(crate) struct BoundedFile {
+    pub(crate) file: File,
+    pub(crate) position: u64,
+    pub(crate) end: u64,
+    pub(crate) limit: u64,
+    pub(crate) deadline: Instant,
+    pub(crate) discarded: Arc<AtomicBool>,
 }
 
 impl Write for BoundedFile {
@@ -90,7 +90,7 @@ impl Seek for BoundedFile {
     }
 }
 
-fn output_error(error: io::Error) -> Error {
+pub(crate) fn output_error(error: io::Error) -> Error {
     if matches!(
         error.kind(),
         io::ErrorKind::FileTooLarge | io::ErrorKind::TimedOut
@@ -101,7 +101,7 @@ fn output_error(error: io::Error) -> Error {
     }
 }
 
-fn zip_error(error: zip::result::ZipError) -> Error {
+pub(crate) fn zip_error(error: zip::result::ZipError) -> Error {
     match error {
         zip::result::ZipError::Io(error) => output_error(error),
         error => crate::zip_failure(error),
@@ -452,12 +452,7 @@ impl<'a> PackageWriter<'a> {
         self.zip
             .as_mut()
             .unwrap()
-            .start_file(
-                path,
-                SimpleFileOptions::default()
-                    .compression_method(zip::CompressionMethod::Deflated)
-                    .large_file(true),
-            )
+            .start_file(path, crate::media::file_options(path))
             .map_err(zip_error)?;
         self.entries += 1;
         let mut size = 0u64;
@@ -596,6 +591,7 @@ impl<'a> PackageWriter<'a> {
                 "A streaming callback cannot introduce an unprepared required extension",
             ));
         }
+        crate::resource_inventory::update(&mut self.manifest, &self.inventory);
         let signature = if protected {
             let mut data = protection::data(&self.manifest)?;
             let signer = self.signer.ok_or_else(|| {

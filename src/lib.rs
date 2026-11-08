@@ -7,12 +7,18 @@ mod creation;
 pub mod extensions;
 mod json;
 pub mod manifest;
+mod media;
 mod model;
 mod package;
 mod paths;
 pub mod profiles;
 pub mod protection;
+mod resource_inventory;
+mod source;
 mod sqlite;
+mod transfer;
+pub use media::StoredResource;
+pub use transfer::{create_delta, merge, pack, unpack, verify_delta};
 mod versions;
 mod writer;
 
@@ -35,7 +41,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 use versions::{CATALOG_PATH, Catalog, RuleSet, VersionSpec};
 pub use writer::{PackageUpdate, open, save};
-use zip::{CompressionMethod, ZipArchive};
+
 /// Use the same SQLite and JSON types as the SDK without dependency-version ambiguity.
 pub use {rusqlite, serde_json, zeroize};
 
@@ -71,6 +77,17 @@ pub(crate) fn analyze_captured(
     options: &VerificationOptions<'_>,
     capture: bool,
 ) -> (Report, Option<Staging>) {
+    analyze_input(path, mode, limits, options, capture, None)
+}
+
+pub(crate) fn analyze_input(
+    path: &Path,
+    mode: Mode,
+    limits: Limits,
+    options: &VerificationOptions<'_>,
+    capture: bool,
+    source_file: Option<File>,
+) -> (Report, Option<Staging>) {
     let mut report = Report {
         report_version: 2,
         cli_version: env!("CARGO_PKG_VERSION"),
@@ -83,6 +100,8 @@ pub(crate) fn analyze_captured(
         },
         scope: if mode == Mode::Verify {
             "common_machine_checks"
+        } else if mode == Mode::Inventory {
+            "inventory_claims"
         } else {
             "inspection"
         },
@@ -97,7 +116,15 @@ pub(crate) fn analyze_captured(
         limits,
     };
     let mut staging = None;
-    if let Err(error) = run(path, mode, &mut report, options, capture, &mut staging) {
+    if let Err(error) = run(
+        path,
+        mode,
+        &mut report,
+        options,
+        capture,
+        &mut staging,
+        source_file,
+    ) {
         report.record(error);
     }
     if report.protection.is_none()
@@ -116,6 +143,10 @@ pub(crate) fn analyze_captured(
 
 pub fn verify(path: impl AsRef<Path>) -> Report {
     analyze(path, Mode::Verify, Limits::default())
+}
+
+pub fn inspect_inventory(path: impl AsRef<Path>, limits: Limits) -> Report {
+    analyze(path, Mode::Inventory, limits)
 }
 
 pub fn inspect(path: impl AsRef<Path>) -> Report {
@@ -153,6 +184,7 @@ fn run(
     options: &VerificationOptions<'_>,
     capture_all: bool,
     captured: &mut Option<Staging>,
+    source_file: Option<File>,
 ) -> Result<()> {
     let limits = report.limits.clone();
     if limits.max_entries == 0
@@ -167,65 +199,23 @@ fn run(
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(limits.timeout_seconds))
         .ok_or_else(|| Failure::limit("Processing timeout is too large"))?;
-    let mut source = File::open(path).map_err(io_failure)?;
-    let metadata = source.metadata().map_err(io_failure)?;
-    if !metadata.is_file() {
-        return Err(Failure::new(
-            Status::OperationalError,
-            "io.file_type",
-            "Input must be a regular file",
-        ));
-    }
-    if metadata.len() > limits.max_archive_bytes {
-        return Err(Failure::limit(
-            "Compressed archive exceeds the configured byte limit",
-        ));
-    }
-    let directory = container::preflight(&mut source, metadata.len(), &limits, deadline)?;
-    let mut archive = ZipArchive::new(source).map_err(zip_failure)?;
-    if archive.len() != directory.names.len() {
-        return Err(Failure::invalid(
-            "zip.directory",
-            "ZIP reader and central entry inventory disagree",
-        ));
-    }
+    let (mut archive, directory) = match source_file {
+        Some(file) => source::Source::zip(file, &limits, deadline)?,
+        None => source::Source::open(path, &limits, deadline)?,
+    };
+    let directory_form = archive.is_directory();
     let mut total_declared = 0u64;
     for (index, name) in directory.names.iter().enumerate() {
         container::check_deadline(deadline)?;
-        let file = archive.by_index(index).map_err(zip_failure)?;
-        if file.name_raw() != name.as_bytes() {
-            return Err(Failure::invalid(
-                "zip.directory",
-                "ZIP reader and authoritative entry names disagree",
-            ));
-        }
+        let file = archive.entry(index, name)?;
         let directory_entry = name.ends_with('/');
-        if file.is_symlink()
-            || file.unix_mode().is_some_and(|mode| {
-                let kind = mode & 0o170000;
-                kind != 0 && kind != if directory_entry { 0o040000 } else { 0o100000 }
-            })
-        {
-            return Err(Failure::invalid(
-                "zip.entry_type",
-                "Only regular files and directories are allowed",
-            )
-            .at(name));
-        }
-        if directory_entry && file.size() != 0 {
-            return Err(Failure::invalid(
-                "zip.directory_data",
-                "Directory entries cannot contain file data",
-            )
-            .at(name));
-        }
-        if file.size() > limits.max_entry_bytes {
+        if file.size > limits.max_entry_bytes {
             return Err(
                 Failure::limit("Uncompressed entry exceeds the configured byte limit").at(name),
             );
         }
         total_declared = total_declared
-            .checked_add(file.size())
+            .checked_add(file.size)
             .filter(|sum| *sum <= limits.max_total_bytes)
             .ok_or_else(|| {
                 Failure::limit("Total uncompressed size exceeds the configured limit")
@@ -233,22 +223,17 @@ fn run(
         report.entries.push(EntryInfo {
             path: name.clone(),
             kind: if directory_entry { "directory" } else { "file" },
-            compressed_bytes: file.compressed_size(),
-            bytes: file.size(),
-            compression: match file.compression() {
-                CompressionMethod::Stored => "store",
-                CompressionMethod::Deflated => "deflate",
-                _ => {
-                    return Err(Failure::invalid(
-                        "zip.compression",
-                        "Unsupported compression",
-                    ));
-                }
-            },
+            compressed_bytes: file.compressed,
+            bytes: file.size,
+            compression: file.compression,
             crc_verified: false,
         });
     }
-    report.checks.push("zip.structure");
+    report.checks.push(if directory_form {
+        "directory.structure"
+    } else {
+        "zip.structure"
+    });
     let manifest_index = directory
         .names
         .iter()
@@ -257,13 +242,13 @@ fn run(
             Failure::invalid("manifest.missing", "Required root manifest.json is missing")
         })?;
     let manifest_bytes = {
-        let mut file = archive.by_index(manifest_index).map_err(zip_failure)?;
-        if file.size() > limits.max_metadata_bytes {
+        let mut file = archive.entry(manifest_index, "manifest.json")?;
+        if file.size > limits.max_metadata_bytes {
             return Err(Failure::limit(
                 "Manifest exceeds the configured metadata limit",
             ));
         }
-        read_metadata(&mut file, &limits, deadline)?
+        read_metadata(&mut file.reader, &limits, deadline)?
     };
     let value = json::parse(&manifest_bytes)?;
     report.manifest = Some(value.clone());
@@ -297,7 +282,7 @@ fn run(
             id.unwrap_or("missing identifier"),
             version.unwrap_or("missing version")
         );
-        if mode == Mode::Verify {
+        if mode != Mode::Inspect {
             report.record(Failure::new(
                 Status::Unsupported,
                 "version.unsupported",
@@ -307,7 +292,7 @@ fn run(
             report.note("version.unsupported", message);
         }
     }
-    let mut common = mode == Mode::Verify && spec.is_some();
+    let mut common = mode != Mode::Inspect && spec.is_some();
     if common {
         let spec = spec.unwrap();
         match spec.rules {
@@ -347,7 +332,7 @@ fn run(
             report.checks.push("manifest.schema");
         }
     }
-    let manifest: Option<Manifest> = serde_json::from_value(value).ok();
+    let manifest: Option<Manifest> = serde_json::from_value(value.clone()).ok();
     if common && manifest.is_none() {
         return Err(Failure::invalid(
             "manifest.structure",
@@ -362,10 +347,32 @@ fn run(
             report.checks.push("inventory");
         }
     }
-    let temporary = tempfile::Builder::new()
-        .prefix("darkbox-")
-        .tempdir()
-        .map_err(io_failure)?;
+    if directory_form && version != Some("1.2.0") {
+        return Err(Failure::new(
+            Status::Unsupported,
+            "directory.version",
+            "Directory form requires Darkbox 1.2.0",
+        ));
+    }
+    if mode == Mode::Inventory {
+        if common && report.status == Status::Inspected {
+            resource_inventory::claims(report)?;
+        }
+        return Ok(());
+    }
+    if common {
+        let value = report.manifest.as_ref().unwrap();
+        if value.get("packageId").is_some()
+            && value["extensions"].get(protection::NAMESPACE).is_some()
+            && value["packageId"] != value["extensions"][protection::NAMESPACE]["data"]["packageId"]
+        {
+            report.record(Failure::invalid(
+                "manifest.package_id",
+                "Root packageId must match protection data.packageId",
+            ));
+        }
+    }
+    let temporary = limits.tempdir("darkbox-")?;
     let databases: BTreeMap<_, _> = manifest
         .as_ref()
         .map(|manifest| {
@@ -377,6 +384,27 @@ fn run(
                 .collect()
         })
         .unwrap_or_default();
+    let mut stage_all_extensions = false;
+    let mut staged_extension_paths = BTreeSet::new();
+    let stage_for_profile = common
+        && manifest.as_ref().is_some_and(|m| {
+            options
+                .profiles
+                .get(&m.application.id, &m.application.format_version)
+                .is_some()
+        });
+    if common {
+        for (namespace, extension) in &manifest.as_ref().unwrap().extensions {
+            if let Some(verifier) = options.extensions.get(namespace, &extension.version) {
+                if let Some(paths) = verifier.resources_to_stage(report.manifest.as_ref().unwrap())
+                {
+                    staged_extension_paths.extend(paths);
+                } else {
+                    stage_all_extensions = true;
+                }
+            }
+        }
+    }
     let mut staged = BTreeMap::new();
     let mut signatures = BTreeMap::new();
     let mut digests = BTreeMap::new();
@@ -385,7 +413,7 @@ fn run(
     let mut profile_ok = common;
     for (index, name) in directory.names.iter().enumerate() {
         container::check_deadline(deadline)?;
-        let mut file = archive.by_index(index).map_err(zip_failure)?;
+        let mut file = archive.entry(index, name)?;
         let expected =
             spec.and_then(|spec| spec.files.iter().find(|expected| expected.path == name));
         let catalog = name == CATALOG_PATH;
@@ -395,7 +423,11 @@ fn run(
         let capture =
             name == "manifest.json" || profile || (common && (expected.is_some() || catalog));
         let destination = if !name.ends_with('/')
-            && (capture_all || common || databases.contains_key(name.as_str()))
+            && (capture_all
+                || databases.contains_key(name.as_str())
+                || stage_all_extensions
+                || stage_for_profile
+                || staged_extension_paths.contains(name))
         {
             let destination = temporary.path().join(format!("entry-{index}"));
             let handle = File::create(&destination).map_err(io_failure)?;
@@ -404,10 +436,10 @@ fn run(
         } else {
             None
         };
-        let expected_crc = file.crc32();
-        let expected_size = file.size();
+        let expected_crc = file.crc;
+        let expected_size = file.size;
         let scan = stream(
-            &mut file,
+            &mut file.reader,
             destination,
             capture,
             &limits,
@@ -415,14 +447,14 @@ fn run(
             deadline,
         )
         .map_err(|error| error.at(name))?;
-        if scan.size != expected_size || scan.crc != expected_crc {
+        if scan.size != expected_size || expected_crc.is_some_and(|crc| scan.crc != crc) {
             return Err(Failure::invalid(
                 "zip.crc",
                 "ZIP entry size or CRC does not match its data",
             )
             .at(name));
         }
-        report.entries[index].crc_verified = true;
+        report.entries[index].crc_verified = !directory_form;
         if name == "manifest.json" && scan.bytes != manifest_bytes {
             return Err(Failure::new(
                 Status::OperationalError,
@@ -481,7 +513,11 @@ fn run(
             }
         }
     }
-    report.checks.push("zip.crc");
+    report.checks.push(if directory_form {
+        "directory.bytes"
+    } else {
+        "zip.crc"
+    });
     if canonical_ok {
         report.checks.push("bundle.canonical");
     }
@@ -562,6 +598,12 @@ fn run(
             }
         }
     }
+    if common {
+        let metadata = report.manifest.as_ref().unwrap().clone();
+        if let Err(error) = resource_inventory::check(&metadata, &digests, report) {
+            report.record(error);
+        }
+    }
     let mut sqlite_ok = common;
     for (name, (_, db)) in &databases {
         if let Some(path) = staged.get(*name) {
@@ -632,13 +674,11 @@ fn run(
         }
     }
     container::check_deadline(deadline)?;
-    if capture_all {
-        *captured = Some(Staging {
-            _directory: temporary,
-            files: staged,
-            digests,
-        });
-    }
+    *captured = Some(Staging {
+        _directory: temporary,
+        files: staged,
+        digests,
+    });
     Ok(())
 }
 

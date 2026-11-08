@@ -357,6 +357,24 @@ impl ExtensionVerifier for ProtectionVerifier {
     ) -> Result<(), Error> {
         Ok(())
     }
+    fn resources_to_stage(&self, manifest: &Value) -> Option<BTreeSet<String>> {
+        let data = &manifest["extensions"][NAMESPACE]["data"];
+        Some(
+            data["signature"]["path"]
+                .as_str()
+                .into_iter()
+                .chain(
+                    data["files"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|file| file["path"].as_str()),
+                )
+                .map(str::to_owned)
+                .collect(),
+        )
+    }
+
     fn verify(&self, context: &ExtensionContext<'_>, report: &mut Report) -> Result<(), Error> {
         if context.manifest["darkbox"]["version"] == "1.0.0" {
             return Err(Error::invalid(

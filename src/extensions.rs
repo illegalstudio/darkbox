@@ -43,6 +43,12 @@ pub trait ExtensionVerifier {
     fn supports(&self, version: &str) -> bool;
     fn verify(&self, context: &ExtensionContext<'_>, report: &mut Report) -> Result<(), Error>;
 
+    /// Select raw resources needed by this verifier once per scan. Digests are always available.
+    /// None stages every file so existing application verifiers retain access.
+    fn resources_to_stage(&self, _manifest: &Value) -> Option<std::collections::BTreeSet<String>> {
+        None
+    }
+
     /// Update extension metadata/resources before final validation and publication.
     /// The default refuses saving, even for a recognized extension.
     fn prepare_save(

@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 pub enum Mode {
     Verify,
     Inspect,
+    Inventory,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -87,7 +88,14 @@ impl Failure {
     }
 
     pub fn limit(message: impl Into<String>) -> Self {
-        Self::new(Status::ResourceLimit, "limits.exceeded", message)
+        Self::new(
+            Status::ResourceLimit,
+            "limits.exceeded",
+            format!(
+                "{}; select --limits large or raise --max-archive-bytes, --max-entry-bytes, --max-total-bytes, --max-entries, --max-metadata-bytes or --timeout-seconds as appropriate (SDK: configure Limits)",
+                message.into()
+            ),
+        )
     }
 }
 
@@ -109,6 +117,8 @@ pub struct Limits {
     pub max_entries: usize,
     pub max_metadata_bytes: u64,
     pub timeout_seconds: u64,
+    /// Private staging storage. None uses the operating-system temporary directory.
+    pub staging_directory: Option<std::path::PathBuf>,
 }
 
 impl Default for Limits {
@@ -120,7 +130,41 @@ impl Default for Limits {
             max_entries: 10_000,
             max_metadata_bytes: 4 * 1024 * 1024,
             timeout_seconds: 60,
+            staging_directory: None,
         }
+    }
+}
+
+impl Limits {
+    /// Reader-owned policy for media libraries, including individual 4 GiB videos.
+    pub fn large() -> Self {
+        Self {
+            max_archive_bytes: 1024 * 1024 * 1024 * 1024,
+            max_entry_bytes: 64 * 1024 * 1024 * 1024,
+            max_total_bytes: 2 * 1024 * 1024 * 1024 * 1024,
+            max_entries: 1_000_000,
+            max_metadata_bytes: 64 * 1024 * 1024,
+            timeout_seconds: 3600,
+            staging_directory: None,
+        }
+    }
+    pub(crate) fn tempdir(&self, prefix: &str) -> Result<tempfile::TempDir> {
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(prefix);
+        match &self.staging_directory {
+            Some(parent) => builder.tempdir_in(parent),
+            None => builder.tempdir(),
+        }
+        .map_err(crate::io_failure)
+    }
+    pub(crate) fn tempfile(&self, prefix: &str) -> Result<tempfile::NamedTempFile> {
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(prefix);
+        match &self.staging_directory {
+            Some(parent) => builder.tempfile_in(parent),
+            None => builder.tempfile(),
+        }
+        .map_err(crate::io_failure)
     }
 }
 

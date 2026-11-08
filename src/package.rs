@@ -65,10 +65,7 @@ fn freeze_reader(
     limits: &Limits,
     deadline: Instant,
 ) -> Result<(NamedTempFile, [u8; 32]), Error> {
-    let mut output = tempfile::Builder::new()
-        .prefix("darkbox-snapshot-")
-        .tempfile()
-        .map_err(crate::io_failure)?;
+    let mut output = limits.tempfile("darkbox-snapshot-")?;
     let mut hash = Sha256::new();
     let mut size = 0u64;
     let mut buffer = [0; 65_536];
@@ -244,6 +241,29 @@ impl DiagnosticPackage {
         options: &VerificationOptions<'_>,
     ) -> Result<Self, Error> {
         let end = deadline(&limits)?;
+        if std::fs::symlink_metadata(path.as_ref())
+            .map_err(crate::io_failure)?
+            .is_dir()
+        {
+            let scratch = limits.tempdir("darkbox-directory-snapshot-")?;
+            let archive = scratch.path().join("snapshot.zip");
+            if let Err(mut error) = crate::pack(path.as_ref(), &archive, limits.clone(), options) {
+                if let Some(report) = error.report.take() {
+                    return Ok(Self {
+                        report: *report,
+                        snapshot: None,
+                    });
+                }
+                return Err(error);
+            }
+            let mut result = Self::from_reader(
+                File::open(archive).map_err(crate::io_failure)?,
+                limits,
+                options,
+            )?;
+            result.report.file = path.as_ref().display().to_string();
+            return Ok(result);
+        }
         let (archive, digest) = freeze(path.as_ref(), &limits, end)?;
         let (mut report, staging) =
             crate::analyze_captured(archive.path(), Mode::Verify, limits, options, true);
@@ -315,6 +335,9 @@ impl Package {
     ) -> Result<Self, Error> {
         let origin = destination(path.as_ref())?;
         let end = deadline(&limits)?;
+        let directory_form = std::fs::symlink_metadata(&origin)
+            .map_err(crate::io_failure)?
+            .is_dir();
         let diagnostic = DiagnosticPackage::open(&origin, limits.clone(), options)?;
         if diagnostic.report.status != Status::Passed {
             let first = diagnostic
@@ -333,7 +356,10 @@ impl Package {
             .with_report(diagnostic.report));
         }
         let snapshot = diagnostic.snapshot.unwrap();
-        if crate::writer::file_digest(&origin, limits.max_archive_bytes, end)? != snapshot.digest {
+        if !directory_form
+            && crate::writer::file_digest(&origin, limits.max_archive_bytes, end)?
+                != snapshot.digest
+        {
             return Err(Error::new(
                 Status::OperationalError,
                 "package.source_changed",
@@ -343,7 +369,7 @@ impl Package {
         Ok(Self {
             report: diagnostic.report,
             snapshot,
-            origin: Some(origin),
+            origin: (!directory_form).then_some(origin),
         })
     }
     pub fn report(&self) -> &Report {
@@ -740,10 +766,7 @@ impl PackageEditor {
     fn stage(&self, path: &str, mut reader: impl Read) -> Result<Resource, Error> {
         self.check_resource_path(path)?;
         let end = deadline(&self.limits)?;
-        let mut file = tempfile::Builder::new()
-            .prefix("darkbox-edit-")
-            .tempfile()
-            .map_err(crate::io_failure)?;
+        let mut file = self.limits.tempfile("darkbox-edit-")?;
         let mut size = 0u64;
         let mut hash = Sha256::new();
         let mut buffer = [0; 65_536];
@@ -1064,10 +1087,7 @@ impl PackageEditor {
         let declaration = declared_database(&self.manifest, path)?;
         let end = deadline(&self.limits)?;
         // TempDir owns any journal/WAL created even by unsuccessful application SQL.
-        let directory = tempfile::Builder::new()
-            .prefix("darkbox-db-edit-")
-            .tempdir()
-            .map_err(crate::io_failure)?;
+        let directory = self.limits.tempdir("darkbox-db-edit-")?;
         let candidate = directory.path().join("database.sqlite");
         let mut input = self.resource(path)?;
         let mut output = File::create(&candidate).map_err(crate::io_failure)?;
@@ -1372,10 +1392,7 @@ fn database_snapshot(
     {
         return Err(Error::limit("Database snapshot exceeds entry limits"));
     }
-    let directory = tempfile::Builder::new()
-        .prefix("darkbox-db-snapshot-")
-        .tempdir()
-        .map_err(crate::io_failure)?;
+    let directory = limits.tempdir("darkbox-db-snapshot-")?;
     let path = directory.path().join("database.sqlite");
     let mut destination = rusqlite::Connection::open(&path).map_err(crate::sqlite::classify)?;
     configure_edit(&destination, limits, end)?;

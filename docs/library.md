@@ -96,3 +96,14 @@ cargo run --example streaming -- example.project replacement
 ```
 
 The example uses publicly known test keys and deterministic test blocks; production applications provide durable coordinated nonces and private key management.
+
+## Large library storage
+
+See [the SDK directory and delta APIs](sdk.md#directory-libraries-and-incremental-editions-120)
+for 1.2.0 directory packages, byte-preserving pack/unpack, content-bound delta
+creation/merge, unsigned inventory inspection and direct STORE byte ranges.
+`Limits::large()` and `Limits::staging_directory` apply to verification, immutable
+snapshots, SQLite edits and candidate checks. Output candidates remain beside
+the destination. Full verification streams ordinary public media without copying
+it to staging. Legacy `PackageUpdate` remains an in-memory convenience interface;
+use `PackageWriter`, `PackageEditor` or transfer APIs for large collections.

@@ -1,6 +1,6 @@
 # Darkbox command-line tool
 
-The Rust binary inspects and verifies project archives offline. It includes the manifest schemas, canonical catalogs and exact canonical file bytes for every specification version it supports. SQLite is bundled; no SQLite installation, network connection or original application is needed to run it.
+The Rust binary inspects, verifies and converts project ZIPs and quiescent directory packages offline. It includes the manifest schemas, canonical catalogs and exact canonical file bytes for every specification version it supports. SQLite is bundled; no SQLite installation, network connection or original application is needed to run it.
 
 ## Installation and builds
 
@@ -57,7 +57,7 @@ The input filename extension is irrelevant. Both analysis commands leave the ori
 
 `verify` checks the exact supported common version, strict JSON, its schema, path and inventory rules, canonical documentation, profile-document presence and UTF-8 encoding, SQLite snapshot independence, logical table inventory, declared `userVersion`, `integrity_check` and `foreign_key_check`. The archive catalog is compared with the embedded official catalog; its hashes cannot authorize changed documentation. Unknown required extensions and unavailable SQLite capabilities are reported as unsupported.
 
-For Darkbox 1.1.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
+For Darkbox 1.1.0 and 1.2.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
 
 `--trust-store PATH` reads a JSON object mapping signer identifiers to 64 hexadecimal characters representing raw 32-byte Ed25519 public keys. `--decryption-keys PATH` reads an application-supplied private JSON object mapping key identifiers to 64 hexadecimal characters representing raw 32-byte AES keys. These files stay outside the package. No command accepts secret keys directly as command-line values, and reports never include supplied key bytes or decrypted plaintext. Key files are limited to 4 MiB. Malformed key configuration returns a usage error without echoing its contents. Inspect does not authenticate protection, even when these options are supplied.
 
@@ -127,3 +127,102 @@ python3 scripts/check_releases.py --base HEAD
 ```
 
 CI checks the pull request base or the preceding pushed revision. Release preparation and tagged CI also compare against the preceding software release tag, preserving every already-published specification version. New versions must pass the same registered-version fixture checks before publication. Updating the registry does not itself publish a release.
+
+## Live library snapshots and incremental backups
+
+Darkbox 1.2.0 supports both ZIP and quiescent directory representations. The
+1.0.0 and 1.1.0 specifications and their canonical bundles remain unchanged;
+conversion does not upgrade them. All destinations below must be absent.
+
+```sh
+darkbox unpack closed.project library
+darkbox verify library --limits large --staging-directory /disk/staging
+darkbox pack library backup.project --limits large --staging-directory /disk/staging
+
+darkbox delta previous.project backup.project changes.delta --limits large
+darkbox verify changes.delta --base previous.project --limits large
+darkbox merge previous.project changes.delta restored.project --limits large
+```
+
+Applications can keep their SQLite database and media directly in a directory.
+Before full verification or packing, stop all writers/workers, prepare closed
+DELETE-mode SQLite snapshots without sidecars, and finish metadata and signatures.
+Running libraries have no snapshot conformance claim. These commands do not
+checkpoint or modify source databases. Never delete WAL files by hand; use the
+application's close/snapshot operation. All inputs must remain stable throughout
+an operation. Staging and output must be outside input directory packages.
+
+Packing/unpacking preserve every file byte, including manifest, canonical files,
+opaque optional data and signatures. ZIP compression, timestamps and explicit
+nonempty directory entries can change. Inputs and existing outputs are preserved
+on validation failure; new output is validated before publication. The SDK and
+these tools require application-controlled parent directories and external
+coordination with writers that bypass SDK locks.
+
+Delta participants declare the same stable root manifest `packageId` and common
+version 1.2.0. A transfer contains a `delta.json` descriptor and only changed or
+added whole files, including an entire changed SQLite database. It records removed
+paths and binds both the exact base manifest and its complete logical file
+inventory with SHA-256. The reconstructed target must pass full verification and
+match the declared target hashes. A missing/mismatched base blocks the operation.
+`verify --base` checks a transfer by reconstructing privately, without publishing.
+A transfer verified without its base cannot pass ordinary `verify`.
+
+Apply chains in order using each restored edition as the next base; retain
+periodic complete editions and every required intermediate transfer. Delta
+creation and merge still read complete editions to verify their contents. Deltas
+reduce storage and transfer size, rather than verification cost. They do not
+append updates inside an existing ZIP. Protected editions need an externally
+trusted signer public key through `--trust-store`; lossless transfer does not
+require a private signing key or the decryption keys for unchanged locked content.
+
+## Unsigned inventory inspection
+
+A 1.2.0 producer can include `resourceInventory` in its manifest. SDK writers
+rebuild it automatically. It hashes every dynamic file, excluding the manifest,
+canonical bundle and detached protection signature; the protection extension
+retains its own separate signed inventory. Full `verify` recomputes these hashes.
+
+```sh
+darkbox inspect library --inventory-only --limits large --json
+```
+
+This fast operation checks safe structure, manifest schema, path coverage and
+declared sizes, and exposes the stored hashes in `manifest.resourceInventory`.
+Its command is `inventory`, scope is `inventory_claims` and successful status is
+`inspected`. It does not read all payload bytes or check CRC, SHA-256, canonical
+bytes, SQLite or signatures. No profile validation runs. Missing inventory or
+inconsistent claims fail inspection. Exit 0 here means inspection completed;
+it does not certify integrity. Unsigned hashes provide no authenticity, and a
+cached matching timestamp/size is not proof that a file is unchanged.
+
+## Large media and explicit staging
+
+`--limits default` keeps the conservative defaults. `--limits large` sets the
+following bounded policy; individual flags override either preset:
+
+| Limit | Large preset |
+| --- | --- |
+| ZIP bytes (`--max-archive-bytes`) | 1 TiB |
+| Individual uncompressed file (`--max-entry-bytes`) | 64 GiB |
+| Total uncompressed bytes (`--max-total-bytes`) | 2 TiB |
+| Entry count (`--max-entries`) | 1,000,000 |
+| Individual metadata/document bytes (`--max-metadata-bytes`) | 64 MiB |
+| Cooperative timeout (`--timeout-seconds`) | 3,600 seconds |
+
+`--staging-directory PATH` selects an existing private storage location without
+changing the process environment. Otherwise the operating-system temporary
+location is used. Atomic output candidates stay beside the destination. Ordinary
+verification streams media without extracting it; SQLite and application callbacks
+may require private files. Immutable SDK editing snapshots retain decompressed
+resources. Inventory-only inspection does not stage payloads. Allow capacity for
+candidate output and any staged databases or protected content. Limits are reader
+policy; no archive, profile or delta can raise them. Resource-limit diagnostics
+list the relevant override flags and the large preset.
+
+Writers use STORE with 4096-byte data alignment for common already compressed
+media suffixes such as JPEG, PNG, WebP and MP4. Other files use DEFLATE. Unaligned
+STORE and DEFLATE input remain valid. The SDK's `StoredResource` provides bounded
+seekable reads from STORE entries in an immutable verified ZIP, suitable for
+serving media byte ranges without extracting it. Protected resource bytes remain
+ciphertext; DEFLATE resources require decompression.
