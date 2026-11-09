@@ -8,10 +8,16 @@ license = "MIT"
 repository = "https://github.com/illegalstudio/darkbox"
 homepage = "https://illegal.studio/en/products/darkbox"
 default-run = "darkbox"
+readme = "README.md"
+keywords = ["archive", "sqlite", "backup", "preservation"]
+categories = ["encoding", "filesystem", "command-line-utilities"]
+publish = ["crates-io"]
+include = ["/Cargo.toml", "/Cargo.lock", "/build.rs", "/versions.json", "/src/**", "/archive/**", "/schema/**", "/specification/**", "/docs/**", "/assets/**", "/LICENSE", "/README.md", "/tests/*.rs", "/tests/fixtures/**", "/examples/**"]
 
 [features]
 default = ["cli"]
-cli = ["dep:clap"]
+cli = ["dep:clap", "exact-numbers"]
+exact-numbers = ["serde_json/arbitrary_precision", "jsonschema/arbitrary-precision"]
 
 [[bin]]
 name = "darkbox"
@@ -27,10 +33,10 @@ zeroize = { version = "1.8", features = ["serde"] }
 clap = { version = "4.6.7", features = ["derive"], optional = true }
 fs2 = "0.4.3"
 crc32fast = "1.5"
-jsonschema = { version = "0.58.6", default-features = false, features = ["arbitrary-precision"] }
+jsonschema = { version = "0.58.6", default-features = false, features = [] }
 rusqlite = { version = "0.40.2", features = ["bundled", "hooks", "limits", "load_extension", "backup"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["arbitrary_precision"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
 sha2 = "0.10.9"
 tempfile = "3.23"
 zip = { version = "6.0.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }

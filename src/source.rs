@@ -20,6 +20,7 @@ pub(crate) enum Source {
         entries: Vec<(String, u64)>,
         lock: Arc<crate::live::DirectoryLock>,
         overrides: BTreeMap<String, PathBuf>,
+        identities: BTreeMap<String, Identity>,
     },
 }
 
@@ -119,6 +120,7 @@ impl Source {
                 entries,
                 lock,
                 overrides,
+                identities: BTreeMap::new(),
             },
             container::Directory { names, nodes },
         ))
@@ -139,6 +141,7 @@ impl Source {
                 entries,
                 lock,
                 overrides,
+                identities,
             } => {
                 let mut nodes = paths::Nodes::new();
                 for (name, _) in entries {
@@ -150,6 +153,7 @@ impl Source {
                         entries: entries.clone(),
                         lock: lock.clone(),
                         overrides: overrides.clone(),
+                        identities: identities.clone(),
                     },
                     container::Directory {
                         names: entries.iter().map(|(n, _)| n.clone()).collect(),
@@ -158,6 +162,74 @@ impl Source {
                 ))
             }
         }
+    }
+    pub(crate) fn check_retained(&mut self, deadline: Instant) -> Result<()> {
+        if let Self::Directory { identities, .. } = self {
+            if identities.is_empty() {
+                return Ok(());
+            }
+        } else {
+            return Ok(());
+        }
+        let names = if let Self::Directory { entries, .. } = self {
+            entries.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()
+        } else {
+            vec![]
+        };
+        for (index, name) in names.iter().enumerate().filter(|(_, n)| !n.ends_with('/')) {
+            crate::container::check_deadline(deadline)?;
+            let _ = self.entry(index, name)?;
+        }
+        Ok(())
+    }
+    pub(crate) fn overlay(
+        &mut self,
+        replacements: BTreeMap<String, PathBuf>,
+        omitted: &BTreeSet<String>,
+    ) -> Result<()> {
+        if let Self::Directory {
+            entries,
+            overrides,
+            identities,
+            ..
+        } = self
+        {
+            entries.retain(|(name, _)| !omitted.contains(name));
+            for (name, path) in replacements {
+                let metadata = fs::metadata(&path).map_err(crate::io_failure)?;
+                if let Some((_, size)) = entries.iter_mut().find(|(n, _)| *n == name) {
+                    *size = metadata.len();
+                } else {
+                    entries.push((name.clone(), metadata.len()));
+                }
+                identities.insert(name.clone(), Identity::of(&metadata));
+                overrides.insert(name, path);
+            }
+            entries.sort_by(|a, b| a.0.cmp(&b.0));
+        }
+        Ok(())
+    }
+    pub(crate) fn retain_listing(&mut self) -> Result<()> {
+        if let Self::Directory {
+            root,
+            entries,
+            overrides,
+            identities,
+            ..
+        } = self
+        {
+            for (name, _) in entries.iter().filter(|(name, _)| !name.ends_with('/')) {
+                let path = overrides
+                    .get(name)
+                    .cloned()
+                    .unwrap_or_else(|| root.join(name));
+                identities.insert(
+                    name.clone(),
+                    Identity::of(&fs::symlink_metadata(path).map_err(crate::io_failure)?),
+                );
+            }
+        }
+        Ok(())
     }
     pub fn zip(
         mut file: File,
@@ -239,6 +311,7 @@ impl Source {
                 root,
                 entries,
                 overrides,
+                identities,
                 ..
             } => {
                 let (entry_name, size) = &entries[index];
@@ -264,8 +337,19 @@ impl Source {
                     )
                     .at(name));
                 }
+                let file = File::open(path).map_err(crate::io_failure)?;
+                if let Some(expected) = identities.get(name)
+                    && (*expected != Identity::of(&metadata)
+                        || *expected != Identity::of(&file.metadata().map_err(crate::io_failure)?))
+                {
+                    return Err(Error::invalid(
+                        "directory.changed",
+                        "Captured file identity or modification time changed",
+                    )
+                    .at(name));
+                }
                 Ok(Entry {
-                    reader: Box::new(File::open(path).map_err(crate::io_failure)?),
+                    reader: Box::new(file),
                     size: *size,
                     compressed: *size,
                     crc: None,
@@ -344,4 +428,26 @@ fn walk(
         }
     }
     Ok(())
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct Identity {
+    modified: Option<std::time::SystemTime>,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
+}
+impl Identity {
+    fn of(metadata: &fs::Metadata) -> Self {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt;
+        Self {
+            modified: metadata.modified().ok(),
+            #[cfg(unix)]
+            device: metadata.dev(),
+            #[cfg(unix)]
+            inode: metadata.ino(),
+        }
+    }
 }

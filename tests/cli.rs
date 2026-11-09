@@ -425,7 +425,7 @@ fn json_schema_and_profile_presence_errors_are_reported() {
 }
 
 #[test]
-fn arbitrary_json_extension_numbers_and_private_named_keys_remain_data() {
+fn arbitrary_json_extension_numbers_require_exact_precision() {
     let mut fixture = Fixture::new("notebook");
     let mut text = String::from_utf8(fixture.files["manifest.json"].clone()).unwrap();
     text.pop();
@@ -433,7 +433,14 @@ fn arbitrary_json_extension_numbers_and_private_named_keys_remain_data() {
     fixture
         .files
         .insert("manifest.json".into(), text.into_bytes());
-    assert_status(&fixture.verify(), Status::Passed);
+    assert_status(
+        &fixture.verify(),
+        if cfg!(feature = "exact-numbers") {
+            Status::Passed
+        } else {
+            Status::Unsupported
+        },
+    );
 }
 
 #[test]

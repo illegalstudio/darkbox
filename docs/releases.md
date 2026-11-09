@@ -50,7 +50,7 @@ Linux builds use Ubuntu 22.04 to keep the glibc baseline at 2.35. macOS builds s
 
 Native packages are named `darkbox-<version>-1-x86_64.pkg.tar.zst` and `darkbox-<version>-1-aarch64.pkg.tar.zst`. `pkgrel=1` is the Arch packaging revision, separate from the software and specification versions. Package validation checks `.PKGINFO`, architecture, installed paths, notice inventory, executable permissions and exact upstream executable/documentation bytes. Ordinary CI also builds both Arch packages; no external repository is notified for development builds.
 
-Publication waits for all platform checks, the minimum-Rust job and both Arch package jobs. It verifies the package set, executable architecture, executable permissions, documentation and SHA-256 files, then creates a private draft release. Only after all twelve assets are uploaded and checked does it publish the release: five packages, five individual `.sha256` files, one checksum list for the three portable archives and one for the two Arch packages. Published releases are never overwritten by the workflow. The source archives contain the versioned specification, schemas and canonical bundles.
+Publication waits for all platform checks, the minimum-Rust job and both Arch package jobs. It verifies the package set, executable architecture, executable permissions, documentation and SHA-256 files, then creates a private draft release. After the Rust crate is published on crates.io, and only after all twelve assets are uploaded and checked, it publishes the GitHub release: five packages, five individual `.sha256` files, one checksum list for the three portable archives and one for the two Arch packages. Published releases are never overwritten by the workflow. The source archives contain the versioned specification, schemas and canonical bundles.
 
 After publication, `pacman.yml` sends `repository_dispatch` with event type `publish` and source `illegalstudio/darkbox` to `illegalstudio/pacman`. Its existing sync workflow registers the project, downloads the packages, updates each architecture's database and deploys GitHub Pages. This notification is explicitly called by the release workflow because publishing with `GITHUB_TOKEN` does not automatically trigger another release-event workflow, as described in [GitHub's workflow-triggering rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow). Homebrew and pacman notification run independently after the same complete GitHub release.
 
@@ -86,3 +86,34 @@ If validation, build, signing or notarization fails, nothing is published. Fix c
 If Homebrew publication fails after the GitHub release is public, dispatch `Publish Homebrew formula` with that tag. It downloads and verifies the latest public release, regenerates the formula and commits only a changed formula. This recovery does not rebuild or modify released assets. Older releases cannot replace the latest tap formula. Concurrent tap changes cause a normal Git push failure; rerun to start from the new tap HEAD.
 
 If the pacman notification fails, dispatch `Notify Illegal Studio pacman` with the latest published tag. It checks that both native packages exist and retries only synchronization. If notification succeeds but the external sync/deployment fails, rerun the sync workflow in `illegalstudio/pacman` for `illegalstudio/darkbox`. Darkbox's workflow confirms the dispatch was accepted; it does not wait for the external Pages deployment. The pacman repository also has a nightly catch-up for sources already registered by a successful sync.
+
+## crates.io publication
+
+Set the repository secret `CARGO_REGISTRY_TOKEN` to a crates.io API token allowed
+to publish the `darkbox` crate, including its first publication. Verify the owning
+account's email address first. Store the token only in GitHub's secret settings;
+local `cargo login` is not needed for CI. Release preparation checks that this
+secret exists alongside the binary-distribution credentials.
+
+Ordinary CI runs `crate.yml` without credentials or uploads. It packages the
+crate, verifies compilation from the extracted distributable sources, and checks
+library-only compilation from that package. The crate includes every supported
+canonical bundle, schema and version registry needed by build.rs, plus Rust tests,
+fixtures, examples, documentation and license materials.
+
+The release calls that same workflow at the exact checked release commit after
+all native builds, Apple notarization and Arch packaging have passed. It validates
+the annotated tag and performs the package dry-run, then publishes to crates.io
+with the secret available only to the upload step. GitHub release publication
+requires this job to succeed. Homebrew and pacman follow the complete GitHub
+release as before. SDK/software and common specification versions remain distinct.
+
+Publication verifies the public registry SHA-256 against the checked `.crate`.
+On retry, an existing version is accepted only when it is not yanked and its
+checksum is identical. A different existing crate is an error; published versions
+are never overwritten or automatically yanked. Rerun the exact release workflow
+if upload succeeds but registry confirmation or later GitHub publication fails.
+If the Cargo toolchain changes the package bytes on retry, investigate the checksum
+difference instead of bypassing it. A failed crates.io upload prevents GitHub
+publication. Registry versions themselves may become public before a later GitHub
+release failure, which can be recovered independently using the same tag.

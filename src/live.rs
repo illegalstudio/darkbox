@@ -310,14 +310,42 @@ impl DirectoryLibrary {
         )
     }
 
+    /// Capture only listing, profile and SQLite snapshots under the application's
+    /// short write barrier. Then release that barrier and retain captured resources
+    /// unchanged until write_backup/write_delta completes or the handle drops.
+    pub fn prepare_hot_capture(
+        &self,
+        manifest: Value,
+        databases: &BTreeMap<String, &crate::rusqlite::Connection>,
+        limits: Limits,
+    ) -> Result<HotCapture, Error> {
+        if manifest["darkbox"]["version"] != "1.4.0" {
+            return Err(Error::new(
+                Status::Unsupported,
+                "directory.capture_version",
+                "Split-barrier capture requires common 1.4.0",
+            ));
+        }
+        self.capture(manifest, databases, &limits, true)
+    }
     fn prepare(
         &self,
-        mut manifest: Value,
+        manifest: Value,
         databases: &BTreeMap<String, &crate::rusqlite::Connection>,
         limits: &Limits,
         options: &VerificationOptions<'_>,
         hot: bool,
     ) -> Result<Prepared, Error> {
+        self.capture(manifest, databases, limits, hot)?
+            .prepare(options)
+    }
+    fn capture(
+        &self,
+        manifest: Value,
+        databases: &BTreeMap<String, &crate::rusqlite::Connection>,
+        limits: &Limits,
+        hot: bool,
+    ) -> Result<HotCapture, Error> {
         require_live(&manifest)?;
         crate::creation::specification(&manifest)?;
         let end = crate::transfer::deadline(limits)?;
@@ -384,16 +412,101 @@ impl DirectoryLibrary {
         } else {
             BTreeSet::new()
         };
-        drop(raw);
-        let (mut source, directory) = Source::directory_locked(
-            &self.root,
-            self.lock.clone(),
-            overrides.clone(),
-            &omitted,
+        let mut source = raw;
+        source.overlay(overrides, &omitted)?;
+        source.retain_listing()?;
+        let metadata = limits.tempdir("darkbox-hot-metadata-")?;
+        let profile = manifest["application"]["profilePath"].as_str().unwrap();
+        let (_, listing) = source.fork(limits, end)?;
+        let index = listing
+            .names
+            .iter()
+            .position(|name| name == profile)
+            .ok_or_else(|| Error::invalid("profile.missing", "Profile is missing"))?;
+        let bytes = crate::read_metadata(&mut source.entry(index, profile)?.reader, limits, end)?;
+        let profile_copy = metadata.path().join("profile.md");
+        write_file(&profile_copy, &bytes)?;
+        source.overlay(
+            BTreeMap::from([(profile.to_owned(), profile_copy)]),
+            &BTreeSet::new(),
+        )?;
+        let (_, directory) = source.fork(limits, end)?;
+        check_quiescence(&mut source, &directory.names, &manifest)?;
+        Ok(HotCapture {
+            root: self.root.clone(),
+            source,
+            directory,
+            manifest,
+            snapshots,
+            metadata,
+            limits: limits.clone(),
+            end,
+        })
+    }
+}
+
+/// Frozen listing and database/profile snapshots. After preparation, additions
+/// may resume. Retain every listed resource unchanged until this handle drops.
+pub struct HotCapture {
+    root: PathBuf,
+    source: Source,
+    directory: crate::container::Directory,
+    manifest: Value,
+    snapshots: Vec<crate::package::DatabaseSnapshot>,
+    metadata: tempfile::TempDir,
+    limits: Limits,
+    end: std::time::Instant,
+}
+impl HotCapture {
+    pub fn write_backup(
+        self,
+        destination: impl AsRef<Path>,
+        options: &VerificationOptions<'_>,
+    ) -> Result<Report, Error> {
+        let destination = crate::transfer::output_path(destination.as_ref(), &[&self.root])?;
+        let limits = self.limits.clone();
+        let end = self.end;
+        let prepared = self.prepare(options)?;
+        crate::transfer::pack_verified(prepared.verified, &destination, &limits, options, end)
+    }
+    pub fn write_delta(
+        self,
+        base: impl AsRef<Path>,
+        destination: impl AsRef<Path>,
+        options: &VerificationOptions<'_>,
+    ) -> Result<Report, Error> {
+        let destination =
+            crate::transfer::output_path(destination.as_ref(), &[&self.root, base.as_ref()])?;
+        let limits = self.limits.clone();
+        let end = self.end;
+        let prepared = self.prepare(options)?;
+        crate::transfer::delta_from_verified(
+            base.as_ref(),
+            prepared.verified,
+            &destination,
+            &limits,
+            options,
+            end,
+        )
+    }
+    fn prepare(self, options: &VerificationOptions<'_>) -> Result<Prepared, Error> {
+        let Self {
+            root,
+            mut source,
+            directory,
+            mut manifest,
+            snapshots,
+            metadata,
             limits,
             end,
-        )?;
-        check_quiescence(&mut source, &directory.names, &manifest)?;
+        } = self;
+        let limits = &limits;
+        let declared: BTreeSet<_> = manifest["databases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|db| db["path"].as_str().unwrap().to_owned())
+            .collect();
         let mut digests = BTreeMap::new();
         let mut trusted = Vec::new();
         let mut total = 0u64;
@@ -458,18 +571,13 @@ impl DirectoryLibrary {
         }
         crate::resource_inventory::update(&mut manifest, &digests);
         let bytes = crate::creation::serialized_manifest(&manifest, limits.max_metadata_bytes)?;
-        let metadata = limits.tempdir("darkbox-live-metadata-")?;
         let manifest_path = metadata.path().join("manifest.json");
         write_file(&manifest_path, &bytes)?;
-        overrides.insert("manifest.json".into(), manifest_path);
-        let pair = Source::directory_locked(
-            &self.root,
-            self.lock.clone(),
-            overrides,
-            &omitted,
-            limits,
-            end,
+        source.overlay(
+            BTreeMap::from([("manifest.json".into(), manifest_path)]),
+            &BTreeSet::new(),
         )?;
+        let pair = source.fork(limits, end)?;
         // Reuse hashes from this coordinated pass, while still checking metadata,
         // canonical bytes, database snapshots, file prefixes and profile callbacks.
         let cache = PassDigests(&digests);
@@ -492,9 +600,9 @@ impl DirectoryLibrary {
                 )
                 .is_some()
         {
-            crate::transfer::Verified::from_source(&self.root, pair, limits, options, end)?
+            crate::transfer::Verified::from_source(&root, pair, limits, options, end)?
         } else {
-            crate::transfer::Verified::from_source(&self.root, pair, limits, &verification, end)?
+            crate::transfer::Verified::from_source(&root, pair, limits, &verification, end)?
         };
         verified
             .report
@@ -536,7 +644,11 @@ struct Prepared {
     _metadata: tempfile::TempDir,
 }
 fn require_live(manifest: &Value) -> Result<(), Error> {
-    if manifest["darkbox"]["version"] != "1.3.0" || !manifest["packageId"].is_string() {
+    if !matches!(
+        manifest["darkbox"]["version"].as_str(),
+        Some("1.3.0" | "1.4.0")
+    ) || !manifest["packageId"].is_string()
+    {
         return Err(Error::new(
             Status::Unsupported,
             "directory.version",

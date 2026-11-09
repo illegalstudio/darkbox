@@ -16,3 +16,6 @@ jobs:
   pacman:
     needs: build
     uses: ./.github/workflows/pacman-build.yml
+
+  crate:
+    uses: ./.github/workflows/crate.yml

@@ -7,7 +7,17 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 darkbox = { path = "/path/to/darkbox", default-features = false }
 ```
 
-Use a registry version when a release containing these APIs is available. The optional default `cli` feature enables the binary and its argument parser. Library integrations can omit both. The crate re-exports `rusqlite`, `serde_json` and `zeroize` for matching SQLite, JSON and secret-buffer types. Rust 1.88 and a C compiler are required for bundled SQLite.
+Use a registry version when a release containing these APIs is available. The opt-in `exact-numbers` feature preserves arbitrary JSON numbers and enables
+`serde_json/arbitrary_precision` plus `jsonschema/arbitrary-precision`. The CLI
+enables it. Library consumers using `default-features = false` do not enable
+those features through Darkbox. Without it, the strict parser checks numeric
+syntax and existing digit/exponent limits, then rejects values whose decimal
+value would change on serialization with `Unsupported` / `json.number_precision`.
+It never silently rounds unknown extension data. Choose extended precision
+explicitly only if the host accepts Cargo feature unification and the associated
+Serde enum/flatten implications. Other dependencies may still enable that feature.
+
+The optional default `cli` feature enables the binary and its argument parser. Library integrations can omit both. The crate re-exports `rusqlite`, `serde_json` and `zeroize` for matching SQLite, JSON and secret-buffer types. Rust 1.88 and a C compiler are required for bundled SQLite.
 
 | Operation | API |
 | --- | --- |
@@ -249,3 +259,34 @@ packages continue to support `pack`, `unpack`, `create_delta` and `merge`, inclu
 locked copying without decryption. Use caller-supplied profile verifiers to enforce
 application semantics; hot capture never implies cross-resource transactions.
 All staging must be outside the library. Atomic candidates stay beside outputs.
+
+## Short capture barriers (1.4.0)
+
+Use `DirectoryLibrary::prepare_hot_capture(manifest, connections, limits)` while
+holding the application's coherent write barrier. It snapshots every database,
+reads the profile and freezes the listing, sizes and identities without hashing
+or copying media. Returning `HotCapture` signals that the short barrier can end.
+Keep the library guard alive and retain every listed external resource unchanged
+until the capture handle finishes or drops. Defer deletions of referenced media;
+new media additions and live database writes may resume immediately.
+
+```rust,no_run
+# fn example(library: &darkbox::DirectoryLibrary, manifest: darkbox::serde_json::Value, connections: &std::collections::BTreeMap<String, &darkbox::rusqlite::Connection>) -> Result<(),darkbox::Error> {
+// Hold the application write barrier for this call only.
+let capture = library.prepare_hot_capture(manifest, connections, darkbox::Limits::large())?;
+// Release the write barrier. Keep captured external resources immutable/retained.
+capture.write_backup("edition.project", &darkbox::VerificationOptions::default())?;
+// A separate capture can instead call write_delta(base, destination, options).
+# Ok(()) }
+```
+
+`write_backup` and `write_delta` consume the handle. They never enumerate the live
+directory again. The database, profile and manifest revision stay captured even
+if the application updates their live paths. Retained resources are checked by
+size/type, modification time and, on Unix, device/inode identity. Copied bytes
+remain hash-checked. A violated retention contract fails without publishing.
+The timeout covers capture and streaming, including time between API calls.
+Capture guards release their private snapshots on drop. Existing one-call APIs
+retain their whole-call coordination contract for common 1.3.0; the new split
+contract requires common 1.4.0. Protected live metadata rewriting retains its
+existing capability restriction.

@@ -353,6 +353,7 @@ pub(crate) fn pack_verified(
         |i, output| input.copy(&names[i], output, limits, end),
     )?;
     let report = checked(candidate.path(), limits, options)?;
+    input.source.check_retained(end)?;
     crate::container::check_deadline(end)?;
     publish(candidate, destination, report)
 }
@@ -373,7 +374,7 @@ pub fn unpack(
     if input.source.is_directory()
         || !matches!(
             input.manifest()["darkbox"]["version"].as_str(),
-            Some("1.2.0" | "1.3.0")
+            Some("1.2.0" | "1.3.0" | "1.4.0")
         )
     {
         return Err(Error::new(
@@ -451,7 +452,7 @@ struct Delta {
 fn identity(input: &Verified) -> Result<Identity, Error> {
     if !matches!(
         input.manifest()["darkbox"]["version"].as_str(),
-        Some("1.2.0" | "1.3.0")
+        Some("1.2.0" | "1.3.0" | "1.4.0")
     ) {
         return Err(Error::new(
             Status::Unsupported,
@@ -594,6 +595,7 @@ fn delta_verified(
             }
         },
     )?;
+    target.source.check_retained(end)?;
     let mut report = target.report;
     report.scope = "delta_creation";
     report.checks.push("delta.base_and_target");

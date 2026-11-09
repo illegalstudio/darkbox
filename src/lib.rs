@@ -9,7 +9,7 @@ mod json;
 mod live;
 pub mod manifest;
 mod media;
-pub use live::DirectoryLibrary;
+pub use live::{DirectoryLibrary, HotCapture};
 mod model;
 mod package;
 mod paths;
@@ -378,7 +378,7 @@ fn run(
             report.checks.push("inventory");
         }
     }
-    if directory_form && !matches!(version, Some("1.2.0" | "1.3.0")) {
+    if directory_form && !matches!(version, Some("1.2.0" | "1.3.0" | "1.4.0")) {
         return Err(Failure::new(
             Status::Unsupported,
             "directory.version",
@@ -471,7 +471,7 @@ fn run(
         let expected_size = file.size;
         let trusted = if allow_cached
             && directory_form
-            && version == Some("1.3.0")
+            && matches!(version, Some("1.3.0" | "1.4.0"))
             && common
             && !capture
             && destination.is_none()

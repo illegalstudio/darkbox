@@ -1,8 +1,8 @@
-# Darkbox 1.3.0
+# Darkbox 1.4.0
 
 Specification identifier: `darkbox`. Date: 2026-11-08.
 
-The authoritative versioned copy is `specification/1.3.0.md` in the Darkbox source distribution; `docs/specification.md` is a convenience copy of the current specification.
+The authoritative versioned copy is `specification/1.4.0.md` in the Darkbox source distribution; `docs/specification.md` is a convenience copy of the current specification.
 
 **MUST**, **MUST NOT**, **SHOULD** and **MAY** indicate a requirement, prohibition, recommendation and option within this specification.
 
@@ -13,7 +13,7 @@ Darkbox defines a universal project container and its metadata. An application p
 | Manifest field | Meaning | Fictional example |
 | --- | --- | --- |
 | `darkbox.id` | Stable common specification identifier | `darkbox` |
-| `darkbox.version` | Version of the container and metadata rules | `1.3.0` |
+| `darkbox.version` | Version of the container and metadata rules | `1.4.0` |
 | `application.id` | Stable application profile identifier | `org.example.notebook` |
 | `application.formatVersion` | Profile-specific data-format version | `"3"` |
 | `application.profilePath` | Archive-relative path to the included profile documentation | `docs/profile.md` |
@@ -53,7 +53,7 @@ example.project
     └── image-001.png
 ```
 
-There is no enclosing project directory. `folders` MUST list every expected directory, including ancestors of nested paths and all canonical bundle directories. Version 1.3.0 therefore requires `docs`, `docs/darkbox`, `docs/darkbox/protection`, `docs/sqlite` and `docs/sqlite/images` in this inventory. A nonempty directory exists through its child entries; an expected empty directory MUST have a ZIP directory entry ending in `/`. Manifest directory paths do not end in `/`. An explicit directory entry cannot substitute for a regular file. Application profile documentation MUST also be inside declared folders; databases MAY still be at the root.
+There is no enclosing project directory. `folders` MUST list every expected directory, including ancestors of nested paths and all canonical bundle directories. Version 1.4.0 therefore requires `docs`, `docs/darkbox`, `docs/darkbox/protection`, `docs/sqlite` and `docs/sqlite/images` in this inventory. A nonempty directory exists through its child entries; an expected empty directory MUST have a ZIP directory entry ending in `/`. Manifest directory paths do not end in `/`. An explicit directory entry cannot substitute for a regular file. Application profile documentation MUST also be inside declared folders; databases MAY still be at the root.
 
 Regular files at the root MUST be either the required metadata files or declared databases. Declared directories are also allowed at the root. Other regular files, including application profile documentation, MUST be inside declared folders and follow a profile or extension convention. Every standalone SQLite database, including extension databases, MUST be inventoried, regardless of its filename suffix. A file with the SQLite database header is a database for this purpose; a SQLite BLOB inside another database is not a standalone archive entry.
 
@@ -65,11 +65,11 @@ Readers MUST identify the ZIP or directory structure and manifest rather than re
 
 The manifest uses **JSON**: one object encoded as UTF-8 without a BOM. Comments, trailing commas, non-JSON numbers and duplicate object keys at any level are forbidden. Object member order is insignificant. Array order in the common inventory does not choose a primary database or table. Two-space indentation and a final newline are recommended.
 
-The [version-specific manifest schema](../schema/1.3.0/manifest.schema.json) uses [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/json-schema-core). Its `$schema` identifies the schema language, not the Darkbox version; its `$id` identifies this schema using an URN, not a download location. An archive does not require network access or an embedded schema. A reader selects its supported schema from `darkbox.version`. Schemas are retained under `schema/<version>/`; the root schema is a convenience copy for the current version.
+The [version-specific manifest schema](../schema/1.4.0/manifest.schema.json) uses [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/json-schema-core). Its `$schema` identifies the schema language, not the Darkbox version; its `$id` identifies this schema using an URN, not a download location. An archive does not require network access or an embedded schema. A reader selects its supported schema from `darkbox.version`. Schemas are retained under `schema/<version>/`; the root schema is a convenience copy for the current version.
 
 | Field | Required | Value |
 | --- | --- | --- |
-| `darkbox` | Yes | Object with `id = "darkbox"`, `version = "1.3.0"` |
+| `darkbox` | Yes | Object with `id = "darkbox"`, `version = "1.4.0"` |
 | `application` | Yes | Object with `id`, `formatVersion` and `profilePath` strings |
 | `folders` | Yes | Array of objects with `path` and short `description`, including the four canonical bundle directories |
 | `databases` | Yes | Nonempty array of objects with `path`, short `description` and `tables` |
@@ -84,7 +84,7 @@ Application, creator and extension versions are nonblank strings of at most 128 
 
 Each database's `tables` MUST list all logical application tables, including virtual tables. SQLite internal tables named `sqlite_*` and module-managed shadow tables are excluded. Other tables MUST NOT be excluded solely because of a naming prefix. Views, indexes and triggers remain in SQLite and are not part of this table inventory. Table names are exact, nonblank SQL identifiers, may use Unicode and are at most 255 characters. A tool MUST quote SQL identifiers correctly rather than interpolate names as SQL text.
 
-Version 1.3.0 rejects unknown properties in common objects. Extensions are represented only through `extensions`; their `data` objects are open. JSON Schema checks the shape, constants, required canonical folder declarations and some syntax. It does not check resource existence, canonical bundle bytes, SQL schemas, path uniqueness by key or the full container. It cannot detect duplicate JSON keys after a parser has discarded them.
+Version 1.4.0 rejects unknown properties in common objects. Extensions are represented only through `extensions`; their `data` objects are open. JSON Schema checks the shape, constants, required canonical folder declarations and some syntax. It does not check resource existence, canonical bundle bytes, SQL schemas, path uniqueness by key or the full container. It cannot detect duplicate JSON keys after a parser has discarded them.
 
 ## 4. Relative paths, encodings and resource names
 
@@ -106,9 +106,9 @@ Display names and original attachment filenames are data, not ZIP paths, and may
 
 ### Canonical documentation bundle
 
-The complete contents of `archive/<darkbox.version>/` are the canonical documentation bundle for that specification version. For `darkbox.version = "1.3.0"`, a writer MUST copy every file and directory from [archive/1.3.0/](../archive/1.3.0/) into the ZIP root, preserving relative paths and file bytes. The source directory itself is not copied as an enclosing directory. The manifest, application profile documentation, databases and other resources are added separately at their declared paths.
+The complete contents of `archive/<darkbox.version>/` are the canonical documentation bundle for that specification version. For `darkbox.version = "1.4.0"`, a writer MUST copy every file and directory from [archive/1.4.0/](../archive/1.4.0/) into the ZIP root, preserving relative paths and file bytes. The source directory itself is not copied as an enclosing directory. The manifest, application profile documentation, databases and other resources are added separately at their declared paths.
 
-The canonical files for version 1.3.0 are:
+The canonical files for version 1.4.0 are:
 
 | Archive path | Purpose |
 | --- | --- |
@@ -128,7 +128,7 @@ Writers MUST NOT edit, translate, prepend or append content, change line endings
 
 The canonical README uses English, UTF-8 without a BOM and LF line endings, and states the exact Darkbox version it documents. The manifest is authoritative for project identity, versions and inventory. The README explains the common format and points to the manifest for application details; it is not a second application-schema definition. The source directory is the complete list of static files to include. Writers generate project metadata and payload separately.
 
-The catalog at `docs/darkbox/bundle.json` is canonical metadata governed by the [bundle catalog schema](../schema/1.3.0/bundle.schema.json). It identifies the exact Darkbox version in `darkbox`, lists all canonical directories in `folders`, and lists every other canonical file in `files`. Each file record has its exact relative `path`, uncompressed byte `size` and lowercase 64-character `sha256` digest. File and directory paths are unique and sorted by ascending ASCII byte order. The catalog is excluded from its own digest list; it MUST itself be included unchanged and compared with the trusted version-specific reference. This avoids a self-referential checksum.
+The catalog at `docs/darkbox/bundle.json` is canonical metadata governed by the [bundle catalog schema](../schema/1.4.0/bundle.schema.json). It identifies the exact Darkbox version in `darkbox`, lists all canonical directories in `folders`, and lists every other canonical file in `files`. Each file record has its exact relative `path`, uncompressed byte `size` and lowercase 64-character `sha256` digest. File and directory paths are unique and sorted by ascending ASCII byte order. The catalog is excluded from its own digest list; it MUST itself be included unchanged and compared with the trusted version-specific reference. This avoids a self-referential checksum.
 
 Reference data MUST come from a locally trusted Darkbox distribution for the supported version. An archive's own catalog MUST NOT be the sole source of expected hashes. SHA-256 is computed over uncompressed file bytes, independent of ZIP compression and timestamps. Catalog consistency, file hashes and exact-byte comparison do not establish authorship or authenticate user project data. The catalog does not inventory or hash the dynamic project manifest, application-profile document, databases or attachments.
 
@@ -210,7 +210,7 @@ Patch changes clarify existing rules without changing allowed structures or requ
 | --- | --- |
 | Unknown common specification identifier | Reject application opening; generic ZIP inventory may remain available |
 | Unimplemented common version | Report unsupported version, preserve source; only generic inspection or an explicitly uncertified read-only view |
-| Unknown common field under version 1.3.0 | Report schema nonconformance rather than silently ignore it |
+| Unknown common field under version 1.4.0 | Report schema nonconformance rather than silently ignore it |
 | Unknown application or application data version | Generic inspection allowed; no application-data modification without a supported profile or migration |
 | Unknown required extension or unsupported extension version | Block ordinary application opening and saving; generic inventory allowed |
 | Unknown optional extension or unsupported extension version | Skip the feature but preserve its descriptor and resources, or refuse saving if preservation cannot be guaranteed |
@@ -239,11 +239,11 @@ Namespace ownership and version interpretation belong to the extension publisher
 
 An unaware writer MUST preserve an optional extension descriptor as a JSON value and its uncompressed resource bytes. It need not preserve JSON whitespace, ZIP compression or timestamps. It must also preserve other declared resources it cannot regenerate. If preservation is impossible, it MUST NOT overwrite the source. Permanent changes to application data conventions belong to a new profile data version, not arbitrary common fields.
 
-Integrity validation uses ZIP CRC and the SQLite checks in sections 6 and 7. The canonical catalog additionally uses SHA-256 for comparison with official static documentation. This version defines the official `studio.illegal.darkbox.protection` extension, independently versioned as 1.0.0, for selective encryption, a signed complete payload inventory and application-supplied trust. Its normative [specification](../archive/1.3.0/docs/darkbox/protection/1.0.0.md), [schema](../archive/1.3.0/docs/darkbox/protection/1.0.0.schema.json) and [test vectors](../archive/1.3.0/docs/darkbox/protection/1.0.0.vectors.json) travel in the canonical bundle. The extension MUST be required when present, MUST NOT be used with a common version earlier than 1.1.0, and does not change the SQLite physical format. Public metadata and required documentation MUST remain readable. Without this extension no payload authentication is claimed. There is no general public extension registry. ZIP CRC detects accidental errors, not authenticity. Additional algorithms and block or extension versions require an explicit versioned specification. Ordinary readers MUST verify required extension semantics, including signature trust, before opening; absent decryption keys allow a public or locked view. Writers MUST refuse a save that cannot retain required protection and produce its updated authenticated inventory and signature. Diagnostic inspection does not authorize saving.
+Integrity validation uses ZIP CRC and the SQLite checks in sections 6 and 7. The canonical catalog additionally uses SHA-256 for comparison with official static documentation. This version defines the official `studio.illegal.darkbox.protection` extension, independently versioned as 1.0.0, for selective encryption, a signed complete payload inventory and application-supplied trust. Its normative [specification](../archive/1.4.0/docs/darkbox/protection/1.0.0.md), [schema](../archive/1.4.0/docs/darkbox/protection/1.0.0.schema.json) and [test vectors](../archive/1.4.0/docs/darkbox/protection/1.0.0.vectors.json) travel in the canonical bundle. The extension MUST be required when present, MUST NOT be used with a common version earlier than 1.1.0, and does not change the SQLite physical format. Public metadata and required documentation MUST remain readable. Without this extension no payload authentication is claimed. There is no general public extension registry. ZIP CRC detects accidental errors, not authenticity. Additional algorithms and block or extension versions require an explicit versioned specification. Ordinary readers MUST verify required extension semantics, including signature trust, before opening; absent decryption keys allow a public or locked view. Writers MUST refuse a save that cannot retain required protection and produce its updated authenticated inventory and signature. Diagnostic inspection does not authorize saving.
 
 ## 13. Quiescent directory representation
 
-A Darkbox 1.3.0 package MAY be a directory containing exactly the same files,
+A Darkbox 1.4.0 package MAY be a directory containing exactly the same files,
 relative paths and canonical bytes as its ZIP representation. The root contains
 manifest.json and README.md, without an enclosing version directory. All folder,
 path, inventory, profile, SQLite, extension and protection rules apply. ZIP header,
@@ -310,7 +310,7 @@ remains a complete byte pass. Unsigned hashes provide no authenticity.
 A delta is a separate ZIP transfer envelope, not a conformant standalone project.
 It applies one exact complete base edition to produce one exact complete target
 edition. Both editions MUST conform to an explicitly supported delta-capable common
-version (1.2.0 or 1.3.0) with the same
+version (1.2.0, 1.3.0 or 1.4.0) with the same
 `packageId`. Delta envelope version `1.0.0` is independent of software and common
 specification versions. A delta MUST NOT remove or change the version of a
 required extension present in its base. Application migrations that produce the
@@ -395,7 +395,7 @@ sizes and deadlines. A limit increase never establishes conformance by itself.
 
 ## 17. Coordinated live directory storage
 
-A 1.3.0 directory MAY serve as live application working storage. Its databases
+A 1.4.0 directory MAY serve as live application working storage. Its databases
 MAY use WAL while active. Working state is not a conforming snapshot: ordinary
 readers MUST refuse it until the application has recovered and sealed it.
 Published 1.0.0, 1.1.0 and 1.2.0 references remain unchanged.
@@ -459,12 +459,26 @@ Existing directories MUST NOT be overwritten by initialization.
 ### Hot snapshots and direct deltas
 
 An application holding the exclusive lock MAY capture a complete edition without
-closing its live database connections. It MUST establish a coherent write barrier
-across all databases, manifest, profile and resource changes. Supply each declared
-database through the SQLite online backup API; use the private closed DELETE-mode
-copies, never the active database files. Only associated live sidecars are omitted
-from this captured view. The original databases and sidecars remain untouched.
-Immutable resources MAY stream directly while mutation/deletion is prevented.
+closing live database connections. Capture has two phases. Under a coherent write
+barrier, snapshot every declared database using the SQLite online backup API,
+copy the manifest and profile revision, and freeze the complete resource listing,
+including paths, sizes and filesystem identity where available. Use private closed
+DELETE-mode database copies; omit only associated live sidecars from the view.
+The original databases and sidecars remain untouched.
+
+Once a capture handle has been returned, the application MAY release its write
+barrier and resume database writes, metadata edits and resource additions. Newly
+added files belong to later editions and MUST NOT enter this capture through
+re-enumeration. Retain every captured external resource unchanged and undeleted
+until streaming finishes or the handle is dropped. Applications MAY defer deletes
+until all captures referencing those resources have finished. The capture handle
+retains database/profile/manifest snapshots separately from those live paths.
+
+Streaming MUST check captured size/type and file identity where available, and
+reject missing, replaced or modified retained resources. Changed output bytes
+MUST still be hashed while copying, including when comparison used trusted hashes.
+Failure MUST discard the output candidate. A capture is not a filesystem snapshot:
+applications remain responsible for immutability and retention across streaming.
 An advisory lock alone does not pause threads in the owning application.
 
 A delta MAY be constructed from a verified base edition and this captured target

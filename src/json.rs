@@ -135,13 +135,47 @@ impl Parser<'_> {
                         ));
                     }
                 }
-                let number = text
-                    .parse::<Number>()
+                serde_json::from_str::<&serde_json::value::RawValue>(text)
                     .map_err(|_| self.error("Invalid JSON number"))?;
+                let number = text.parse::<Number>().map_err(|_| precision_error())?;
+                if !cfg!(feature = "exact-numbers")
+                    && normalized(text) != normalized(&number.to_string())
+                {
+                    return Err(precision_error());
+                }
                 Ok(Value::Number(number))
             }
             _ => Err(self.error("Expected a JSON value")),
         }
+    }
+}
+
+fn precision_error() -> Failure {
+    Failure::new(
+        crate::Status::Unsupported,
+        "json.number_precision",
+        "JSON number requires the opt-in exact-numbers feature; no rounded value was accepted",
+    )
+}
+// Compare bounded decimal values, independent of insignificant zeros/exponents.
+fn normalized(text: &str) -> (bool, String, i32) {
+    let negative = text.starts_with('-');
+    let text = text.trim_start_matches('-');
+    let (mantissa, exponent) = text.split_once(['e', 'E']).unwrap_or((text, "0"));
+    let exponent = exponent.parse::<i32>().unwrap_or(0);
+    let fractional = mantissa
+        .split_once('.')
+        .map_or(0, |(_, digits)| digits.len()) as i32;
+    let mut digits = mantissa.replace('.', "").trim_start_matches('0').to_owned();
+    let mut power = exponent - fractional;
+    while digits.ends_with('0') {
+        digits.pop();
+        power += 1;
+    }
+    if digits.is_empty() {
+        (false, "0".into(), 0)
+    } else {
+        (negative, digits, power)
     }
 }
 
@@ -171,6 +205,7 @@ mod tests {
         }
     }
     #[test]
+    #[cfg(feature = "exact-numbers")]
     fn preserves_json_numbers_and_private_named_objects() {
         let value =
             parse(br#"{"number":1e500,"data":{"$serde_json::private::Number":"ordinary data"}}"#)
@@ -180,6 +215,27 @@ mod tests {
             value["data"]["$serde_json::private::Number"],
             "ordinary data"
         );
+    }
+    #[test]
+    #[cfg(not(feature = "exact-numbers"))]
+    fn fallback_rejects_rounding_but_preserves_native_values() {
+        for number in ["1e500", "18446744073709551616", "0.123456789012345678901"] {
+            assert_eq!(
+                parse(number.as_bytes()).unwrap_err().code,
+                "json.number_precision"
+            );
+        }
+        for number in [
+            "0.1",
+            "1.000",
+            "1e2",
+            "18446744073709551615",
+            "-9223372036854775808",
+        ] {
+            assert!(parse(number.as_bytes()).is_ok(), "{number}");
+        }
+        let value = parse(br#"{"$serde_json::private::Number":"ordinary data"}"#).unwrap();
+        assert_eq!(value["$serde_json::private::Number"], "ordinary data");
     }
     #[test]
     fn rejects_non_json_and_trailing_values() {
@@ -208,6 +264,9 @@ mod tests {
                 crate::Status::ResourceLimit
             );
         }
-        assert!(parse(b"1e0000000500").is_ok());
+        assert_eq!(
+            parse(b"1e0000000500").is_ok(),
+            cfg!(feature = "exact-numbers")
+        );
     }
 }

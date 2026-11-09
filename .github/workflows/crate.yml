@@ -1,0 +1,50 @@
+name: Check and publish Rust crate
+
+on:
+  workflow_call:
+    inputs:
+      source-commit:
+        type: string
+        default: ''
+      release-tag:
+        type: string
+        default: ''
+      publish:
+        type: boolean
+        default: false
+    secrets:
+      CARGO_REGISTRY_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source-commit || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Validate release identity
+        if: inputs.publish
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: python3 scripts/release.py --check-tag "$RELEASE_TAG"
+      - name: Package and verify from the distributable sources
+        run: |
+          cargo +stable package --locked
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
+          cargo +stable check --manifest-path "target/package/darkbox-$version/Cargo.toml" --no-default-features --locked --target-dir target
+      - name: Publish verified crate before the GitHub release
+        if: inputs.publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: python3 scripts/publish_crate.py

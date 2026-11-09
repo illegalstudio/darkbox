@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.3.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.3.0"></a>
+  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.4.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.4.0"></a>
   <a href="schema/manifest.schema.json"><img src="https://img.shields.io/static/v1?label=JSON%20Schema&amp;message=2020-12&amp;color=303A46&amp;style=flat-square" alt="JSON Schema 2020-12"></a>
 </p>
 
@@ -50,7 +50,7 @@ Preserving data also means preserving how to decode it. Every archive carries th
 - [Low-level library: verification, extension registration and progressive creation](docs/library.md)
 - [Building and publishing releases](docs/releases.md)
 - [Specification](docs/specification.md)
-- [Canonical Darkbox 1.3.0 README](archive/1.3.0/README.md), copied byte-for-byte to the archive root as `README.md`
+- [Canonical Darkbox 1.4.0 README](archive/1.4.0/README.md), copied byte-for-byte to the archive root as `README.md`
 - [Selective protection extension 1.0.0](archive/1.1.0/docs/darkbox/protection/1.0.0.md), with its schema and interoperable test vectors
 - [Original SQLite file-format reference](archive/1.0.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.0.0/docs/sqlite/SOURCE.md)
 - [Manifest JSON Schema](schema/manifest.schema.json), using JSON Schema Draft 2020-12
@@ -142,7 +142,7 @@ cargo install --path . --locked
 
 ## Releases
 
-Run `make release` from a clean `main` checkout. It proposes the next software version, includes every unpublished specification automatically, prepares release metadata, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, builds native Arch packages for both Linux architectures, publishes the complete release, updates the Illegal Studio Homebrew tap and notifies its pacman repository. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
+Run `make release` from a clean `main` checkout. It proposes the next software version, includes every unpublished specification automatically, prepares release metadata, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, builds native Arch packages for both Linux architectures, publishes the Rust crate on crates.io and then the complete GitHub release, updates the Illegal Studio Homebrew tap and notifies its pacman repository. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
 
 ## Versioned archive documentation
 
@@ -170,7 +170,7 @@ example.project
 
 Darkbox fixes its root metadata names and canonical bundle paths. Other database and folder paths are declared in the manifest. Required `application.profilePath` locates the included application data-format documentation; `docs/profile.md` is a recommended path. Attachments may remain database BLOBs or become separate files, as defined by a profile.
 
-The specification version, application data-format version and optional creator-software version are independent. The current specification is identified by `darkbox.version = "1.3.0"`. Application profiles define their own data-format versions.
+The specification version, application data-format version and optional creator-software version are independent. The current specification is identified by `darkbox.version = "1.4.0"`. Application profiles define their own data-format versions.
 
 ## License
 

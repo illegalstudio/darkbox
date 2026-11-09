@@ -467,3 +467,189 @@ fn delta_base_directory_is_fully_read_even_when_target_cache_is_enabled() {
     assert_eq!(error.status, Status::Invalid);
     assert!(!f.path("bad.delta").exists());
 }
+
+#[test]
+fn split_capture_ignores_later_additions_and_keeps_database_and_profile_revision() {
+    let mut f = Fixture::new();
+    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    let (library, db) = f.initialize();
+    db.execute_batch("PRAGMA journal_mode=WAL").unwrap();
+    let capture = library
+        .prepare_hot_capture(
+            f.manifest.clone(),
+            &BTreeMap::from([(DB.to_owned(), &db)]),
+            Limits::default(),
+        )
+        .unwrap();
+    // Application releases the capture barrier and resumes additions/DB writes.
+    db.execute_batch("INSERT INTO items VALUES(2,'after capture')")
+        .unwrap();
+    fs::write(library.path().join("media/later.mp4"), b"later").unwrap();
+    fs::write(
+        library.path().join("docs/profile.md"),
+        b"later profile revision",
+    )
+    .unwrap();
+    fs::write(
+        library.path().join("manifest.json"),
+        b"later manifest revision",
+    )
+    .unwrap();
+    capture
+        .write_backup(f.path("captured.zip"), &VerificationOptions::default())
+        .unwrap();
+    assert_passed(&f.path("captured.zip"));
+    darkbox::unpack(
+        f.path("captured.zip"),
+        f.path("restored"),
+        Limits::default(),
+        &VerificationOptions::default(),
+    )
+    .unwrap();
+    assert!(!f.path("restored/media/later.mp4").exists());
+    assert!(
+        fs::read_to_string(f.path("restored/docs/profile.md"))
+            .unwrap()
+            .contains("org.example.live")
+    );
+    let restored = Connection::open(f.path("restored").join(DB)).unwrap();
+    assert_eq!(
+        restored
+            .query_row("SELECT COUNT(*) FROM items", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+}
+
+#[test]
+fn split_capture_writes_a_delta_and_rejects_retention_violations() {
+    let mut f = Fixture::new();
+    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    f.sealed();
+    let options = VerificationOptions::default();
+    darkbox::pack(
+        f.path("library"),
+        f.path("base.zip"),
+        Limits::default(),
+        &options,
+    )
+    .unwrap();
+    let library = DirectoryLibrary::open(f.path("library")).unwrap();
+    let db = Connection::open(library.path().join(DB)).unwrap();
+    db.execute_batch("INSERT INTO items VALUES(2,'captured')")
+        .unwrap();
+    let databases = BTreeMap::from([(DB.to_owned(), &db)]);
+    let capture = library
+        .prepare_hot_capture(f.manifest.clone(), &databases, Limits::default())
+        .unwrap();
+    fs::write(library.path().join("media/later.mp4"), b"later").unwrap();
+    capture
+        .write_delta(f.path("base.zip"), f.path("captured.delta"), &options)
+        .unwrap();
+    darkbox::merge(
+        f.path("base.zip"),
+        f.path("captured.delta"),
+        f.path("merged.zip"),
+        Limits::default(),
+        &options,
+    )
+    .unwrap();
+    assert_passed(&f.path("merged.zip"));
+    let capture = library
+        .prepare_hot_capture(f.manifest.clone(), &databases, Limits::default())
+        .unwrap();
+    fs::remove_file(library.path().join("media/item.mp4")).unwrap();
+    assert!(
+        capture
+            .write_backup(f.path("missing.zip"), &options)
+            .is_err()
+    );
+    assert!(!f.path("missing.zip").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn capture_rejects_same_size_same_bytes_replaced_inode() {
+    let mut f = Fixture::new();
+    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    let (library, db) = f.initialize();
+    let capture = library
+        .prepare_hot_capture(
+            f.manifest.clone(),
+            &BTreeMap::from([(DB.to_owned(), &db)]),
+            Limits::default(),
+        )
+        .unwrap();
+    fs::write(f.path("replacement"), b"immutable media").unwrap();
+    fs::rename(f.path("replacement"), library.path().join("media/item.mp4")).unwrap();
+    assert!(
+        capture
+            .write_backup(f.path("changed.zip"), &VerificationOptions::default())
+            .is_err()
+    );
+    assert!(!f.path("changed.zip").exists());
+}
+
+#[cfg(not(feature = "exact-numbers"))]
+#[test]
+fn host_json_tagged_untagged_and_flatten_numbers_work_without_feature_unification() {
+    #[derive(serde::Deserialize)]
+    #[serde(tag = "kind")]
+    enum Tagged {
+        Value { number: u64 },
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum Untagged {
+        Number(u64),
+        Text(String),
+    }
+    #[derive(serde::Deserialize)]
+    struct Inner {
+        number: u64,
+    }
+    #[derive(serde::Deserialize)]
+    struct Flat {
+        #[serde(flatten)]
+        inner: Inner,
+    }
+    let Tagged::Value { number } = serde_json::from_str(r#"{"kind":"Value","number":42}"#).unwrap();
+    assert_eq!(number, 42);
+    match serde_json::from_str::<Untagged>("42").unwrap() {
+        Untagged::Number(n) => assert_eq!(n, 42),
+        Untagged::Text(s) => panic!("{s}"),
+    }
+    assert_eq!(
+        serde_json::from_str::<Flat>(r#"{"number":42}"#)
+            .unwrap()
+            .inner
+            .number,
+        42
+    );
+}
+
+#[test]
+fn capture_is_send_and_owns_its_library_guard() {
+    fn assert_send<T: Send>() {}
+    assert_send::<darkbox::HotCapture>();
+    let mut f = Fixture::new();
+    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    let (library, db) = f.initialize();
+    let capture = library
+        .prepare_hot_capture(
+            f.manifest.clone(),
+            &BTreeMap::from([(DB.to_owned(), &db)]),
+            Limits::default(),
+        )
+        .unwrap();
+    drop(library);
+    assert_eq!(
+        darkbox::verify(f.path("library")).status,
+        Status::NotQuiescent
+    );
+    capture
+        .write_backup(f.path("owned.zip"), &VerificationOptions::default())
+        .unwrap();
+    assert_passed(&f.path("owned.zip"));
+    assert!(DirectoryLibrary::open(f.path("library")).is_ok());
+}

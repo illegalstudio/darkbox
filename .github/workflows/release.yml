@@ -42,6 +42,7 @@ jobs:
         id: metadata
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -53,7 +54,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
-          names = ('APPLE_CERTIFICATE_P12', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY',
+          names = ('CARGO_REGISTRY_TOKEN', 'APPLE_CERTIFICATE_P12', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY',
                    'APPLE_ID', 'APPLE_TEAM_ID', 'APPLE_APP_PASSWORD',
                    'ILLEGAL_BOT_APP_ID', 'ILLEGAL_BOT_PRIVATE_KEY')
           missing = [name for name in names if not os.environ.get(name)]
@@ -83,8 +84,18 @@ jobs:
     with:
       source-commit: ${{ needs.prepare.outputs.commit }}
 
-  publish:
+  crate:
     needs: [prepare, build, pacman-build]
+    uses: ./.github/workflows/crate.yml
+    with:
+      source-commit: ${{ needs.prepare.outputs.commit }}
+      release-tag: ${{ needs.prepare.outputs.tag }}
+      publish: true
+    secrets:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish:
+    needs: [prepare, build, pacman-build, crate]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
