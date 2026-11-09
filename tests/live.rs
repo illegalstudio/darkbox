@@ -78,7 +78,10 @@ fn initialize_lock_seal_and_reopen_without_intermediate_zip() {
     let (library, db) = f.initialize();
     let lock_path = library.lock_path().unwrap();
     assert!(lock_path.exists());
-    assert_eq!(lock_path.parent(), Some(f.dir.path()));
+    assert_eq!(
+        lock_path.parent(),
+        Some(fs::canonicalize(f.dir.path()).unwrap().as_path())
+    );
     assert_eq!(darkbox::verify(library.path()).status, Status::NotQuiescent);
     assert!(DirectoryLibrary::open(library.path()).is_err());
     let error = darkbox::pack(
