@@ -19,6 +19,7 @@ pub enum Status {
     Unsupported,
     ResourceLimit,
     OperationalError,
+    NotQuiescent,
 }
 
 impl Status {
@@ -29,6 +30,7 @@ impl Status {
             Self::Unsupported => 3,
             Self::ResourceLimit => 4,
             Self::OperationalError => 5,
+            Self::NotQuiescent => 6,
         }
     }
 
@@ -39,6 +41,7 @@ impl Status {
             Self::ResourceLimit => 2,
             Self::Invalid => 3,
             Self::OperationalError => 4,
+            Self::NotQuiescent => 5,
         }
     }
 }
@@ -200,6 +203,8 @@ pub struct Report {
     pub supported_versions: Vec<&'static str>,
     pub manifest: Option<Value>,
     pub entries: Vec<EntryInfo>,
+    /// Resources whose complete hashes were supplied by application policy.
+    pub trusted_resources: Vec<crate::extensions::EntryDigest>,
     pub databases: Vec<DatabaseInfo>,
     pub protection: Option<crate::protection::ProtectionReport>,
     pub checks: Vec<&'static str>,

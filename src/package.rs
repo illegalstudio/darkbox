@@ -1359,17 +1359,17 @@ fn configure_edit(db: &rusqlite::Connection, limits: &Limits, end: Instant) -> R
     Ok(())
 }
 
-struct DatabaseSnapshot {
+pub(crate) struct DatabaseSnapshot {
     _directory: tempfile::TempDir,
     path: PathBuf,
 }
 impl DatabaseSnapshot {
-    fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 }
 
-fn database_snapshot(
+pub(crate) fn database_snapshot(
     source: &rusqlite::Connection,
     limits: &Limits,
     end: Instant,

@@ -19,10 +19,10 @@ use std::{
 use tempfile::NamedTempFile;
 use zip::{ZipWriter, write::SimpleFileOptions};
 
-struct Verified {
+pub(crate) struct Verified {
     source: Source,
     indices: BTreeMap<String, usize>,
-    report: Report,
+    pub(crate) report: Report,
     // Retain verifier scratch files until all application callbacks have finished.
     staging: crate::Staging,
 }
@@ -33,14 +33,53 @@ impl Verified {
         options: &VerificationOptions<'_>,
         deadline: Instant,
     ) -> Result<Self, Error> {
-        let (source, directory) = Source::open(path, limits, deadline)?;
-        let (report, staging) = crate::analyze_input(
+        let pair = Source::open(path, limits, deadline)?;
+        Self::from_source(path, pair, limits, options, deadline)
+    }
+    pub(crate) fn from_source(
+        path: &Path,
+        (source, directory): (Source, crate::container::Directory),
+        limits: &Limits,
+        options: &VerificationOptions<'_>,
+        deadline: Instant,
+    ) -> Result<Self, Error> {
+        Self::from_input(path, (source, directory), limits, options, deadline, false)
+    }
+    fn open_full(
+        path: &Path,
+        limits: &Limits,
+        options: &VerificationOptions<'_>,
+        deadline: Instant,
+    ) -> Result<Self, Error> {
+        Self::from_input(
+            path,
+            Source::open(path, limits, deadline)?,
+            limits,
+            options,
+            deadline,
+            true,
+        )
+    }
+    fn from_input(
+        path: &Path,
+        (source, directory): (Source, crate::container::Directory),
+        limits: &Limits,
+        options: &VerificationOptions<'_>,
+        deadline: Instant,
+        full: bool,
+    ) -> Result<Self, Error> {
+        let input = source.fork(limits, deadline)?;
+        let (report, staging) = crate::analyze_source(
             path,
             Mode::Verify,
             limits.clone(),
             options,
             false,
-            source.clone_file()?,
+            Some(if full {
+                crate::AnalysisInput::Full(input)
+            } else {
+                crate::AnalysisInput::Opened(input)
+            }),
         );
         if report.status != Status::Passed {
             return Err(Error::new(
@@ -63,7 +102,7 @@ impl Verified {
             staging: staging.unwrap(),
         })
     }
-    fn files(&self) -> &BTreeMap<String, EntryDigest> {
+    pub(crate) fn files(&self) -> &BTreeMap<String, EntryDigest> {
         &self.staging.digests
     }
     fn copy(
@@ -81,7 +120,7 @@ impl Verified {
         let mut entry = self.source.entry(self.indices[name], name)?;
         copy_checked(&mut entry.reader, output, &expected, limits, deadline)
     }
-    fn manifest(&self) -> &serde_json::Value {
+    pub(crate) fn manifest(&self) -> &serde_json::Value {
         self.report.manifest.as_ref().unwrap()
     }
     fn folders(&self) -> Vec<String> {
@@ -98,7 +137,7 @@ impl Verified {
 fn invalid(message: &str) -> Error {
     Error::invalid("delta.invalid", message)
 }
-fn deadline(limits: &Limits) -> Result<Instant, Error> {
+pub(crate) fn deadline(limits: &Limits) -> Result<Instant, Error> {
     if limits.timeout_seconds == 0
         || limits.max_archive_bytes == 0
         || limits.max_entry_bytes == 0
@@ -150,7 +189,7 @@ fn copy_checked(
     }
     Ok(())
 }
-fn output_path(path: &Path, sources: &[&Path]) -> Result<PathBuf, Error> {
+pub(crate) fn output_path(path: &Path, sources: &[&Path]) -> Result<PathBuf, Error> {
     let destination = crate::package::destination(path)?;
     match fs::symlink_metadata(&destination) {
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -284,28 +323,38 @@ pub fn pack(
     let source = source.as_ref();
     let destination = output_path(destination.as_ref(), &[source])?;
     let end = deadline(&limits)?;
-    let mut input = Verified::open(source, &limits, options, end)?;
+    let input = Verified::open(source, &limits, options, end)?;
     if !input.source.is_directory() {
         return Err(Error::invalid(
             "pack.source",
             "Packing requires a directory package",
         ));
     }
+    pack_verified(input, &destination, &limits, options, end)
+}
+
+pub(crate) fn pack_verified(
+    mut input: Verified,
+    destination: &Path,
+    limits: &Limits,
+    options: &VerificationOptions<'_>,
+    end: Instant,
+) -> Result<Report, Error> {
     let names: Vec<_> = input.files().keys().cloned().collect();
     let candidate = write_zip(
-        &destination,
+        destination,
         &input.folders(),
         &names
             .iter()
             .map(|name| (name.clone(), crate::media::file_options(name)))
             .collect::<Vec<_>>(),
-        &limits,
+        limits,
         end,
-        |i, output| input.copy(&names[i], output, &limits, end),
+        |i, output| input.copy(&names[i], output, limits, end),
     )?;
-    let report = checked(candidate.path(), &limits, options)?;
+    let report = checked(candidate.path(), limits, options)?;
     crate::container::check_deadline(end)?;
-    publish(candidate, &destination, report)
+    publish(candidate, destination, report)
 }
 
 /// Unpack a supported 1.2.0 ZIP to an absent directory using private staging.
@@ -318,13 +367,19 @@ pub fn unpack(
 ) -> Result<Report, Error> {
     let source = source.as_ref();
     let destination = output_path(destination.as_ref(), &[source])?;
+    let destination_lock = crate::live::destination_lock(&destination)?;
     let end = deadline(&limits)?;
     let mut input = Verified::open(source, &limits, options, end)?;
-    if input.source.is_directory() || input.manifest()["darkbox"]["version"] != "1.2.0" {
+    if input.source.is_directory()
+        || !matches!(
+            input.manifest()["darkbox"]["version"].as_str(),
+            Some("1.2.0" | "1.3.0")
+        )
+    {
         return Err(Error::new(
             Status::Unsupported,
             "unpack.version",
-            "Unpacking requires a Darkbox 1.2.0 ZIP",
+            "Unpacking requires a Darkbox 1.2.0 or 1.3.0 ZIP",
         ));
     }
     let candidate = tempfile::Builder::new()
@@ -341,7 +396,16 @@ pub fn unpack(
         input.copy(&name, &mut file, &limits, end)?;
         file.sync_all().map_err(crate::io_failure)?;
     }
-    let mut report = checked(candidate.path(), &limits, options)?;
+    let pair = Source::directory_locked(
+        candidate.path(),
+        destination_lock,
+        BTreeMap::new(),
+        &BTreeSet::new(),
+        &limits,
+        end,
+    )?;
+    let verified = Verified::from_source(candidate.path(), pair, &limits, options, end)?;
+    let mut report = verified.report;
     #[cfg(unix)]
     for folder in folders
         .iter()
@@ -385,11 +449,14 @@ struct Delta {
     removed: Vec<String>,
 }
 fn identity(input: &Verified) -> Result<Identity, Error> {
-    if input.manifest()["darkbox"]["version"] != "1.2.0" {
+    if !matches!(
+        input.manifest()["darkbox"]["version"].as_str(),
+        Some("1.2.0" | "1.3.0")
+    ) {
         return Err(Error::new(
             Status::Unsupported,
             "delta.version",
-            "Delta editions require Darkbox 1.2.0",
+            "Delta editions require Darkbox 1.2.0 or 1.3.0",
         ));
     }
     let id = input.manifest()["packageId"]
@@ -436,8 +503,29 @@ pub fn create_delta(
 ) -> Result<Report, Error> {
     let destination = output_path(destination.as_ref(), &[base.as_ref(), target.as_ref()])?;
     let end = deadline(&limits)?;
-    let base = Verified::open(base.as_ref(), &limits, options, end)?;
-    let mut target = Verified::open(target.as_ref(), &limits, options, end)?;
+    let base = Verified::open_full(base.as_ref(), &limits, options, end)?;
+    let target = Verified::open(target.as_ref(), &limits, options, end)?;
+    delta_verified(base, target, &destination, &limits, end)
+}
+
+pub(crate) fn delta_from_verified(
+    base: &Path,
+    target: Verified,
+    destination: &Path,
+    limits: &Limits,
+    options: &VerificationOptions<'_>,
+    end: Instant,
+) -> Result<Report, Error> {
+    let base = Verified::open_full(base, limits, options, end)?;
+    delta_verified(base, target, destination, limits, end)
+}
+fn delta_verified(
+    base: Verified,
+    mut target: Verified,
+    destination: &Path,
+    limits: &Limits,
+    end: Instant,
+) -> Result<Report, Error> {
     compatible(&base, &target)?;
     let descriptor = Delta {
         darkbox_delta: "1.0.0".into(),
@@ -482,7 +570,7 @@ pub fn create_delta(
         vec!["files".into()]
     };
     let candidate = write_zip(
-        &destination,
+        destination,
         &folders,
         &names
             .iter()
@@ -496,13 +584,13 @@ pub fn create_delta(
                 (name.clone(), crate::media::file_options(logical))
             })
             .collect::<Vec<_>>(),
-        &limits,
+        limits,
         end,
         |index, zip| {
             if index == 0 {
                 zip.write_all(&bytes).map_err(crate::creation::output_error)
             } else {
-                target.copy(&descriptor.changed[index - 1], zip, &limits, end)
+                target.copy(&descriptor.changed[index - 1], zip, limits, end)
             }
         },
     )?;
@@ -511,7 +599,7 @@ pub fn create_delta(
     report.checks.push("delta.base_and_target");
     report.note("delta.base_required", "This incremental transfer requires its exact verified base; it is not a standalone Darkbox package");
     crate::container::check_deadline(end)?;
-    publish(candidate, &destination, report)
+    publish(candidate, destination, report)
 }
 
 fn reconstruct(
@@ -522,7 +610,7 @@ fn reconstruct(
     options: &VerificationOptions<'_>,
     end: Instant,
 ) -> Result<(NamedTempFile, Report), Error> {
-    let mut base = Verified::open(base_path, limits, options, end)?;
+    let mut base = Verified::open_full(base_path, limits, options, end)?;
     let (mut source, directory) = Source::open(delta_path, limits, end)?;
     if source.is_directory() {
         return Err(invalid("A delta must be a ZIP transfer"));

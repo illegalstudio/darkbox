@@ -392,6 +392,7 @@ fn run() -> io::Result<u8> {
             } else {
                 let mut report = Report {
                     report_version: 2,
+                    trusted_resources: Vec::new(),
                     cli_version: env!("CARGO_PKG_VERSION"),
                     command: mode,
                     file: input.file.display().to_string(),

@@ -57,7 +57,7 @@ The input filename extension is irrelevant. Both analysis commands leave the ori
 
 `verify` checks the exact supported common version, strict JSON, its schema, path and inventory rules, canonical documentation, profile-document presence and UTF-8 encoding, SQLite snapshot independence, logical table inventory, declared `userVersion`, `integrity_check` and `foreign_key_check`. The archive catalog is compared with the embedded official catalog; its hashes cannot authorize changed documentation. Unknown required extensions and unavailable SQLite capabilities are reported as unsupported.
 
-For Darkbox 1.1.0 and 1.2.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
+For Darkbox 1.1.0, 1.2.0 and 1.3.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
 
 `--trust-store PATH` reads a JSON object mapping signer identifiers to 64 hexadecimal characters representing raw 32-byte Ed25519 public keys. `--decryption-keys PATH` reads an application-supplied private JSON object mapping key identifiers to 64 hexadecimal characters representing raw 32-byte AES keys. These files stay outside the package. No command accepts secret keys directly as command-line values, and reports never include supplied key bytes or decrypted plaintext. Key files are limited to 4 MiB. Malformed key configuration returns a usage error without echoing its contents. Inspect does not authenticate protection, even when these options are supplied.
 
@@ -73,7 +73,7 @@ Application profiles are not implemented by this binary. A successful result is 
 
 Human-readable output is the default. `--json` writes one JSON object to standard output, including on analysis failures. Usage errors and output-write failures are written to standard error. Applications should use JSON rather than parse display text.
 
-JSON report version 2 includes `report_version`, `cli_version`, `command`, `file`, `status`, `scope`, `application_validation`, `supported_versions`, `manifest`, `entries`, `databases`, `protection`, `checks`, `diagnostics` and effective `limits`. Entry records indicate whether their CRC was checked; database records indicate whether integrity and foreign keys were checked. `protection` is null when protection was not checked; otherwise it reports the extension version, signature state, inventory result and every encrypted block with public context, block SHA-256, public `nonce_hex`, authentication state and `plaintext_validation = "not_performed"`. Authentication is `verified`, `key_absent`, `failed` or `not_verified`. A verified inventory with an unknown or invalid signature is not an authenticated inventory. `checks` identifies completed check groups, not application-profile certification. Diagnostics have a severity, stable code, optional archive path and explanatory message. Reports may acquire additional fields; consumers should ignore fields they do not use and explicitly support the report version.
+JSON report version 2 includes `report_version`, `cli_version`, `command`, `file`, `status`, `scope`, `application_validation`, `supported_versions`, `manifest`, `entries`, `trusted_resources`, `databases`, `protection`, `checks`, `diagnostics` and effective `limits`. Entry records indicate whether their CRC was checked; database records indicate whether integrity and foreign keys were checked. `protection` is null when protection was not checked; otherwise it reports the extension version, signature state, inventory result and every encrypted block with public context, block SHA-256, public `nonce_hex`, authentication state and `plaintext_validation = "not_performed"`. Authentication is `verified`, `key_absent`, `failed` or `not_verified`. A verified inventory with an unknown or invalid signature is not an authenticated inventory. `checks` identifies completed check groups, not application-profile certification. Diagnostics have a severity, stable code, optional archive path and explanatory message. Reports may acquire additional fields; consumers should ignore fields they do not use and explicitly support the report version.
 
 Protection diagnostic codes include `protection.key_absent`, `protection.signer_unknown`, `protection.version`, `protection.block_version`, `protection.signature_missing`, `protection.signature_invalid`, `protection.authentication`, `protection.inventory`, `protection.nonce_reuse`, `protection.required` and `protection.missing`. Missing decryption keys are informational; trust and unsupported-version errors are unsupported; invalid signature, inventory and AEAD errors are invalid. Independent public and SQLite checks continue where structurally safe. Diagnostic inspection never claims cryptographic conformance.
 
@@ -85,8 +85,9 @@ Protection diagnostic codes include `protection.key_absent`, `protection.signer_
 | `3` | `unsupported` | Unsupported specification, required extension, SQLite capability or requested profile validation |
 | `4` | `resource_limit` | Processing stopped at a configured limit |
 | `5` | `operational_error` | Input, staging or output I/O failure |
+| `6` | `not_quiescent` | Active or interrupted directory; recover and seal in the owning application |
 
-Multiple diagnoses can appear. Operational failure takes precedence over invalid data, then resource limits, then unsupported features. A failed report does not certify unchecked entries or databases; an inspection success is never a verification success.
+A not-quiescent diagnosis stops directory snapshot checks without certifying its data. Otherwise multiple diagnoses can appear. Operational failure takes precedence over invalid data, then resource limits, then unsupported features. A failed report does not certify unchecked entries or databases; an inspection success is never a verification success.
 
 ## Resource limits
 
@@ -130,7 +131,7 @@ CI checks the pull request base or the preceding pushed revision. Release prepar
 
 ## Live library snapshots and incremental backups
 
-Darkbox 1.2.0 supports both ZIP and quiescent directory representations. The
+Darkbox 1.2.0 and 1.3.0 support both ZIP and quiescent directory representations. The
 1.0.0 and 1.1.0 specifications and their canonical bundles remain unchanged;
 conversion does not upgrade them. All destinations below must be absent.
 
@@ -160,7 +161,7 @@ these tools require application-controlled parent directories and external
 coordination with writers that bypass SDK locks.
 
 Delta participants declare the same stable root manifest `packageId` and common
-version 1.2.0. A transfer contains a `delta.json` descriptor and only changed or
+version 1.2.0 or 1.3.0. A transfer contains a `delta.json` descriptor and only changed or
 added whole files, including an entire changed SQLite database. It records removed
 paths and binds both the exact base manifest and its complete logical file
 inventory with SHA-256. The reconstructed target must pass full verification and
@@ -226,3 +227,18 @@ STORE and DEFLATE input remain valid. The SDK's `StoredResource` provides bounde
 seekable reads from STORE entries in an immutable verified ZIP, suitable for
 serving media byte ranges without extracting it. Protected resource bytes remain
 ciphertext; DEFLATE resources require decompression.
+
+## Active or interrupted directory libraries
+
+Directory commands acquire a shared stable sibling lock. An application using
+`DirectoryLibrary` holds the exclusive lock while its workers run. Contention,
+SQLite sidecars or a WAL-mode main file return status `not_quiescent`, diagnostic
+`directory.not_quiescent` and exit code **6**. Reopen the owning application to
+recover and seal the library. The CLI never deletes WAL/SHM files or checkpoints
+live databases. A leftover unlocked `.darkbox-<digest>.lock` file is normal.
+Do not delete it; its inode coordinates later readers and writers.
+
+CLI `verify` still reads every resource. Trusted-digest hooks are an explicit SDK
+policy and reports list `trusted_resources`; the CLI does not infer trust from a
+manifest inventory. Hot backup and sealing require application coordination and
+SQLite connections, so their entry points are in the [SDK](sdk.md#live-directory-storage-130).

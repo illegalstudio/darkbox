@@ -185,3 +185,67 @@ retains access to every resource for existing custom verifiers; the built-in
 protection verifier stages its signature, encrypted files and declared databases,
 leaving ordinary public media streaming. Registered profile validators retain
 access to all resources. Staging limits and cleanup apply to every path.
+
+## Live directory storage (1.3.0)
+
+`DirectoryLibrary` owns the exclusive interoperable sibling lock for a whole
+working session. `initialize(path, manifest, profile, limits)` creates absent
+storage directly with the canonical bundle and declared folders. Supply a 1.3.0
+manifest with a stable `packageId`, then create its databases and resources while
+holding the returned handle. Initialization alone is not snapshot validation.
+`open(path)` also opens interrupted working storage so the owning application can
+recover it. It takes the lock without automatically modifying or validating data.
+
+Stop workers, finish transactions, use SQLite to recover/checkpoint and set DELETE
+mode, then close every connection. `seal(manifest, limits, options)` consumes the
+handle, refreshes an optional resourceInventory, checks the complete candidate and
+atomically updates the manifest. It releases the lock on return. Failed validation
+preserves the previous manifest; reopen the handle to continue recovery. Update
+`application.formatVersion` and the corresponding profile document together.
+The stable lock file is never deleted and remains outside package inventory.
+
+```rust,no_run
+use darkbox::{DirectoryLibrary, Limits, VerificationOptions};
+use std::collections::BTreeMap;
+# fn example(manifest: darkbox::serde_json::Value, db: &darkbox::rusqlite::Connection) -> Result<(), darkbox::Error> {
+let mut library = DirectoryLibrary::open("library")?;
+let databases = BTreeMap::from([("data/library.sqlite".to_owned(), db)]);
+// Hold the application's coherent write/deletion barrier throughout each call.
+library.hot_backup("backup.project", manifest.clone(), &databases,
+    Limits::large(), &VerificationOptions::default())?;
+library.create_delta("previous.project", "changes.delta", manifest, &databases,
+    Limits::large(), &VerificationOptions::default())?;
+# Ok(()) }
+```
+
+Hot operations require exactly one application-supplied connection for each
+manifest database. SQLite backup captures committed WAL state into private
+DELETE-mode copies. Live files and sidecars are unchanged. Media stream from the
+library under the application's barrier; the lock does not pause its threads.
+`create_delta` accepts an empty connection map for a closed quiescent library.
+It verifies the base and an overlaid target view, then writes changed files only;
+it never materializes an entire target ZIP or stages ordinary media.
+
+`TrustedDigests::sha256(path, size)` can provide a cached hash for resources whose
+unchanged bytes the application independently guarantees. Set
+`VerificationOptions::trusted_digests` explicitly. Return `None` for full reads.
+Only 1.3.0 directories use this optimization. Metadata, canonical documentation,
+profile text, databases and protected or callback-staged resources remain fully
+read. A small signature prefix is still checked for uninventoried databases.
+Caches may never come from untrusted manifests or timestamp comparisons alone.
+
+Conditional reports retain `Status::Passed` with scope
+`common_checks_with_trusted_resources`, check `directory.incremental` and the
+exact `trusted_resources` list. Delta reports retain that list with their delta
+scope. Default options perform full verification. Copied output bytes are always
+rehashed, so a stale cached hash cannot publish mismatching changed resources.
+An unchanged file omitted from a delta depends on the application's cache trust;
+reconstruction verifies the complete result against the exact base.
+
+The live APIs preserve common version, packageId and extension descriptors.
+Protected manifest changes require a transactional extension-aware application
+writer and are rejected by these new convenience methods. Exact sealed protected
+packages continue to support `pack`, `unpack`, `create_delta` and `merge`, including
+locked copying without decryption. Use caller-supplied profile verifiers to enforce
+application semantics; hot capture never implies cross-resource transactions.
+All staging must be outside the library. Atomic candidates stay beside outputs.

@@ -6,8 +6,10 @@ mod container;
 mod creation;
 pub mod extensions;
 mod json;
+mod live;
 pub mod manifest;
 mod media;
+pub use live::DirectoryLibrary;
 mod model;
 mod package;
 mod paths;
@@ -23,7 +25,7 @@ mod versions;
 mod writer;
 
 pub use creation::PackageWriter;
-pub use extensions::{ExtensionRegistry, ExtensionVerifier, VerificationOptions};
+pub use extensions::{ExtensionRegistry, ExtensionVerifier, TrustedDigests, VerificationOptions};
 pub use manifest::ManifestBuilder;
 pub use model::{
     DatabaseInfo, Diagnostic, EntryInfo, Failure as Error, Limits, Mode, Report, Status,
@@ -88,6 +90,29 @@ pub(crate) fn analyze_input(
     capture: bool,
     source_file: Option<File>,
 ) -> (Report, Option<Staging>) {
+    analyze_source(
+        path,
+        mode,
+        limits,
+        options,
+        capture,
+        source_file.map(AnalysisInput::File),
+    )
+}
+
+pub(crate) enum AnalysisInput {
+    File(File),
+    Opened((source::Source, container::Directory)),
+    Full((source::Source, container::Directory)),
+}
+pub(crate) fn analyze_source(
+    path: &Path,
+    mode: Mode,
+    limits: Limits,
+    options: &VerificationOptions<'_>,
+    capture: bool,
+    input: Option<AnalysisInput>,
+) -> (Report, Option<Staging>) {
     let mut report = Report {
         report_version: 2,
         cli_version: env!("CARGO_PKG_VERSION"),
@@ -109,6 +134,7 @@ pub(crate) fn analyze_input(
         supported_versions: supported_versions().map(|(version, _)| version).collect(),
         manifest: None,
         entries: Vec::new(),
+        trusted_resources: Vec::new(),
         databases: Vec::new(),
         protection: None,
         checks: Vec::new(),
@@ -123,7 +149,7 @@ pub(crate) fn analyze_input(
         options,
         capture,
         &mut staging,
-        source_file,
+        input,
     ) {
         report.record(error);
     }
@@ -184,7 +210,7 @@ fn run(
     options: &VerificationOptions<'_>,
     capture_all: bool,
     captured: &mut Option<Staging>,
-    source_file: Option<File>,
+    input: Option<AnalysisInput>,
 ) -> Result<()> {
     let limits = report.limits.clone();
     if limits.max_entries == 0
@@ -199,8 +225,10 @@ fn run(
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(limits.timeout_seconds))
         .ok_or_else(|| Failure::limit("Processing timeout is too large"))?;
-    let (mut archive, directory) = match source_file {
-        Some(file) => source::Source::zip(file, &limits, deadline)?,
+    let allow_cached = !matches!(&input, Some(AnalysisInput::Full(_)));
+    let (mut archive, directory) = match input {
+        Some(AnalysisInput::File(file)) => source::Source::zip(file, &limits, deadline)?,
+        Some(AnalysisInput::Opened(pair) | AnalysisInput::Full(pair)) => pair,
         None => source::Source::open(path, &limits, deadline)?,
     };
     let directory_form = archive.is_directory();
@@ -339,6 +367,9 @@ fn run(
             "Manifest inventory is unreadable",
         ));
     }
+    if directory_form {
+        live::check_quiescence(&mut archive, &directory.names, &value)?;
+    }
     if common {
         if let Err(error) = inventory(manifest.as_ref().unwrap(), &directory.nodes, spec.unwrap()) {
             report.record(error);
@@ -347,11 +378,11 @@ fn run(
             report.checks.push("inventory");
         }
     }
-    if directory_form && version != Some("1.2.0") {
+    if directory_form && !matches!(version, Some("1.2.0" | "1.3.0")) {
         return Err(Failure::new(
             Status::Unsupported,
             "directory.version",
-            "Directory form requires Darkbox 1.2.0",
+            "Directory form requires Darkbox 1.2.0 or 1.3.0",
         ));
     }
     if mode == Mode::Inventory {
@@ -438,15 +469,62 @@ fn run(
         };
         let expected_crc = file.crc;
         let expected_size = file.size;
-        let scan = stream(
-            &mut file.reader,
-            destination,
-            capture,
-            &limits,
-            &mut total_actual,
-            deadline,
-        )
-        .map_err(|error| error.at(name))?;
+        let trusted = if allow_cached
+            && directory_form
+            && version == Some("1.3.0")
+            && common
+            && !capture
+            && destination.is_none()
+            && !name.ends_with('/')
+            && !name.starts_with("extensions/")
+        {
+            options
+                .trusted_digests
+                .and_then(|cache| cache.sha256(name, expected_size))
+        } else {
+            None
+        };
+        let scan = if let Some(hash) = trusted {
+            if hash.len() != 64
+                || !hash
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            {
+                return Err(Failure::invalid(
+                    "directory.trusted_digest",
+                    "Trusted SHA-256 must be 64 lowercase hex characters",
+                )
+                .at(name));
+            }
+            total_actual = total_actual
+                .checked_add(expected_size)
+                .filter(|n| *n <= limits.max_total_bytes)
+                .ok_or_else(|| Failure::limit("Trusted resources exceed total limits"))?;
+            let mut prefix = vec![0; expected_size.min(16) as usize];
+            file.reader.read_exact(&mut prefix).map_err(read_failure)?;
+            report.trusted_resources.push(extensions::EntryDigest {
+                path: name.clone(),
+                size: expected_size,
+                sha256: hash.clone(),
+            });
+            Scan {
+                size: expected_size,
+                crc: 0,
+                sha256: hash,
+                prefix,
+                bytes: vec![],
+            }
+        } else {
+            stream(
+                &mut file.reader,
+                destination,
+                capture,
+                &limits,
+                &mut total_actual,
+                deadline,
+            )
+            .map_err(|error| error.at(name))?
+        };
         if scan.size != expected_size || expected_crc.is_some_and(|crc| scan.crc != crc) {
             return Err(Failure::invalid(
                 "zip.crc",
@@ -513,7 +591,9 @@ fn run(
             }
         }
     }
-    report.checks.push(if directory_form {
+    report.checks.push(if !report.trusted_resources.is_empty() {
+        "directory.incremental"
+    } else if directory_form {
         "directory.bytes"
     } else {
         "zip.crc"
@@ -672,6 +752,10 @@ fn run(
                 "Application policy requires a registered verifier for this exact profile version",
             ));
         }
+    }
+    if !report.trusted_resources.is_empty() {
+        report.scope = "common_checks_with_trusted_resources";
+        report.note("directory.trusted_resources", "Application-trusted digests replaced full byte reads for the listed resources. This is conditional validation, not a full byte verification.");
     }
     container::check_deadline(deadline)?;
     *captured = Some(Staging {

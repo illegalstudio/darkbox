@@ -113,9 +113,18 @@ impl Default for ExtensionRegistry {
     }
 }
 
+/// Application-owned cache for immutable, independently identified resource bytes.
+/// Never populate this from untrusted manifest claims or timestamps alone.
+/// Returning None requests a complete byte pass. Metadata, databases and staged
+/// callback resources are always read in full, even when the hook returns a hash.
+pub trait TrustedDigests {
+    fn sha256(&self, path: &str, size: u64) -> Option<String>;
+}
+
 #[derive(Default)]
 pub struct VerificationOptions<'a> {
     pub extensions: ExtensionRegistry,
+    pub trusted_digests: Option<&'a dyn TrustedDigests>,
     pub profiles: crate::profiles::ProfileRegistry,
     pub require_profile: bool,
     pub decryption_keys: Option<&'a dyn crate::protection::DecryptionKeys>,
