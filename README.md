@@ -99,7 +99,7 @@ Add the published [darkbox crate](https://crates.io/crates/darkbox) to your proj
 
 ```toml
 [dependencies]
-darkbox = { version = "1.4.0", default-features = false }
+darkbox = { version = "1.4.1", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable
@@ -168,6 +168,11 @@ cargo install --path . --locked
 ## Releases
 
 Run `make release` from a clean `main` checkout. It proposes the next software version, includes every unpublished specification automatically, prepares release metadata, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, builds native Arch packages for both Linux architectures, publishes the Rust crate on crates.io and then the complete GitHub release, updates the Illegal Studio Homebrew tap and notifies its pacman repository. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
+
+Documentation changes shipped in the crate or binary packages also require a
+software release, including documentation-only corrections. The common
+specification version changes only when its versioned rules or canonical bundle
+change.
 
 ## Versioned archive documentation
 

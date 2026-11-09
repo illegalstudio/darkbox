@@ -2,6 +2,14 @@
 
 Software tags use `vMAJOR.MINOR.PATCH` and match the Rust package version in both `Cargo.toml` and `Cargo.lock`. Specification versions are registered separately in `versions.json`. A software patch can fix the validator without changing any specification or canonical document. Publishing a new specification requires its own completed versioned references, rules and tests.
 
+Changes to documentation shipped in the crate or binary packages always require
+a new software release, even when no runtime code changes. This includes the
+repository README and packaged SDK/CLI guides. A documentation-only correction
+normally increments the software patch version and retains the common
+specification version. Finish publication and distribution as part of the change;
+an update on `main` alone does not update installed or registry packages. Published
+versioned specifications and canonical bundles remain immutable.
+
 ## Prepare a release
 
 Commit the intended changes first. From a clean `main` checkout with Python 3.11 or later, Make, Rust 1.88 or later, a C compiler and authenticated Git access to `origin`:
