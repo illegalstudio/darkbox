@@ -103,7 +103,8 @@ fixtures, examples, documentation and license materials.
 
 The release calls that same workflow at the exact checked release commit after
 all native builds, Apple notarization and Arch packaging have passed. It validates
-the annotated tag and performs the package dry-run, then publishes to crates.io
+the annotated tag and runs `cargo package --locked` to prepare and verify the
+archive, then publishes to crates.io
 with the secret available only to the upload step. GitHub release publication
 requires this job to succeed. Homebrew and pacman follow the complete GitHub
 release as before. SDK/software and common specification versions remain distinct.

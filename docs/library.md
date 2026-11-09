@@ -111,3 +111,8 @@ use `PackageWriter`, `PackageEditor` or transfer APIs for large collections.
 See [live directory storage](sdk.md#live-directory-storage-130) for the 1.3.0
 `DirectoryLibrary` lifecycle, hot backup, direct deltas and `TrustedDigests`
 policy. Ordinary verification remains a full byte pass.
+
+For common 1.4.0, [short capture barriers](sdk.md#short-capture-barriers-140)
+use owned `HotCapture` handles to stream retained snapshots on a worker while
+application writes resume. The [SDK dependency and feature guidance](sdk.md)
+shows the published crate and the explicit `exact-numbers` precision option.

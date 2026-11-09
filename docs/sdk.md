@@ -4,10 +4,13 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 
 ```toml
 [dependencies]
-darkbox = { path = "/path/to/darkbox", default-features = false }
+darkbox = { version = "1.4.0", default-features = false }
 ```
 
-Use a registry version when a release containing these APIs is available. The opt-in `exact-numbers` feature preserves arbitrary JSON numbers and enables
+Releases are available on [crates.io](https://crates.io/crates/darkbox).
+For local SDK development, replace `version` with `path` pointing to its checkout.
+
+The opt-in `exact-numbers` feature preserves arbitrary JSON numbers and enables
 `serde_json/arbitrary_precision` plus `jsonschema/arbitrary-precision`. The CLI
 enables it. Library consumers using `default-features = false` do not enable
 those features through Darkbox. Without it, the strict parser checks numeric
@@ -163,7 +166,7 @@ publication. Signed copies need external public trust, without signing keys.
 SQLite changes transfer whole database files. Complete editions are still read
 for verification; unchanged ordinary media is streamed without private copies.
 
-`Package::open` also accepts a quiescent 1.2.0 directory. It packs and freezes a
+`Package::open` also accepts quiescent directories for common versions 1.2.0, 1.3.0 and 1.4.0. It packs and freezes a
 private ZIP, then retains its verified resource snapshot. That immutable handle
 has `path() = None`; edits require `save_as` to a new ZIP. It does not write staged
 edits back into a live directory. Applications own live SQL/media operations and
@@ -200,7 +203,7 @@ access to all resources. Staging limits and cleanup apply to every path.
 
 `DirectoryLibrary` owns the exclusive interoperable sibling lock for a whole
 working session. `initialize(path, manifest, profile, limits)` creates absent
-storage directly with the canonical bundle and declared folders. Supply a 1.3.0
+storage directly with the canonical bundle and declared folders. Supply a 1.3.0 or 1.4.0
 manifest with a stable `packageId`, then create its databases and resources while
 holding the returned handle. Initialization alone is not snapshot validation.
 `open(path)` also opens interrupted working storage so the owning application can
@@ -239,7 +242,7 @@ it never materializes an entire target ZIP or stages ordinary media.
 `TrustedDigests::sha256(path, size)` can provide a cached hash for resources whose
 unchanged bytes the application independently guarantees. Set
 `VerificationOptions::trusted_digests` explicitly. Return `None` for full reads.
-Only 1.3.0 directories use this optimization. Metadata, canonical documentation,
+Common 1.3.0 and 1.4.0 directories support this optimization. Metadata, canonical documentation,
 profile text, databases and protected or callback-staged resources remain fully
 read. A small signature prefix is still checked for uninventoried databases.
 Caches may never come from untrusted manifests or timestamp comparisons alone.
@@ -266,8 +269,9 @@ Use `DirectoryLibrary::prepare_hot_capture(manifest, connections, limits)` while
 holding the application's coherent write barrier. It snapshots every database,
 reads the profile and freezes the listing, sizes and identities without hashing
 or copying media. Returning `HotCapture` signals that the short barrier can end.
-Keep the library guard alive and retain every listed external resource unchanged
-until the capture handle finishes or drops. Defer deletions of referenced media;
+The owned capture keeps its lock and private snapshots alive independently of
+the original library handle. It is `Send` and can move to a worker. Retain every
+captured external resource unchanged until the capture handle finishes or drops. Defer deletions of referenced media;
 new media additions and live database writes may resume immediately.
 
 ```rust,no_run

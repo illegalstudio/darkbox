@@ -86,7 +86,32 @@ backs up active SQLite connections, and creates deltas without a complete target
 ZIP. Application-trusted immutable-resource digests are explicit in reports.
 See [live storage](docs/sdk.md#live-directory-storage-130).
 
+Darkbox 1.4.0 adds `HotCapture`: snapshot databases, metadata and the resource
+listing under a short application write barrier, then stream a backup or delta
+while the application resumes work. Captured resources remain retained and
+immutable until completion. See [short capture barriers](docs/sdk.md#short-capture-barriers-140).
+
 ## Install
+
+### Rust SDK (crates.io)
+
+Add the published [darkbox crate](https://crates.io/crates/darkbox) to your project:
+
+```toml
+[dependencies]
+darkbox = { version = "1.4.0", default-features = false }
+```
+
+This selects the SDK without the CLI or extended JSON precision. Enable
+`exact-numbers` explicitly if the application needs arbitrary JSON numbers;
+otherwise unsupported precision is reported instead of silently rounding values.
+See [embedding the SDK](docs/sdk.md) for features, SQLite and integration examples.
+
+To compile and install the CLI through Cargo, with Rust 1.88 or later and a C compiler:
+
+```sh
+cargo install darkbox --locked
+```
 
 ### Homebrew
 
