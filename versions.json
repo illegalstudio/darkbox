@@ -22,7 +22,7 @@
     },
     {
       "version": "1.4.0",
-      "released": false,
+      "released": true,
       "rules": "v1"
     }
   ]
