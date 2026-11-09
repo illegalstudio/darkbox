@@ -1263,7 +1263,11 @@ impl PackageEditor {
         signer: Option<&dyn ManifestSigner>,
     ) -> Result<Package, Error> {
         let path = destination(path)?;
-        let lock = lock_destination(&path)?;
+        let lock = if replace {
+            Some(lock_destination(&path)?)
+        } else {
+            None
+        };
         let end = deadline(&self.limits)?;
         if replace {
             let base = self.base.as_ref().unwrap();
@@ -1434,6 +1438,15 @@ pub(crate) fn database_snapshot(
         _directory: directory,
         path,
     })
+}
+
+/// New ZIPs publish without clobbering; only replacements need a stable lock.
+pub(crate) fn lock_zip_destination(path: &Path) -> Result<Option<File>, Error> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => lock_destination(path).map(Some),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(crate::io_failure(error)),
+    }
 }
 
 pub(crate) fn lock_destination(path: &Path) -> Result<File, Error> {

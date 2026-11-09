@@ -91,6 +91,10 @@ listing under a short application write barrier, then stream a backup or delta
 while the application resumes work. Captured resources remain retained and
 immutable until completion. See [short capture barriers](docs/sdk.md#short-capture-barriers-140).
 
+Software 1.4.2 creates new ZIP exports without persistent sibling lock files.
+Existing ZIP replacements and live directory libraries retain writer coordination;
+see [SDK publication and locks](docs/sdk.md#read-edit-and-save).
+
 ## Install
 
 ### Rust SDK (crates.io)
@@ -99,7 +103,7 @@ Add the published [darkbox crate](https://crates.io/crates/darkbox) to your proj
 
 ```toml
 [dependencies]
-darkbox = { version = "1.4.1", default-features = false }
+darkbox = { version = "1.4.2", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable

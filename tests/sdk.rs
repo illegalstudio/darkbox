@@ -1036,3 +1036,39 @@ fn rekeying_rebinds_every_block_and_is_atomic_in_staging() {
         original_file
     );
 }
+
+#[test]
+fn save_as_and_legacy_copy_do_not_leave_output_lock_files() {
+    let f = Fixture::new();
+    let package = f.package(false);
+    let options = f.options(false);
+    let mut editor = package.edit();
+    editor
+        .save_as(f.path("export.zip"), &options, None)
+        .unwrap();
+    darkbox::save(
+        f.path("original.project"),
+        f.path("legacy.zip"),
+        darkbox::PackageUpdate::default(),
+        Limits::default(),
+        &options,
+        None,
+    )
+    .unwrap();
+    assert!(
+        !fs::read_dir(f.directory.path()).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".lock"))
+    );
+    // An ordinary in-place save retains existing-file writer coordination.
+    editor.save(&options, None).unwrap();
+    assert!(
+        fs::read_dir(f.directory.path()).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".lock"))
+    );
+}

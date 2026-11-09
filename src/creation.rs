@@ -176,9 +176,10 @@ pub(crate) fn specification(manifest: &Value) -> Result<&'static VersionSpec, Er
 
 /// Streams complete resources into a private candidate ZIP. The matching canonical
 /// bundle is included automatically. No payload collection is retained in memory.
-/// Callers coordinate exclusive destination access and coherent input snapshots.
+/// Existing replacements are locked; new outputs publish without clobbering.
+/// Callers coordinate coherent input snapshots.
 pub struct PackageWriter<'a> {
-    _destination_lock: File,
+    _destination_lock: Option<File>,
     // Close ZIP output before removing its owning temporary path on drop.
     zip: Option<ZipWriter<BoundedFile>>,
     candidate: Option<NamedTempFile>,
@@ -217,7 +218,7 @@ impl<'a> PackageWriter<'a> {
         signer: Option<&'a dyn ManifestSigner>,
     ) -> Result<Self, Error> {
         let destination = crate::package::destination(destination.as_ref())?;
-        let lock = crate::package::lock_destination(&destination)?;
+        let lock = crate::package::lock_zip_destination(&destination)?;
         Self::new_locked(destination, manifest, limits, options, signer, lock)
     }
 
@@ -227,7 +228,7 @@ impl<'a> PackageWriter<'a> {
         limits: Limits,
         options: &'a VerificationOptions<'a>,
         signer: Option<&'a dyn ManifestSigner>,
-        lock: File,
+        lock: Option<File>,
     ) -> Result<Self, Error> {
         if limits.max_entries == 0
             || limits.max_entry_bytes == 0
@@ -275,6 +276,13 @@ impl<'a> PackageWriter<'a> {
         }
         let destination = destination.as_ref().to_owned();
         let (previous, previous_digest) = match std::fs::symlink_metadata(&destination) {
+            Ok(_) if lock.is_none() => {
+                return Err(Error::new(
+                    Status::OperationalError,
+                    "create.destination_changed",
+                    "A new destination appeared during setup; refusing replacement",
+                ));
+            }
             Ok(metadata) if metadata.is_file() => {
                 let digest =
                     crate::writer::file_digest(&destination, limits.max_archive_bytes, deadline)?;

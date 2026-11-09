@@ -64,7 +64,8 @@ pub(crate) fn file_digest(path: &Path, limit: u64, deadline: Instant) -> Result<
 }
 
 /// Save an already encrypted candidate. SDK writers coordinate destination access
-/// through a stable advisory lock. No signing keys are stored.
+/// through a stable advisory lock for existing destinations. New copies publish
+/// without clobbering and create no persistent output lock. No signing keys are stored.
 /// Existing output is replaced only after complete validation and fsync.
 pub fn save(
     source: impl AsRef<Path>,
@@ -77,7 +78,7 @@ pub fn save(
     let source = source.as_ref();
     let destination = destination.as_ref();
     let resolved_destination = crate::package::destination(destination)?;
-    let _destination_lock = crate::package::lock_destination(&resolved_destination)?;
+    let _destination_lock = crate::package::lock_zip_destination(&resolved_destination)?;
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(limits.timeout_seconds))
         .ok_or_else(|| Error::limit("Save timeout is too large"))?;
@@ -91,6 +92,11 @@ pub fn save(
         ));
     }
     let replace_source = if destination.exists() {
+        if _destination_lock.is_none() {
+            return Err(refused(
+                "A new destination appeared during setup; refusing replacement",
+            ));
+        }
         if std::fs::symlink_metadata(destination)
             .map_err(crate::io_failure)?
             .file_type()

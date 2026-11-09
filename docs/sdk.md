@@ -4,7 +4,7 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 
 ```toml
 [dependencies]
-darkbox = { version = "1.4.1", default-features = false }
+darkbox = { version = "1.4.2", default-features = false }
 ```
 
 Releases are available on [crates.io](https://crates.io/crates/darkbox).
@@ -74,7 +74,18 @@ Editors retain immutable source evidence and stage replacements as private files
 
 `clone` creates an independent editor checkpoint sharing immutable files. `discard_changes` restores the last opened/saved edition, or initial metadata of a new project. Failed saves retain staged work for retry. `save_as` requires an absent destination and follows the new edition after success. `save` replaces the current original only if its byte digest still matches the opened/saved edition. Stale editors return `package.conflict` and can save isolated work as a separate copy. Missing originals/I/O errors also preserve staged work.
 
-All SDK writers, including `PackageWriter` and legacy `save`, acquire the same stable advisory destination lock. Contention returns `package.busy`. The hidden `.darkbox-<digest>.lock` intentionally remains beside the destination; it is not package content or disposable staging. Keeping its inode prevents a lock race across atomic replacements. Integrating applications coordinate tools that bypass this advisory lock. Package symlinks are refused and parent directories must be application-controlled. Locks cannot prevent unrelated tools from writing files.
+Starting with software 1.4.2, new ZIP destinations created by `PackageWriter`,
+editor `save_as` and legacy `save` publish atomically without overwriting files and
+create no persistent output lock. Competing creators may prepare candidates, but
+only one can publish; a destination that appears during setup is never adopted
+as a replacement. Successful, failed and abandoned new exports leave no lock file.
+
+Writers replacing existing ZIPs acquire the same stable advisory destination
+lock. Contention returns `package.busy`. The hidden `.darkbox-<digest>.lock`
+intentionally remains beside an existing-file replacement destination; it is not
+package content or disposable staging. Keeping its inode prevents a lock race
+across atomic replacements. Directory-library locks retain their separate
+whole-session protocol. Existing lock files are not automatically deleted. Integrating applications coordinate tools that bypass this advisory lock. Package symlinks are refused and parent directories must be application-controlled. Locks cannot prevent unrelated tools from writing files.
 
 Publication streams a complete candidate, rebuilds inventory/signature, validates common/canonical/SQLite/extension/profile rules, checks encrypted contexts, rechecks destination bytes and commits atomically. The editor prepares its new frozen snapshot before replacement; post-commit reopening cannot turn a published save into an error. Every editor save error precedes publication and preserves an existing destination. Success may carry `create.durability` if final Unix directory synchronization failed after publication.
 

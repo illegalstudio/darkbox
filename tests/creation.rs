@@ -998,3 +998,136 @@ fn callbacks_cannot_introduce_unprepared_required_extensions_or_protection() {
         fixture.assert_clean();
     }
 }
+
+#[test]
+fn new_outputs_leave_no_sidecars_and_competing_creators_never_overwrite() {
+    let f = Fixture::new(false);
+    let before: std::collections::BTreeSet<_> = fs::read_dir(f.dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    let options = f.options(false);
+    let mut first = PackageWriter::new(
+        f.output(),
+        f.manifest.clone(),
+        Limits::default(),
+        &options,
+        None,
+    )
+    .unwrap();
+    let mut second = PackageWriter::new(
+        f.output(),
+        f.manifest.clone(),
+        Limits::default(),
+        &options,
+        None,
+    )
+    .unwrap();
+    for (name, path) in &f.sources {
+        first.add_path(name, path).unwrap();
+        second.add_path(name, path).unwrap();
+    }
+    first.finish().unwrap();
+    let winner = fs::read(f.output()).unwrap();
+    assert!(second.finish().is_err());
+    assert_eq!(fs::read(f.output()).unwrap(), winner);
+    let abandoned = PackageWriter::new(
+        f.dir.path().join("abandoned.zip"),
+        f.manifest.clone(),
+        Limits::default(),
+        &options,
+        None,
+    )
+    .unwrap();
+    drop(abandoned);
+    let failed = PackageWriter::new(
+        f.dir.path().join("failed.zip"),
+        f.manifest.clone(),
+        Limits::default(),
+        &options,
+        None,
+    )
+    .unwrap();
+    assert!(failed.finish().is_err());
+    let mut expected = before;
+    expected.insert(f.output().file_name().unwrap().to_owned());
+    let after: std::collections::BTreeSet<_> = fs::read_dir(f.dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(after, expected);
+    // Replacements still coordinate through a stable sibling lock.
+    let replacement = PackageWriter::new(
+        f.output(),
+        f.manifest.clone(),
+        Limits::default(),
+        &options,
+        None,
+    )
+    .unwrap();
+    assert_eq!(
+        PackageWriter::new(
+            f.output(),
+            f.manifest.clone(),
+            Limits::default(),
+            &options,
+            None
+        )
+        .err()
+        .unwrap()
+        .code,
+        "package.busy"
+    );
+    drop(replacement);
+    assert!(
+        fs::read_dir(f.dir.path()).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".lock"))
+    );
+}
+
+#[test]
+fn new_writer_refuses_a_destination_created_during_setup() {
+    struct RacingSigner<'a> {
+        destination: PathBuf,
+        signing: &'a Signing,
+    }
+    impl ManifestSigner for RacingSigner<'_> {
+        fn signer_id(&self) -> &str {
+            self.signing.signer_id()
+        }
+        fn public_key(&self) -> [u8; 32] {
+            fs::write(&self.destination, b"concurrent winner").unwrap();
+            self.signing.public_key()
+        }
+        fn sign(&self, bytes: &[u8]) -> Result<[u8; 64], darkbox::Error> {
+            self.signing.sign(bytes)
+        }
+    }
+    let f = Fixture::new(true);
+    let options = f.options(false);
+    let signer = RacingSigner {
+        destination: f.output(),
+        signing: &f.signing,
+    };
+    let error = PackageWriter::new(
+        f.output(),
+        f.manifest.clone(),
+        Limits::default(),
+        &options,
+        Some(&signer),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(error.code, "create.destination_changed");
+    assert_eq!(fs::read(f.output()).unwrap(), b"concurrent winner");
+    assert!(
+        !fs::read_dir(f.dir.path()).unwrap().any(|e| e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .ends_with(".lock"))
+    );
+}
