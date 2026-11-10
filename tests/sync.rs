@@ -1215,5 +1215,50 @@ fn working_mutators_refuse_unowned_required_extensions_without_changes() {
     Notes
         .verify(&connection, &domain(), &initial.state())
         .unwrap();
-    assert_eq!(fs::read(path).unwrap(), original);
+    assert_eq!(fs::read(&path).unwrap(), original);
+    metadata["extensions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("org.example.required");
+    let clean = serde_json::to_vec(&metadata).unwrap();
+    fs::write(&path, &clean).unwrap();
+    let profile = library.path().join("docs/profile.md");
+    let profile_bytes = fs::read(&profile).unwrap();
+    fs::write(&profile, b"changed without a new domain").unwrap();
+    let objects = ObjectStore::open(root.path().join("wrong-profile-objects"), limits()).unwrap();
+    assert!(
+        SyncSession::open(
+            &mut library,
+            &mut connection,
+            domain(),
+            objects.clone(),
+            SessionOptions::new("4".repeat(32), "wrong profile"),
+            &Notes
+        )
+        .is_err()
+    );
+    fs::write(profile, profile_bytes).unwrap();
+    metadata["darkbox"]["id"] = json!("wrong");
+    fs::write(&path, serde_json::to_vec(&metadata).unwrap()).unwrap();
+    assert!(
+        SyncSession::open(
+            &mut library,
+            &mut connection,
+            domain(),
+            objects,
+            SessionOptions::new("4".repeat(32), "wrong manifest"),
+            &Notes
+        )
+        .is_err()
+    );
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT count(*) FROM _darkbox_sync_meta WHERE key LIKE 'replica:%'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+        0
+    );
 }

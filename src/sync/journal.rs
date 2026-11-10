@@ -186,6 +186,7 @@ pub fn attach_working(
     let original =
         super::exchange::read_regular(root, "manifest.json", limits.max_metadata_bytes as usize)?;
     let mut manifest = crate::json::parse(&original)?;
+    crate::creation::specification(&manifest)?;
     domain.check_manifest(&manifest)?;
     require_working_writer(&manifest)?;
     if manifest["extensions"]
@@ -319,6 +320,7 @@ impl<'a> SyncSession<'a> {
             "manifest.json",
             limits.io.max_metadata_bytes as usize,
         )?)?;
+        crate::creation::specification(&manifest)?;
         domain.check_manifest(&manifest)?;
         require_working_writer(&manifest)?;
         if manifest["extensions"][NAMESPACE] != working_extension(&domain) {
@@ -336,6 +338,16 @@ impl<'a> SyncSession<'a> {
             )? != canonical(domain.mapping())?
         {
             return Err(invalid("Working domain resources differ"));
+        }
+        let profile_path = manifest["application"]["profilePath"]
+            .as_str()
+            .ok_or_else(|| invalid("Application profile path is absent"))?;
+        if super::exchange::read_regular(library.path(), profile_path, MAX_SEGMENT_BYTES)?
+            != domain.profile()
+        {
+            return Err(invalid(
+                "Working profile bytes differ from the pinned domain",
+            ));
         }
         check_connection(library.path(), &domain, connection)?;
         projection_binding(&domain, adapter)?;
