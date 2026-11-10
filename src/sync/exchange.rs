@@ -458,6 +458,12 @@ pub struct ExchangeScan {
     pub snapshots: Vec<SnapshotDescriptor>,
     pub diagnostics: Vec<ScanDiagnostic>,
 }
+
+#[derive(Default)]
+pub(crate) struct ScanEvidence {
+    pub(crate) fork: Vec<Vec<u8>>,
+    pub(crate) copies: Vec<SyncTransaction>,
+}
 /// Immutable exchange transport. Its pinned root is rechecked on every scan/write.
 #[derive(Clone, Debug)]
 pub struct Exchange {
@@ -516,8 +522,12 @@ impl Exchange {
         &self.domain
     }
     fn check_root(&self) -> Result<()> {
+        self.check_root_with_evidence(&mut Vec::new())
+    }
+    fn check_root_with_evidence(&self, evidence: &mut Vec<Vec<u8>>) -> Result<()> {
         let actual = read_regular(&self.root, "library.json", MAX_SEGMENT_BYTES)?;
-        if actual != canonical(self.domain.root())? {
+        let pinned = canonical(self.domain.root())?;
+        if actual != pinned {
             let parsed = decode::<DomainRoot>(&actual, MAX_SEGMENT_BYTES)
                 .map_err(|_| super::pending_bytes("Exchange root is incomplete or noncanonical"))?;
             if parsed.sync_id == self.domain.root().sync_id {
@@ -528,6 +538,14 @@ impl Exchange {
                         "Changed root does not yet have complete matching profile resources",
                     )
                 })?;
+                evidence.extend([
+                    pinned,
+                    canonical(self.domain.mapping())?,
+                    self.domain.profile().to_vec(),
+                    actual,
+                    mapping,
+                    profile,
+                ]);
                 return Err(fork("Exchange root changed under the same domain identity"));
             }
             return Err(invalid(
@@ -565,7 +583,10 @@ impl Exchange {
         })
     }
     pub fn scan(&self) -> Result<ExchangeScan> {
-        self.check_root()?;
+        self.scan_with_evidence(&mut ScanEvidence::default())
+    }
+    pub(crate) fn scan_with_evidence(&self, evidence: &mut ScanEvidence) -> Result<ExchangeScan> {
+        self.check_root_with_evidence(&mut evidence.fork)?;
         let end = crate::transfer::deadline(&self.limits.io)?;
         let mut result = ExchangeScan::default();
         let mut files = Vec::new();
@@ -582,7 +603,9 @@ impl Exchange {
         }
         files.sort();
         let mut segments = Vec::new();
-        let mut descriptor_bytes = BTreeMap::new();
+        let mut descriptor_bytes: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        let mut receipt_digests = BTreeMap::new();
+        let mut conflicted_receipts = BTreeSet::new();
         let mut retained_bytes = 0u64;
         for relative in files {
             crate::container::check_deadline(end)?;
@@ -643,26 +666,29 @@ impl Exchange {
                     Some("darkbox-sync-replica") => {
                         let descriptor: ReplicaDescriptor = decode(&bytes, MAX_SEGMENT_BYTES)?;
                         descriptor.validate(&self.domain)?;
-                        if descriptor.relative_path()? != relative {
-                            return Err(invalid("Noncanonical descriptor path"));
-                        }
-                        if descriptor_bytes
-                            .insert(descriptor.replica_id.clone(), bytes.clone())
-                            .is_some_and(|old| old != bytes)
+                        if let Some(old) = descriptor_bytes.get(&descriptor.replica_id)
+                            && old != &bytes
                         {
+                            evidence.fork.extend([old.clone(), bytes]);
                             return Err(fork("Replica descriptor identity fork"));
                         }
-                        result
-                            .replicas
-                            .insert(descriptor.replica_id.clone(), descriptor);
+                        descriptor_bytes.insert(descriptor.replica_id.clone(), bytes);
+                        if descriptor.relative_path()? == relative {
+                            result
+                                .replicas
+                                .insert(descriptor.replica_id.clone(), descriptor);
+                        } else {
+                            result.diagnostics.push(diag(
+                                &relative,
+                                "sync.ignored",
+                                "Noncanonical replica descriptor used only for identity checks",
+                            ));
+                        }
                     }
                     Some("darkbox-sync-segment") => {
                         let segment: Segment = decode(&bytes, MAX_SEGMENT_BYTES)?;
                         segment.validate(&self.domain)?;
                         let canonical = segment.relative_path()? == relative;
-                        if !canonical && !name.contains(&digest) {
-                            return Err(invalid("Ignored segment lacks its content digest"));
-                        }
                         if !canonical {
                             result.diagnostics.push(diag(
                                 &relative,
@@ -675,10 +701,27 @@ impl Exchange {
                     Some("darkbox-sync-receipt") => {
                         let receipt: Receipt = decode(&bytes, MAX_SEGMENT_BYTES)?;
                         receipt.validate(&self.domain)?;
-                        if receipt.relative_path()? != relative {
-                            return Err(invalid("Noncanonical receipt path"));
+                        let key = (receipt.replica_id.clone(), receipt.serial);
+                        if receipt_digests
+                            .insert(key.clone(), digest.clone())
+                            .is_some_and(|old| old != digest)
+                        {
+                            conflicted_receipts.insert(key);
+                            result.diagnostics.push(diag(
+                                &relative,
+                                "sync.invalid_record",
+                                "Conflicting advisory receipt serial",
+                            ));
                         }
-                        result.receipts.push(receipt);
+                        if receipt.relative_path()? == relative {
+                            result.receipts.push(receipt);
+                        } else {
+                            result.diagnostics.push(diag(
+                                &relative,
+                                "sync.ignored",
+                                "Noncanonical advisory receipt",
+                            ));
+                        }
                     }
                     Some("darkbox-sync-snapshot") => {
                         let snapshot: SnapshotDescriptor = decode(&bytes, MAX_SEGMENT_BYTES)?;
@@ -711,45 +754,45 @@ impl Exchange {
                 ));
             }
         }
-        let mut identities = BTreeMap::new();
-        let mut emitted = BTreeSet::new();
-        let mut transaction_bytes = 0u64;
+        result.receipts.retain(|receipt| {
+            !conflicted_receipts.contains(&(receipt.replica_id.clone(), receipt.serial))
+        });
+        let mut identities: BTreeMap<_, (SyncTransaction, bool)> = BTreeMap::new();
         for (segment, canonical) in segments {
-            if !result.replicas.contains_key(&segment.replica_id) {
+            let has_descriptor = result.replicas.contains_key(&segment.replica_id);
+            if canonical && !has_descriptor {
                 result.diagnostics.push(diag(
                     &segment.relative_path()?,
                     "sync.pending_dependency",
                     "Replica descriptor missing",
                 ));
-                continue;
             }
             for tx in segment.transactions {
                 let key = (tx.replica_id.clone(), tx.sequence);
-                let hash = tx.hash()?;
-                if identities
-                    .insert(key.clone(), hash.clone())
-                    .is_some_and(|old| old != hash)
-                {
-                    return Err(fork(
-                        "Exchange contains two histories at one replica sequence",
-                    ));
-                }
-                if canonical && emitted.insert(key) {
-                    transaction_bytes = transaction_bytes
-                        .checked_add(tx.bytes()?.len() as u64)
-                        .ok_or_else(|| super::limit("Scan transaction bytes"))?;
-                    if result.transactions.len() >= self.limits.max_transactions
-                        || transaction_bytes > self.limits.max_history_bytes
-                    {
-                        return Err(super::limit("Scan history budget"));
+                let authoritative = canonical && has_descriptor;
+                if let Some((old, emitted)) = identities.get_mut(&key) {
+                    if old != &tx {
+                        evidence.fork.extend([old.bytes()?, tx.bytes()?]);
+                        return Err(fork(
+                            "Exchange contains two histories at one replica sequence",
+                        ));
                     }
-                    result.transactions.push(tx);
+                    *emitted |= authoritative;
+                } else {
+                    identities.insert(key, (tx, authoritative));
+                }
+                if identities.len() > self.limits.max_transactions {
+                    return Err(super::limit("Scan transaction count"));
                 }
             }
         }
-        result
-            .transactions
-            .sort_by(|a, b| (&a.replica_id, a.sequence).cmp(&(&b.replica_id, b.sequence)));
+        for (tx, authoritative) in identities.into_values() {
+            if authoritative {
+                result.transactions.push(tx);
+            } else {
+                evidence.copies.push(tx);
+            }
+        }
         Ok(result)
     }
 }

@@ -216,6 +216,8 @@ It imports complete objects and durably queues transactions. `apply_ready`
 advances only after the preceding sequence, exact causal dependencies and every
 referenced resource are available. Each accepted group and its projection commit
 atomically. Independent ready chains can progress while another chain waits.
+If a transaction fails semantic validation, `apply_ready` leaves it pending and
+returns the offending replica and sequence after applying other ready chains.
 
 A cloud client can expose partial files and deliver them out of order despite a
 local atomic rename. The scanner verifies complete length/hash/content. Incomplete

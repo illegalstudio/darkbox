@@ -552,7 +552,8 @@ impl<'a> SyncSession<'a> {
         }
         tx.commit().map_err(sql)
     }
-    /// Each ready incoming group is one application/frontier commit. Other chains can wait.
+    /// Each ready incoming group is one application/frontier commit. A malformed
+    /// group remains pending and is reported after applying independent ready chains.
     pub fn apply_ready(
         &self,
         connection: &mut Connection,
@@ -581,6 +582,8 @@ impl<'a> SyncSession<'a> {
             }
         }
         let mut applied = 0;
+        let mut rejected = BTreeSet::new();
+        let mut first_rejection = None;
         let end = crate::transfer::deadline(&self.limits.io)?;
         loop {
             crate::container::check_deadline(end)?;
@@ -600,6 +603,10 @@ impl<'a> SyncSession<'a> {
             for bytes in pending {
                 crate::container::check_deadline(end)?;
                 let incoming: SyncTransaction = decode(&bytes, MAX_TRANSACTION_BYTES)?;
+                let identity = (incoming.replica_id.clone(), incoming.sequence);
+                if rejected.contains(&identity) {
+                    continue;
+                }
                 if let Err(e) = history.check_known_hashes(&incoming) {
                     let mut evidence = existing(&tx, &incoming.replica_id, incoming.sequence)?;
                     evidence.push(bytes);
@@ -623,7 +630,17 @@ impl<'a> SyncSession<'a> {
                     continue;
                 }
                 let previous = history.state();
-                let status = history.accept(incoming.clone())?;
+                let status = match history.accept(incoming.clone()) {
+                    Ok(status) => status,
+                    Err(error) if matches!(error.code, "sync.invalid" | "sync.unsupported") => {
+                        first_rejection.get_or_insert_with(|| {
+                            error.at(format!("{}:{}", incoming.replica_id, incoming.sequence.0))
+                        });
+                        rejected.insert(identity);
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
                 if matches!(status, ApplyStatus::Pending(_)) {
                     continue;
                 }
@@ -661,13 +678,16 @@ impl<'a> SyncSession<'a> {
                 changed = true;
                 break;
             }
+            if changed {
+                check_budget(&tx, &self.limits)?;
+            }
             tx.commit().map_err(sql)?;
             self.cache
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .replace((revision, history));
             if !changed {
-                return Ok(applied);
+                return first_rejection.map_or(Ok(applied), Err);
             }
         }
     }
@@ -678,14 +698,24 @@ impl<'a> SyncSession<'a> {
     ) -> Result<ExchangeScan> {
         self.check(connection)?;
         self.check_exchange(exchange)?;
-        let scan = match exchange.scan() {
+        let mut evidence = super::exchange::ScanEvidence::default();
+        let scan = match exchange.scan_with_evidence(&mut evidence) {
             Ok(s) => s,
             Err(e) if e.code == "sync.fork" => {
-                mark_fork(connection, &[])?;
+                mark_fork(connection, &evidence.fork)?;
                 return Err(e);
             }
             Err(e) => return Err(e),
         };
+        for copy in evidence.copies {
+            let bytes = copy.bytes()?;
+            let mut old = existing(connection, &copy.replica_id, copy.sequence)?;
+            if old.iter().any(|known| known != &bytes) {
+                old.push(bytes);
+                mark_fork(connection, &old)?;
+                return Err(fork("Exchange transaction conflicts with local history"));
+            }
+        }
         for transaction in &scan.transactions {
             for blob in transaction.blobs()? {
                 self.objects.import(exchange, &blob)?;

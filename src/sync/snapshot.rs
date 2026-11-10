@@ -163,6 +163,16 @@ fn read_history(bytes: &[u8], domain: &Domain, limits: &SyncLimits) -> Result<Hi
     }
     History::replay(domain.clone(), transactions, limits.clone())
 }
+fn require_projection_database(manifest: &Value, domain: &Domain) -> Result<()> {
+    let path = &domain.mapping().storage.database_path;
+    if !manifest["databases"]
+        .as_array()
+        .is_some_and(|databases| databases.iter().any(|db| db["path"] == *path))
+    {
+        return Err(invalid("Authoritative snapshot database is not declared").at(path));
+    }
+    Ok(())
+}
 fn verify_core(
     manifest: &Value,
     inventory: &BTreeMap<String, EntryDigest>,
@@ -234,6 +244,7 @@ fn verify_core(
     )?;
     domain.bind(&sync_id, &root_hash)?;
     domain.check_manifest(manifest)?;
+    require_projection_database(manifest, &domain)?;
     let checkpoint: Checkpoint = decode(
         &read(&checkpoint_path, limits.max_history_bytes)?,
         limits.max_history_bytes.min(usize::MAX as u64) as usize,
@@ -329,7 +340,7 @@ impl ExtensionVerifier for SyncVerifier {
             max_transactions: self.max_transactions,
             ..Default::default()
         };
-        verify_core(
+        let (_, checkpoint) = verify_core(
             context.manifest,
             context.inventory,
             &limits,
@@ -341,6 +352,20 @@ impl ExtensionVerifier for SyncVerifier {
                 context.read(path)
             },
         )?;
+        let trusted: BTreeSet<_> = report
+            .trusted_resources
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect();
+        if let Some(object) = checkpoint
+            .objects
+            .iter()
+            .find(|object| trusted.contains(object.path.as_str()))
+        {
+            return Err(
+                unsupported("Sync checkpoint objects require a full byte read").at(&object.path),
+            );
+        }
         report.checks.extend([
             "sync.causal_history",
             "sync.logical_state",
@@ -394,12 +419,7 @@ impl<'a> SnapshotBuilder<'a> {
         update_journal_declarations(&mut manifest, domain, false)?;
         domain.check_manifest(&manifest)?;
         projection_binding(domain, adapter)?;
-        if !manifest["databases"].as_array().is_some_and(|a| {
-            a.iter()
-                .any(|d| d["path"] == domain.mapping().storage.database_path)
-        }) {
-            return Err(invalid("Authoritative snapshot database is not declared"));
-        }
+        require_projection_database(&manifest, domain)?;
         let scratch = limits.tempdir("darkbox-sync-checkpoint-")?;
         let database = scratch.path().join("projection.sqlite");
         let mut connection = Connection::open(&database).map_err(sql)?;

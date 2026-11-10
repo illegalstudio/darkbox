@@ -688,25 +688,178 @@ fn scanner_waits_for_complete_bytes_and_distinguishes_duplicates_from_forks() {
         "{} (conflicted copy).json",
         path.file_stem().unwrap().to_str().unwrap()
     ));
-    fs::write(copy, &bytes).unwrap();
+    fs::write(&copy, &bytes).unwrap();
     assert_eq!(exchange.scan().unwrap().transactions.len(), 1);
+
+    let receipt = Receipt {
+        kind: "darkbox-sync-receipt".into(),
+        protocol_version: VERSION.into(),
+        sync_id: descriptor.sync_id.clone(),
+        root_sha256: descriptor.root_sha256.clone(),
+        replica_id: descriptor.replica_id.clone(),
+        serial: Counter(1),
+        frontier: vec![],
+    };
+    exchange.publish_receipt(&receipt).unwrap();
+    let receipt_copy = exchange
+        .path()
+        .join(receipt.relative_path().unwrap())
+        .with_file_name("receipt (conflicted copy).json");
+    let mut conflicting_receipt = receipt;
+    conflicting_receipt.frontier = history("concurrent-values-and-moves").frontier();
+    fs::write(&receipt_copy, canonical(&conflicting_receipt).unwrap()).unwrap();
+    let scan = exchange.scan().unwrap();
+    assert!(scan.receipts.is_empty());
+    assert_eq!(scan.transactions, vec![tx.clone()]);
+    assert!(scan.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "sync.invalid_record"
+            && diagnostic.message == "Conflicting advisory receipt serial"
+    }));
+    fs::remove_file(receipt_copy).unwrap();
+
     let mut other = tx;
     other.operations.push(Operation::Create {
         collection: "items".into(),
     });
     let fork = Segment::new(&domain(), vec![other]).unwrap();
     let fork_bytes = canonical(&fork).unwrap();
-    let copy = path.parent().unwrap().join(format!(
-        "{} (conflicted copy).json",
-        Path::new(&fork.relative_path().unwrap())
-            .file_stem()
-            .unwrap()
-            .to_str()
-            .unwrap()
-    ));
-    fs::write(copy, &fork_bytes).unwrap();
+    assert!(!copy.to_str().unwrap().contains(&sha256(&fork_bytes)));
+    fs::write(&copy, &fork_bytes).unwrap();
+    assert_eq!(exchange.scan().unwrap_err().code, "sync.fork");
+    fs::remove_file(copy).unwrap();
+
+    let descriptor_path = exchange.path().join(descriptor.relative_path().unwrap());
+    let mut conflicting_descriptor = descriptor;
+    conflicting_descriptor.label = "different incarnation label".into();
+    fs::write(
+        descriptor_path.with_file_name("replica (conflicted copy).json"),
+        canonical(&conflicting_descriptor).unwrap(),
+    )
+    .unwrap();
     assert_eq!(exchange.scan().unwrap_err().code, "sync.fork");
 }
+
+#[test]
+fn received_conflict_copy_preserves_both_transactions_after_cloud_files_disappear() {
+    let known = transactions("concurrent-values-and-moves").remove(0);
+    let initial = History::replay(domain(), vec![known.clone()], limits()).unwrap();
+    let mut divergent = known.clone();
+    divergent.operations.push(Operation::Create {
+        collection: "items".into(),
+    });
+    for canonical_present in [true, false] {
+        let root = tempfile::tempdir().unwrap();
+        let (mut library, objects) = new_library(root.path(), "known", &initial);
+        let mut connection = db(&library);
+        let session = SyncSession::open(
+            &mut library,
+            &mut connection,
+            domain(),
+            objects,
+            SessionOptions::new("d".repeat(32), "receiver"),
+            &Notes,
+        )
+        .unwrap();
+        let exchange = Exchange::create(root.path().join("cloud"), domain(), limits()).unwrap();
+        let replica = ReplicaDescriptor {
+            kind: "darkbox-sync-replica".into(),
+            protocol_version: VERSION.into(),
+            sync_id: domain().root().sync_id.clone(),
+            root_sha256: domain().root_hash().into(),
+            replica_id: known.replica_id.clone(),
+            device_id: "a".repeat(32),
+            label: "origin".into(),
+        };
+        exchange.publish_replica(&replica).unwrap();
+        let segment = Segment::new(&domain(), vec![known.clone()]).unwrap();
+        let canonical_path = exchange.path().join(segment.relative_path().unwrap());
+        if canonical_present {
+            exchange.publish_segment(&segment).unwrap();
+        }
+        fs::create_dir_all(canonical_path.parent().unwrap()).unwrap();
+        let copy = canonical_path.with_file_name("segment (conflicted copy).json");
+        fs::write(
+            &copy,
+            canonical(&Segment::new(&domain(), vec![divergent.clone()]).unwrap()).unwrap(),
+        )
+        .unwrap();
+        if !canonical_present {
+            assert!(exchange.scan().unwrap().transactions.is_empty());
+        }
+        assert_eq!(
+            session
+                .receive_exchange(&mut connection, &exchange)
+                .unwrap_err()
+                .code,
+            "sync.fork"
+        );
+        fs::remove_file(copy).unwrap();
+        if canonical_present {
+            fs::remove_file(canonical_path).unwrap();
+        }
+        let mut query = connection
+            .prepare("SELECT bytes FROM _darkbox_sync_forks")
+            .unwrap();
+        let mut retained = query
+            .query_map([], |row| row.get::<_, Vec<u8>>(0))
+            .unwrap()
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .unwrap();
+        retained.sort();
+        let mut expected = vec![known.bytes().unwrap(), divergent.bytes().unwrap()];
+        expected.sort();
+        assert_eq!(retained, expected);
+        assert_eq!(session.history(&connection).unwrap_err().code, "sync.fork");
+    }
+}
+#[test]
+fn malformed_incoming_transaction_does_not_block_independent_replica() {
+    let root = tempfile::tempdir().unwrap();
+    let initial = history("exact-values");
+    let (mut library, objects) = new_library(root.path(), "receiver", &initial);
+    let mut connection = db(&library);
+    let session = SyncSession::open(
+        &mut library,
+        &mut connection,
+        domain(),
+        objects,
+        SessionOptions::new("a".repeat(32), "receiver"),
+        &Notes,
+    )
+    .unwrap();
+    let create = || {
+        vec![Operation::Create {
+            collection: "items".into(),
+        }]
+    };
+    let mut malformed = initial.prepare(&"0".repeat(32), create()).unwrap();
+    malformed.lamport.0 += 1;
+    let valid = initial.prepare(&"f".repeat(32), create()).unwrap();
+    session
+        .receive(&mut connection, &malformed.bytes().unwrap())
+        .unwrap();
+    session
+        .receive(&mut connection, &valid.bytes().unwrap())
+        .unwrap();
+    let rejection = session.apply_ready(&mut connection, &Notes).unwrap_err();
+    assert_eq!(rejection.code, "sync.invalid");
+    assert_eq!(
+        rejection.path,
+        Some(format!("{}:{}", malformed.replica_id, malformed.sequence.0))
+    );
+    assert_eq!(session.pending_count(&connection).unwrap(), 1);
+    let applied = session.history(&connection).unwrap();
+    assert_eq!(applied.len(), initial.len() + 1);
+    assert!(
+        applied
+            .transactions()
+            .any(|transaction| transaction == &valid)
+    );
+    Notes
+        .verify(&connection, &domain(), &applied.state())
+        .unwrap();
+}
+
 #[test]
 fn checkpoint_union_preserves_local_outbox_and_local_only_values() {
     let root = tempfile::tempdir().unwrap();
@@ -1064,6 +1217,106 @@ fn sealed_checkpoint_rejects_a_forged_state_even_with_updated_resource_digest() 
     let report = darkbox::verify(&path);
     assert_eq!(report.status, Status::Invalid);
     assert!(report.diagnostics.iter().any(|d| d.code == "sync.invalid"));
+}
+
+#[test]
+fn sealed_checkpoint_requires_the_mapped_application_database() {
+    let root = tempfile::tempdir().unwrap();
+    let _ = new_library(root.path(), "source", &history("exact-values"));
+    let directory = root.path().join("checkpoint");
+    darkbox::unpack(
+        root.path().join("source.zip"),
+        &directory,
+        limits().io,
+        &VerificationOptions::default(),
+    )
+    .unwrap();
+    let manifest_path = directory.join("manifest.json");
+    let mut manifest: Value = serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    fs::rename(
+        directory.join("data/project.sqlite"),
+        directory.join("data/unrelated.sqlite"),
+    )
+    .unwrap();
+    manifest["databases"][0]["path"] = json!("data/unrelated.sqlite");
+    fs::write(manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let report = darkbox::verify(&directory);
+    assert_eq!(report.status, Status::Invalid);
+    assert!(report.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "sync.invalid"
+            && diagnostic.path.as_deref() == Some("data/project.sqlite")
+    }));
+}
+
+#[test]
+fn complete_checkpoint_does_not_certify_objects_from_trusted_digests() {
+    const MEDIA: &str = "media/history.bin";
+    struct Cache(String);
+    impl darkbox::TrustedDigests for Cache {
+        fn sha256(&self, path: &str, _: u64) -> Option<String> {
+            (path == MEDIA).then(|| self.0.clone())
+        }
+    }
+
+    let root = tempfile::tempdir().unwrap();
+    let _ = new_library(root.path(), "source", &history("delete-wins"));
+    let directory = root.path().join("checkpoint");
+    darkbox::unpack(
+        root.path().join("source.zip"),
+        &directory,
+        limits().io,
+        &VerificationOptions::default(),
+    )
+    .unwrap();
+
+    // A profile resource can supply historical object bytes outside the sync namespace.
+    let manifest_path = directory.join("manifest.json");
+    let mut manifest: Value = serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    manifest["folders"].as_array_mut().unwrap().push(json!({
+        "path": "media",
+        "description": "Profile object resources"
+    }));
+    fs::write(manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    fs::create_dir(directory.join("media")).unwrap();
+    let checkpoint_path = directory.join(format!("{PREFIX}/checkpoint.json"));
+    let mut checkpoint: Checkpoint =
+        decode(&fs::read(&checkpoint_path).unwrap(), MAX_SEGMENT_BYTES).unwrap();
+    assert_eq!(checkpoint.objects.len(), 1);
+    let object = &mut checkpoint.objects[0];
+    fs::rename(directory.join(&object.path), directory.join(MEDIA)).unwrap();
+    object.path = MEDIA.into();
+    let cache = Cache(object.sha256.clone());
+    fs::write(checkpoint_path, canonical(&checkpoint).unwrap()).unwrap();
+    let report = darkbox::verify(&directory);
+    assert_eq!(report.status, Status::Passed, "{:?}", report.diagnostics);
+
+    let path = directory.join(MEDIA);
+    let mut data = fs::read(&path).unwrap();
+    data[0] ^= 1;
+    fs::write(path, data).unwrap();
+    assert_eq!(darkbox::verify(&directory).status, Status::Invalid);
+    let conditional = darkbox::analyze_with(
+        &directory,
+        darkbox::Mode::Verify,
+        limits().io,
+        &VerificationOptions {
+            trusted_digests: Some(&cache),
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        conditional.status,
+        Status::Unsupported,
+        "{:?}",
+        conditional.diagnostics
+    );
+    assert!(
+        conditional
+            .trusted_resources
+            .iter()
+            .any(|entry| entry.path == MEDIA)
+    );
+    assert!(!conditional.checks.contains(&"sync.object_closure"));
 }
 
 #[test]
