@@ -1,0 +1,798 @@
+use super::*;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs::{self, File, Metadata},
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    time::Instant,
+};
+
+pub(crate) fn directory(path: &Path) -> Result<PathBuf> {
+    if !path.exists() {
+        fs::create_dir_all(path).map_err(crate::io_failure)?;
+    }
+    if !fs::symlink_metadata(path)
+        .map_err(crate::io_failure)?
+        .is_dir()
+    {
+        return Err(invalid("Sync root must be a real directory"));
+    }
+    fs::canonicalize(path).map_err(crate::io_failure)
+}
+pub(crate) fn sync_dir(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    File::open(path)
+        .and_then(|file| file.sync_all())
+        .map_err(crate::io_failure)?;
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+pub(crate) fn safe_path(root: &Path, relative: &str, create: bool) -> Result<PathBuf> {
+    crate::paths::validate(relative)?;
+    checked_path(root, relative, create)
+}
+fn checked_path(root: &Path, relative: &str, create: bool) -> Result<PathBuf> {
+    if relative.is_empty()
+        || relative.contains('\\')
+        || relative.contains('\0')
+        || Path::new(relative).is_absolute()
+        || relative
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(invalid("Unsafe relative diagnostic path"));
+    }
+    let mut path = root.to_owned();
+    let parts: Vec<_> = relative.split('/').collect();
+    for (i, part) in parts.iter().enumerate() {
+        path.push(part);
+        match fs::symlink_metadata(&path) {
+            Ok(meta)
+                if meta.file_type().is_symlink() || (i + 1 < parts.len() && !meta.is_dir()) =>
+            {
+                return Err(invalid("Sync path has a symlink/non-directory parent").at(relative));
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                if i + 1 < parts.len() && create {
+                    match fs::create_dir(&path) {
+                        Ok(()) => sync_dir(path.parent().unwrap())?,
+                        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                        Err(e) => return Err(crate::io_failure(e)),
+                    }
+                    if !fs::symlink_metadata(&path)
+                        .map_err(crate::io_failure)?
+                        .is_dir()
+                    {
+                        return Err(invalid("Sync parent changed"));
+                    }
+                }
+            }
+            Err(e) => return Err(crate::io_failure(e)),
+        }
+    }
+    Ok(path)
+}
+fn same(a: &Metadata, b: &Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if a.dev() != b.dev() || a.ino() != b.ino() {
+            return false;
+        }
+    }
+    a.is_file() && b.is_file() && a.len() == b.len() && a.modified().ok() == b.modified().ok()
+}
+pub(crate) fn open_regular(root: &Path, relative: &str, maximum: u64) -> Result<(File, Metadata)> {
+    let path = checked_path(root, relative, false)?;
+    let before = fs::symlink_metadata(&path).map_err(crate::io_failure)?;
+    if !before.is_file() || before.file_type().is_symlink() {
+        return Err(invalid("Sync input is not a regular file").at(relative));
+    }
+    if before.len() > maximum {
+        return Err(super::limit("Sync input bytes").at(relative));
+    }
+    let file = File::open(path).map_err(crate::io_failure)?;
+    if !same(&before, &file.metadata().map_err(crate::io_failure)?) {
+        return Err(invalid("Sync input changed while opening"));
+    }
+    Ok((file, before))
+}
+pub(crate) fn read_regular(root: &Path, relative: &str, maximum: usize) -> Result<Vec<u8>> {
+    let (mut file, before) = open_regular(root, relative, maximum as u64)?;
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(maximum as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(crate::io_failure)?;
+    if bytes.len() > maximum
+        || !same(&before, &file.metadata().map_err(crate::io_failure)?)
+        || !same(
+            &before,
+            &fs::symlink_metadata(checked_path(root, relative, false)?)
+                .map_err(crate::io_failure)?,
+        )
+    {
+        return Err(invalid("Sync input changed during read"));
+    }
+    Ok(bytes)
+}
+pub(crate) fn publish_bytes(root: &Path, relative: &str, bytes: &[u8]) -> Result<()> {
+    let path = safe_path(root, relative, true)?;
+    let mut candidate =
+        tempfile::NamedTempFile::new_in(path.parent().unwrap()).map_err(crate::io_failure)?;
+    candidate
+        .write_all(bytes)
+        .and_then(|()| candidate.as_file().sync_all())
+        .map_err(crate::io_failure)?;
+    match candidate.persist_noclobber(&path) {
+        Ok(_) => sync_dir(path.parent().unwrap()),
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let existing = read_regular(root, relative, bytes.len());
+            if existing.as_ref().is_ok_and(|actual| actual == bytes) {
+                Ok(())
+            } else if advertised(relative.rsplit('/').next().unwrap_or("")).is_some() {
+                Err(super::pending_bytes("Existing content-addressed publication is incomplete or mismatched; retry without replacing it").at(relative))
+            } else {
+                Err(fork("Immutable publication path contains different bytes").at(relative))
+            }
+        }
+        Err(e) => Err(crate::io_failure(e.error)),
+    }
+}
+
+/// A private local immutable object store. It must not be the exchange directory.
+#[derive(Clone, Debug)]
+pub struct ObjectStore {
+    root: PathBuf,
+    limits: SyncLimits,
+}
+impl ObjectStore {
+    pub fn open(path: impl AsRef<Path>, limits: SyncLimits) -> Result<Self> {
+        Ok(Self {
+            root: directory(path.as_ref())?,
+            limits,
+        })
+    }
+    pub fn path(&self) -> &Path {
+        &self.root
+    }
+    pub fn put(&self, reader: &mut dyn Read) -> Result<Blob> {
+        self.put_inner(reader, None)
+    }
+    pub fn put_expected(&self, reader: &mut dyn Read, expected: &Blob) -> Result<Blob> {
+        expected.validate()?;
+        self.put_inner(reader, Some(expected))
+    }
+    fn put_inner(&self, reader: &mut dyn Read, expected: Option<&Blob>) -> Result<Blob> {
+        let end = crate::transfer::deadline(&self.limits.io)?;
+        let mut temp = tempfile::NamedTempFile::new_in(&self.root).map_err(crate::io_failure)?;
+        let mut hash = Sha256::new();
+        let mut size = 0u64;
+        let mut buffer = [0u8; 65536];
+        loop {
+            crate::container::check_deadline(end)?;
+            let n = reader.read(&mut buffer).map_err(crate::io_failure)?;
+            if n == 0 {
+                break;
+            }
+            size = size
+                .checked_add(n as u64)
+                .ok_or_else(|| super::limit("Object length"))?;
+            if size > self.limits.io.max_entry_bytes || expected.is_some_and(|b| size > b.size.0) {
+                return Err(super::limit("Object length"));
+            }
+            hash.update(&buffer[..n]);
+            temp.write_all(&buffer[..n]).map_err(crate::io_failure)?;
+        }
+        let blob = Blob {
+            sha256: format!("{:x}", hash.finalize()),
+            size: Counter(size),
+        };
+        if expected.is_some_and(|b| b != &blob) {
+            return Err(invalid("Object bytes do not match expected digest/length"));
+        }
+        temp.as_file().sync_all().map_err(crate::io_failure)?;
+        let relative = blob.relative_path()?;
+        let target = safe_path(&self.root, &relative, true)?;
+        match temp.persist_noclobber(&target) {
+            Ok(_) => sync_dir(target.parent().unwrap())?,
+            Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if !self.contains(&blob)? {
+                    return Err(crate::Error::invalid(
+                        "sync.object_conflict",
+                        "Existing immutable object is damaged",
+                    ));
+                }
+            }
+            Err(e) => return Err(crate::io_failure(e.error)),
+        }
+        Ok(blob)
+    }
+    pub(crate) fn witness(&self, blob: &Blob) -> Result<Option<Metadata>> {
+        verify_blob(&self.root, blob, &self.limits)
+    }
+    pub(crate) fn unchanged(&self, blob: &Blob, witness: &Metadata) -> Result<bool> {
+        let path = safe_path(&self.root, &blob.relative_path()?, false)?;
+        match fs::symlink_metadata(path) {
+            Ok(actual) => Ok(!actual.file_type().is_symlink() && same(witness, &actual)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(crate::io_failure(e)),
+        }
+    }
+    pub fn contains(&self, blob: &Blob) -> Result<bool> {
+        Ok(verify_blob(&self.root, blob, &self.limits)?.is_some())
+    }
+    pub fn with_blob<T>(
+        &self,
+        blob: &Blob,
+        read: impl FnOnce(&mut dyn Read) -> Result<T>,
+    ) -> Result<T> {
+        if !self.contains(blob)? {
+            return Err(invalid("Local immutable object missing or damaged"));
+        }
+        let (mut file, before) = open_regular(
+            &self.root,
+            &blob.relative_path()?,
+            self.limits.io.max_entry_bytes,
+        )?;
+        let result = read(&mut file)?;
+        if !same(&before, &file.metadata().map_err(crate::io_failure)?) {
+            return Err(invalid("Object changed while reading"));
+        }
+        Ok(result)
+    }
+    pub fn import(&self, exchange: &Exchange, blob: &Blob) -> Result<bool> {
+        if self.root.starts_with(&exchange.root) || exchange.root.starts_with(&self.root) {
+            return Err(invalid("Local objects and exchange must be separate"));
+        }
+        if self.contains(blob)? {
+            return Ok(true);
+        }
+        if verify_blob(&exchange.root, blob, &self.limits)?.is_none() {
+            return Ok(false);
+        }
+        let (mut file, _) = open_regular(
+            &exchange.root,
+            &blob.relative_path()?,
+            self.limits.io.max_entry_bytes,
+        )?;
+        self.put_expected(&mut file, blob)?;
+        Ok(true)
+    }
+}
+fn verify_blob(root: &Path, blob: &Blob, limits: &SyncLimits) -> Result<Option<Metadata>> {
+    blob.validate()?;
+    if blob.size.0 > limits.io.max_entry_bytes {
+        return Err(super::limit(
+            "Referenced object exceeds the configured entry-byte policy",
+        ));
+    }
+    let relative = blob.relative_path()?;
+    let path = safe_path(root, &relative, false)?;
+    match fs::symlink_metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(crate::io_failure(e)),
+        _ => {}
+    }
+    let (mut file, before) = open_regular(root, &relative, limits.io.max_entry_bytes)?;
+    if before.len() != blob.size.0 {
+        return Ok(None);
+    }
+    let end = crate::transfer::deadline(&limits.io)?;
+    let mut hash = Sha256::new();
+    let mut size = 0u64;
+    let mut buffer = [0u8; 65536];
+    loop {
+        crate::container::check_deadline(end)?;
+        let n = file.read(&mut buffer).map_err(crate::io_failure)?;
+        if n == 0 {
+            break;
+        }
+        size += n as u64;
+        if size > blob.size.0 {
+            return Ok(None);
+        }
+        hash.update(&buffer[..n]);
+    }
+    let valid = size == blob.size.0
+        && format!("{:x}", hash.finalize()) == blob.sha256
+        && same(&before, &file.metadata().map_err(crate::io_failure)?)
+        && same(
+            &before,
+            &fs::symlink_metadata(path).map_err(crate::io_failure)?,
+        );
+    Ok(valid.then_some(before))
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReplicaDescriptor {
+    pub kind: String,
+    pub protocol_version: String,
+    pub sync_id: String,
+    pub root_sha256: String,
+    pub replica_id: String,
+    pub device_id: String,
+    pub label: String,
+}
+impl ReplicaDescriptor {
+    pub fn validate(&self, domain: &Domain) -> Result<()> {
+        version(&self.kind, &self.protocol_version, "darkbox-sync-replica")?;
+        domain.bind(&self.sync_id, &self.root_sha256)?;
+        if !hex(&self.replica_id, 32) || !hex(&self.device_id, 32) || self.label.len() > 1024 {
+            return Err(invalid("Replica descriptor"));
+        }
+        Ok(())
+    }
+    pub fn relative_path(&self) -> Result<String> {
+        let bytes = canonical(self)?;
+        Ok(format!(
+            "replicas/{}/replica-{:016x}-{}.json",
+            self.replica_id,
+            bytes.len(),
+            sha256(&bytes)
+        ))
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Segment {
+    pub kind: String,
+    pub protocol_version: String,
+    pub sync_id: String,
+    pub root_sha256: String,
+    pub replica_id: String,
+    pub first: Counter,
+    pub last: Counter,
+    pub transactions: Vec<SyncTransaction>,
+}
+impl Segment {
+    pub fn new(domain: &Domain, transactions: Vec<SyncTransaction>) -> Result<Self> {
+        let first = transactions
+            .first()
+            .ok_or_else(|| invalid("Empty segment"))?;
+        let segment = Self {
+            kind: "darkbox-sync-segment".into(),
+            protocol_version: VERSION.into(),
+            sync_id: domain.root().sync_id.clone(),
+            root_sha256: domain.root_hash().into(),
+            replica_id: first.replica_id.clone(),
+            first: first.sequence,
+            last: transactions.last().unwrap().sequence,
+            transactions,
+        };
+        segment.validate(domain)?;
+        Ok(segment)
+    }
+    pub fn validate(&self, domain: &Domain) -> Result<()> {
+        version(&self.kind, &self.protocol_version, "darkbox-sync-segment")?;
+        domain.bind(&self.sync_id, &self.root_sha256)?;
+        if !hex(&self.replica_id, 32)
+            || self.transactions.is_empty()
+            || self.transactions.len() > MAX_SEGMENT_TRANSACTIONS
+            || self.first.0 == 0
+            || self
+                .last
+                .0
+                .checked_sub(self.first.0)
+                .and_then(|n| n.checked_add(1))
+                != Some(self.transactions.len() as u64)
+        {
+            return Err(invalid("Segment bounds"));
+        }
+        for (i, tx) in self.transactions.iter().enumerate() {
+            tx.shape(domain)?;
+            if tx.replica_id != self.replica_id
+                || self.first.0.checked_add(i as u64) != Some(tx.sequence.0)
+            {
+                return Err(invalid("Segment is not contiguous"));
+            }
+            if i > 0 && tx.previous.as_deref() != Some(self.transactions[i - 1].hash()?.as_str()) {
+                return Err(invalid("Segment chain differs"));
+            }
+        }
+        if canonical(self)?.len() > MAX_SEGMENT_BYTES {
+            return Err(super::limit("Segment bytes"));
+        }
+        Ok(())
+    }
+    pub fn relative_path(&self) -> Result<String> {
+        let bytes = canonical(self)?;
+        Ok(format!(
+            "replicas/{}/segments/{:020}-{:020}-{:016x}-{}.json",
+            self.replica_id,
+            self.first.0,
+            self.last.0,
+            bytes.len(),
+            sha256(&bytes)
+        ))
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Receipt {
+    pub kind: String,
+    pub protocol_version: String,
+    pub sync_id: String,
+    pub root_sha256: String,
+    pub replica_id: String,
+    pub serial: Counter,
+    pub frontier: Frontier,
+}
+impl Receipt {
+    pub fn validate(&self, domain: &Domain) -> Result<()> {
+        version(&self.kind, &self.protocol_version, "darkbox-sync-receipt")?;
+        domain.bind(&self.sync_id, &self.root_sha256)?;
+        validate_frontier(&self.frontier)?;
+        if !hex(&self.replica_id, 32) || self.serial.0 == 0 {
+            return Err(invalid("Receipt identity"));
+        }
+        Ok(())
+    }
+    pub fn relative_path(&self) -> Result<String> {
+        let bytes = canonical(self)?;
+        Ok(format!(
+            "replicas/{}/receipts/{:020}-{:016x}-{}.json",
+            self.replica_id,
+            self.serial.0,
+            bytes.len(),
+            sha256(&bytes)
+        ))
+    }
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct ScanDiagnostic {
+    pub path: String,
+    pub code: &'static str,
+    pub message: String,
+}
+#[derive(Clone, Debug, Default)]
+pub struct ExchangeScan {
+    pub replicas: BTreeMap<String, ReplicaDescriptor>,
+    pub transactions: Vec<SyncTransaction>,
+    pub receipts: Vec<Receipt>,
+    pub snapshots: Vec<SnapshotDescriptor>,
+    pub diagnostics: Vec<ScanDiagnostic>,
+}
+/// Immutable exchange transport. Its pinned root is rechecked on every scan/write.
+#[derive(Clone, Debug)]
+pub struct Exchange {
+    pub(crate) root: PathBuf,
+    domain: Domain,
+    limits: SyncLimits,
+}
+impl Exchange {
+    pub fn create(path: impl AsRef<Path>, domain: Domain, limits: SyncLimits) -> Result<Self> {
+        let root = directory(path.as_ref())?;
+        publish_bytes(&root, "profile/profile.md", domain.profile())?;
+        publish_bytes(&root, "profile/mapping.json", &canonical(domain.mapping())?)?;
+        publish_bytes(&root, "library.json", &canonical(domain.root())?)?;
+        Ok(Self {
+            root,
+            domain,
+            limits,
+        })
+    }
+    pub fn open(path: impl AsRef<Path>, pinned_root: &str, limits: SyncLimits) -> Result<Self> {
+        let root = fs::canonicalize(path.as_ref()).map_err(crate::io_failure)?;
+        if !fs::symlink_metadata(path.as_ref())
+            .map_err(crate::io_failure)?
+            .is_dir()
+        {
+            return Err(invalid("Exchange root is not a directory"));
+        }
+        let bytes = read_regular(&root, "library.json", MAX_SEGMENT_BYTES)?;
+        if sha256(&bytes) != pinned_root {
+            decode::<DomainRoot>(&bytes, MAX_SEGMENT_BYTES).map_err(|_| {
+                super::pending_bytes("Selected exchange root is incomplete or noncanonical")
+            })?;
+            let mapping = read_regular(&root, "profile/mapping.json", MAX_SEGMENT_BYTES)?;
+            let profile = read_regular(&root, "profile/profile.md", MAX_SEGMENT_BYTES)?;
+            Domain::from_parts(&bytes, &mapping, &profile).map_err(|_| {
+                super::pending_bytes("Selected root/profile bytes are incomplete or mismatched")
+            })?;
+            return Err(crate::Error::invalid(
+                "sync.root_mismatch",
+                "Selected exchange root differs from the pinned identity",
+            ));
+        }
+        let mapping = read_regular(&root, "profile/mapping.json", MAX_SEGMENT_BYTES)?;
+        let profile = read_regular(&root, "profile/profile.md", MAX_SEGMENT_BYTES)?;
+        let domain = Domain::from_parts(&bytes, &mapping, &profile)?;
+        Ok(Self {
+            root,
+            domain,
+            limits,
+        })
+    }
+    pub fn path(&self) -> &Path {
+        &self.root
+    }
+    pub fn domain(&self) -> &Domain {
+        &self.domain
+    }
+    fn check_root(&self) -> Result<()> {
+        let actual = read_regular(&self.root, "library.json", MAX_SEGMENT_BYTES)?;
+        if actual != canonical(self.domain.root())? {
+            let parsed = decode::<DomainRoot>(&actual, MAX_SEGMENT_BYTES)
+                .map_err(|_| super::pending_bytes("Exchange root is incomplete or noncanonical"))?;
+            if parsed.sync_id == self.domain.root().sync_id {
+                let mapping = read_regular(&self.root, "profile/mapping.json", MAX_SEGMENT_BYTES)?;
+                let profile = read_regular(&self.root, "profile/profile.md", MAX_SEGMENT_BYTES)?;
+                Domain::from_parts(&actual, &mapping, &profile).map_err(|_| {
+                    super::pending_bytes(
+                        "Changed root does not yet have complete matching profile resources",
+                    )
+                })?;
+                return Err(fork("Exchange root changed under the same domain identity"));
+            }
+            return Err(invalid(
+                "Selected exchange now belongs to a different domain",
+            ));
+        }
+        Ok(())
+    }
+    pub fn publish_replica(&self, replica: &ReplicaDescriptor) -> Result<()> {
+        self.check_root()?;
+        replica.validate(&self.domain)?;
+        publish_bytes(&self.root, &replica.relative_path()?, &canonical(replica)?)
+    }
+    pub fn publish_segment(&self, segment: &Segment) -> Result<()> {
+        self.check_root()?;
+        segment.validate(&self.domain)?;
+        publish_bytes(&self.root, &segment.relative_path()?, &canonical(segment)?)
+    }
+    pub fn publish_receipt(&self, receipt: &Receipt) -> Result<()> {
+        self.check_root()?;
+        receipt.validate(&self.domain)?;
+        publish_bytes(&self.root, &receipt.relative_path()?, &canonical(receipt)?)
+    }
+    pub fn publish_object(&self, store: &ObjectStore, blob: &Blob) -> Result<()> {
+        self.check_root()?;
+        if store.root.starts_with(&self.root) || self.root.starts_with(&store.root) {
+            return Err(invalid("Local objects and exchange overlap"));
+        }
+        let destination = ObjectStore {
+            root: self.root.clone(),
+            limits: self.limits.clone(),
+        };
+        store.with_blob(blob, |reader|destination.put_expected(reader,blob).map(|_|())).map_err(|error|{
+            if error.code=="sync.object_conflict"{super::pending_bytes("Existing exchange object is incomplete or mismatched; retry without replacing it")}else{error}
+        })
+    }
+    pub fn scan(&self) -> Result<ExchangeScan> {
+        self.check_root()?;
+        let end = crate::transfer::deadline(&self.limits.io)?;
+        let mut result = ExchangeScan::default();
+        let mut files = Vec::new();
+        let replicas = safe_path(&self.root, "replicas", false)?;
+        if replicas.exists() {
+            collect(&self.root, &replicas, &mut files, &self.limits, end)?;
+        }
+        files.sort();
+        let mut segments = Vec::new();
+        let mut descriptor_bytes = BTreeMap::new();
+        let mut retained_bytes = 0u64;
+        for relative in files {
+            crate::container::check_deadline(end)?;
+            let name = relative.rsplit('/').next().unwrap();
+            if !name.ends_with(".json") {
+                result.diagnostics.push(diag(
+                    &relative,
+                    "sync.ignored",
+                    "Not a canonical protocol record",
+                ));
+                continue;
+            }
+            let bytes = match read_regular(&self.root, &relative, MAX_SEGMENT_BYTES) {
+                Ok(b) => b,
+                Err(e) => {
+                    result
+                        .diagnostics
+                        .push(diag(&relative, "sync.pending_bytes", e.message));
+                    continue;
+                }
+            };
+            retained_bytes = retained_bytes
+                .checked_add(bytes.len() as u64)
+                .ok_or_else(|| super::limit("Scan JSON bytes"))?;
+            if retained_bytes > self.limits.max_history_bytes {
+                return Err(super::limit("Scan retained JSON budget"));
+            }
+            let advertised = advertised(name);
+            let digest = sha256(&bytes);
+            let exact_advertisement = advertised
+                .as_ref()
+                .is_some_and(|(size, hash)| *size == bytes.len() as u64 && hash == &digest);
+            if advertised.is_some() && !exact_advertisement {
+                result.diagnostics.push(diag(
+                    &relative,
+                    "sync.pending_bytes",
+                    "Length/digest incomplete or mismatched",
+                ));
+                continue;
+            }
+            let value: serde_json::Value = match decode(&bytes, MAX_SEGMENT_BYTES) {
+                Ok(v) => v,
+                Err(e) => {
+                    result.diagnostics.push(diag(
+                        &relative,
+                        if exact_advertisement {
+                            "sync.invalid_record"
+                        } else {
+                            "sync.ignored"
+                        },
+                        e.message,
+                    ));
+                    continue;
+                }
+            };
+            let candidate = (|| -> Result<()> {
+                match value["kind"].as_str() {
+                    Some("darkbox-sync-replica") => {
+                        let descriptor: ReplicaDescriptor = decode(&bytes, MAX_SEGMENT_BYTES)?;
+                        descriptor.validate(&self.domain)?;
+                        if descriptor.relative_path()? != relative {
+                            return Err(invalid("Noncanonical descriptor path"));
+                        }
+                        if descriptor_bytes
+                            .insert(descriptor.replica_id.clone(), bytes.clone())
+                            .is_some_and(|old| old != bytes)
+                        {
+                            return Err(fork("Replica descriptor identity fork"));
+                        }
+                        result
+                            .replicas
+                            .insert(descriptor.replica_id.clone(), descriptor);
+                    }
+                    Some("darkbox-sync-segment") => {
+                        let segment: Segment = decode(&bytes, MAX_SEGMENT_BYTES)?;
+                        segment.validate(&self.domain)?;
+                        let canonical = segment.relative_path()? == relative;
+                        if !canonical && !name.contains(&digest) {
+                            return Err(invalid("Ignored segment lacks its content digest"));
+                        }
+                        if !canonical {
+                            result.diagnostics.push(diag(
+                                &relative,
+                                "sync.ignored",
+                                "Verified noncanonical copy, fork/duplicate evidence only",
+                            ));
+                        }
+                        segments.push((segment, canonical));
+                    }
+                    Some("darkbox-sync-receipt") => {
+                        let receipt: Receipt = decode(&bytes, MAX_SEGMENT_BYTES)?;
+                        receipt.validate(&self.domain)?;
+                        if receipt.relative_path()? != relative {
+                            return Err(invalid("Noncanonical receipt path"));
+                        }
+                        result.receipts.push(receipt);
+                    }
+                    Some("darkbox-sync-snapshot") => {
+                        let snapshot: SnapshotDescriptor = decode(&bytes, MAX_SEGMENT_BYTES)?;
+                        snapshot.validate(&self.domain)?;
+                        if snapshot.relative_path()? != relative {
+                            return Err(invalid("Noncanonical snapshot descriptor path"));
+                        }
+                        result.snapshots.push(snapshot);
+                    }
+                    _ => result.diagnostics.push(diag(
+                        &relative,
+                        "sync.ignored",
+                        "Unknown record kind",
+                    )),
+                }
+                Ok(())
+            })();
+            if let Err(e) = candidate {
+                if e.code == "sync.fork" {
+                    return Err(e.at(relative));
+                }
+                result.diagnostics.push(diag(
+                    &relative,
+                    if e.status == crate::Status::Unsupported {
+                        "sync.unsupported"
+                    } else {
+                        "sync.invalid_record"
+                    },
+                    e.message,
+                ));
+            }
+        }
+        let mut identities = BTreeMap::new();
+        let mut emitted = BTreeSet::new();
+        let mut transaction_bytes = 0u64;
+        for (segment, canonical) in segments {
+            if !result.replicas.contains_key(&segment.replica_id) {
+                result.diagnostics.push(diag(
+                    &segment.relative_path()?,
+                    "sync.pending_dependency",
+                    "Replica descriptor missing",
+                ));
+                continue;
+            }
+            for tx in segment.transactions {
+                let key = (tx.replica_id.clone(), tx.sequence);
+                let hash = tx.hash()?;
+                if identities
+                    .insert(key.clone(), hash.clone())
+                    .is_some_and(|old| old != hash)
+                {
+                    return Err(fork(
+                        "Exchange contains two histories at one replica sequence",
+                    ));
+                }
+                if canonical && emitted.insert(key) {
+                    transaction_bytes = transaction_bytes
+                        .checked_add(tx.bytes()?.len() as u64)
+                        .ok_or_else(|| super::limit("Scan transaction bytes"))?;
+                    if result.transactions.len() >= self.limits.max_transactions
+                        || transaction_bytes > self.limits.max_history_bytes
+                    {
+                        return Err(super::limit("Scan history budget"));
+                    }
+                    result.transactions.push(tx);
+                }
+            }
+        }
+        result
+            .transactions
+            .sort_by(|a, b| (&a.replica_id, a.sequence).cmp(&(&b.replica_id, b.sequence)));
+        Ok(result)
+    }
+}
+fn diag(path: &str, code: &'static str, message: impl Into<String>) -> ScanDiagnostic {
+    ScanDiagnostic {
+        path: path.into(),
+        code,
+        message: message.into(),
+    }
+}
+fn advertised(name: &str) -> Option<(u64, String)> {
+    let stem = name.strip_suffix(".json")?;
+    let (prefix, hash) = stem.rsplit_once('-')?;
+    let length = prefix.rsplit('-').next()?;
+    if length.len() != 16 || !hex(length, 16) || !hex(hash, 64) {
+        return None;
+    }
+    Some((u64::from_str_radix(length, 16).ok()?, hash.into()))
+}
+fn collect(
+    root: &Path,
+    directory: &Path,
+    files: &mut Vec<String>,
+    limits: &SyncLimits,
+    end: Instant,
+) -> Result<()> {
+    let mut stack = vec![directory.to_owned()];
+    let mut seen = 0;
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(dir).map_err(crate::io_failure)? {
+            crate::container::check_deadline(end)?;
+            seen += 1;
+            if seen > limits.max_scan_files {
+                return Err(super::limit("Sync scan entry count"));
+            }
+            let entry = entry.map_err(crate::io_failure)?;
+            let kind = entry.file_type().map_err(crate::io_failure)?;
+            let path = entry.path();
+            let Some(relative) = path.strip_prefix(root).ok().and_then(|p| p.to_str()) else {
+                return Err(invalid("Non-UTF-8 sync path"));
+            };
+            if kind.is_dir() {
+                if relative.split('/').count() > 5 {
+                    return Err(super::limit("Sync folder depth"));
+                }
+                stack.push(path);
+            } else {
+                files.push(relative.into());
+            }
+        }
+    }
+    Ok(())
+}

@@ -57,7 +57,7 @@ The input filename extension is irrelevant. Both analysis commands leave the ori
 
 `verify` checks the exact supported common version, strict JSON, its schema, path and inventory rules, canonical documentation, profile-document presence and UTF-8 encoding, SQLite snapshot independence, logical table inventory, declared `userVersion`, `integrity_check` and `foreign_key_check`. The archive catalog is compared with the embedded official catalog; its hashes cannot authorize changed documentation. Unknown required extensions and unavailable SQLite capabilities are reported as unsupported.
 
-For Darkbox 1.1.0, 1.2.0, 1.3.0 and 1.4.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
+For Darkbox 1.1.0, 1.2.0, 1.3.0, 1.4.0 and 1.5.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
 
 `--trust-store PATH` reads a JSON object mapping signer identifiers to 64 hexadecimal characters representing raw 32-byte Ed25519 public keys. `--decryption-keys PATH` reads an application-supplied private JSON object mapping key identifiers to 64 hexadecimal characters representing raw 32-byte AES keys. These files stay outside the package. No command accepts secret keys directly as command-line values, and reports never include supplied key bytes or decrypted plaintext. Key files are limited to 4 MiB. Malformed key configuration returns a usage error without echoing its contents. Inspect does not authenticate protection, even when these options are supplied.
 
@@ -131,7 +131,7 @@ CI checks the pull request base or the preceding pushed revision. Release prepar
 
 ## Live library snapshots and incremental backups
 
-Darkbox 1.2.0, 1.3.0 and 1.4.0 support both ZIP and quiescent directory representations. The
+Darkbox 1.2.0, 1.3.0, 1.4.0 and 1.5.0 support both ZIP and quiescent directory representations. The
 1.0.0 and 1.1.0 specifications and their canonical bundles remain unchanged;
 conversion does not upgrade them. All destinations below must be absent.
 
@@ -161,7 +161,7 @@ these tools require application-controlled parent directories and external
 coordination with writers that bypass SDK locks.
 
 Delta participants declare the same stable root manifest `packageId` and common
-version 1.2.0, 1.3.0 or 1.4.0. A transfer contains a `delta.json` descriptor and only changed or
+version 1.2.0, 1.3.0, 1.4.0 or 1.5.0. A transfer contains a `delta.json` descriptor and only changed or
 added whole files, including an entire changed SQLite database. It records removed
 paths and binds both the exact base manifest and its complete logical file
 inventory with SHA-256. The reconstructed target must pass full verification and
@@ -243,7 +243,22 @@ policy and reports list `trusted_resources`; the CLI does not infer trust from a
 manifest inventory. Hot backup and sealing require application coordination and
 SQLite connections, so their entry points are in the [SDK](sdk.md#live-directory-storage-130).
 
-For common 1.4.0, applications can use the SDK's [short capture barriers](sdk.md#short-capture-barriers-140)
+For common 1.4.0 or 1.5.0, applications can use the SDK's [short capture barriers](sdk.md#short-capture-barriers-140)
 to resume additions and database writes after capture, while retaining captured
 resources through streaming. CLI directory commands continue to require a
 quiescent source and shared lock for their whole operation.
+
+## Synchronization checkpoints (1.5.0)
+
+`darkbox verify checkpoint.project` recognizes the official required
+`studio.illegal.darkbox.sync` extension 1.0.0. It independently replays the complete
+causal history, compares the exact logical state/frontier and checks every
+historically referenced resource against the actual package inventory. Application
+database materialization remains unchecked without its registered profile. The
+CLI performs no cloud access and runs no package-supplied projection code.
+
+A live library carrying a `working` sync descriptor returns NotQuiescent (exit 6),
+even after SQLite connections close. Generic readers never recover that journal.
+The application exports a fresh sealed checkpoint through the SDK; normal exact-base
+deltas can transfer those complete editions but do not merge concurrent edits.
+See [synchronization integration and limits](sync.md).

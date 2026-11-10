@@ -109,6 +109,7 @@ impl Default for ExtensionRegistry {
     fn default() -> Self {
         let mut registry = Self::empty();
         registry.register(crate::protection::ProtectionVerifier);
+        registry.register(crate::sync::SyncVerifier::default());
         registry
     }
 }

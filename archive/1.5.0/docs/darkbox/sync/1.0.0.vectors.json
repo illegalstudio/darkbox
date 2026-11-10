@@ -1,0 +1,4785 @@
+{
+  "extension": "studio.illegal.darkbox.sync",
+  "version": "1.0.0",
+  "generator": "Independent Python set-based materializer; no Rust output is used",
+  "profile": "# Example synchronized notes profile 1\n\nProfile identifier: org.example.sync-notes. Application format version: 1.\nThis fictional profile uses the sync 1.0.0 typed-value codecs. The items collection\nis stored in items(id TEXT PRIMARY KEY, asset TEXT, data TEXT, position TEXT,\ntags TEXT, title TEXT, local_note TEXT). IDs are create-operation dots. Synchronized\ncolumns asset, data and title contain the canonical selected typed value, or SQL\nNULL when absent. tags contains the canonical array of visible typed set values;\nposition contains the canonical PositionField object, or SQL NULL when absent.\nThe item_conflicts(id TEXT PRIMARY KEY, payload BLOB NOT NULL) table contains the\ncanonical complete RecordState JSON for every record, including deleted records.\nIts BLOB bytes are UTF-8 JSON, not encrypted data. This retains competing values,\nset tags and deletion markers independently of the displayed items rows.\nlocal_note is installation-local and is retained on rebuild.\nA deterministic conflict view retains all concurrent candidates and hidden records;\nrecord deletion never erases history. There are no cross-record constraints.\nNo value or file is executable. Resources are immutable byte objects selected by\nSHA-256 and size through the complete checkpoint object index. Missing keys are\nnot applicable because this profile uses the trusted-folder plaintext sync mode.\nThe _darkbox_sync_ tables are reserved for the causal journal, pending input,\noutbox, immutable domain/session metadata and retained fork evidence. Their exact\nprotocol interpretation is in the included Darkbox synchronization reference.\n",
+  "mapping": {
+    "kind": "darkbox-sync-mapping",
+    "mappingVersion": "1.0.0",
+    "application": {
+      "profile": "org.example.sync-notes",
+      "formatVersion": "1"
+    },
+    "storage": {
+      "mode": "single-database",
+      "databasePath": "data/project.sqlite",
+      "reservedPrefix": "_darkbox_sync_"
+    },
+    "collections": [
+      {
+        "name": "items",
+        "table": "items",
+        "idColumn": "id",
+        "localColumns": [
+          "local_note"
+        ],
+        "fields": [
+          {
+            "name": "asset",
+            "kind": "register",
+            "columns": [
+              "asset"
+            ],
+            "codec": "typed",
+            "valueTypes": [
+              "blob"
+            ]
+          },
+          {
+            "name": "data",
+            "kind": "register",
+            "columns": [
+              "data"
+            ],
+            "codec": "typed",
+            "valueTypes": [
+              "decimal",
+              "integer",
+              "list",
+              "map",
+              "text"
+            ]
+          },
+          {
+            "name": "position",
+            "kind": "position",
+            "columns": [
+              "position"
+            ],
+            "codec": "typed",
+            "valueTypes": [],
+            "sequences": [
+              "items"
+            ],
+            "ownerCollections": [],
+            "allowRootOwner": true
+          },
+          {
+            "name": "tags",
+            "kind": "set",
+            "columns": [
+              "tags"
+            ],
+            "codec": "typed",
+            "valueTypes": [
+              "text"
+            ]
+          },
+          {
+            "name": "title",
+            "kind": "register",
+            "columns": [
+              "title"
+            ],
+            "codec": "typed",
+            "valueTypes": [
+              "text"
+            ]
+          }
+        ]
+      }
+    ],
+    "projection": {
+      "id": "org.example.sync-notes.projection",
+      "version": "1",
+      "conflictPolicy": "quarantine",
+      "documentationPath": "profile/profile.md"
+    }
+  },
+  "root": {
+    "kind": "darkbox-sync-domain",
+    "protocolVersion": "1.0.0",
+    "syncId": "00000000000000000000000000000001",
+    "packageId": "00000000000000000000000000000002",
+    "commonVersion": "1.5.0",
+    "application": {
+      "profile": "org.example.sync-notes",
+      "formatVersion": "1"
+    },
+    "profile": {
+      "path": "profile/profile.md",
+      "size": "1623",
+      "sha256": "e6059bf2e604a6d3d235850086caa06545562a52cfaddf5f447e063f8da977fd"
+    },
+    "mapping": {
+      "path": "profile/mapping.json",
+      "size": "1037",
+      "sha256": "ad6bc01ef14cbe6bc79a359ecc3f611fafb0dd41bb81dae0bc0ee5bfb69d033e"
+    },
+    "encoding": "jcs-strings-v1",
+    "merge": "causal-records-v1",
+    "security": "trusted-folder-plaintext"
+  },
+  "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+  "objects": [
+    {
+      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+      "size": "15",
+      "hex": "4461726b626f78206d6564696100ff"
+    }
+  ],
+  "vectors": [
+    {
+      "name": "concurrent-values-and-moves",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        }
+      ],
+      "state": {
+        "kind": "darkbox-sync-state",
+        "protocolVersion": "1.0.0",
+        "syncId": "00000000000000000000000000000001",
+        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "frontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "1",
+            "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "1",
+            "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:0",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "left"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:0",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "right"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": []
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:6",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:6"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "2"
+          }
+        ]
+      },
+      "stateSha256": "818992473f3ccddab78fe88bd4e890dc9650dd3df3b684f29914daf98f080beb",
+      "order": [
+        "00000000000000000000000000000010:1:1",
+        "00000000000000000000000000000010:1:0",
+        "00000000000000000000000000000010:1:2"
+      ]
+    },
+    {
+      "name": "observed-remove-concurrent-add",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000011:1:1"
+              ]
+            }
+          ]
+        }
+      ],
+      "state": {
+        "kind": "darkbox-sync-state",
+        "protocolVersion": "1.0.0",
+        "syncId": "00000000000000000000000000000001",
+        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "frontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "1",
+            "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:0",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "left"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:0",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "right"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": [
+                  "00000000000000000000000000000011:1:1"
+                ]
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:6",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:6"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "2"
+          }
+        ]
+      },
+      "stateSha256": "992a9a55448ee1f4a8acb7fa6ff906b0cf7b5a01cf885385dfc20a02f56641be",
+      "order": [
+        "00000000000000000000000000000010:1:1",
+        "00000000000000000000000000000010:1:0",
+        "00000000000000000000000000000010:1:2"
+      ]
+    },
+    {
+      "name": "causal-resolution",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000011:1:1"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000013",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "4",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "resolved"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000011:1:2"
+            }
+          ]
+        }
+      ],
+      "state": {
+        "kind": "darkbox-sync-state",
+        "protocolVersion": "1.0.0",
+        "syncId": "00000000000000000000000000000001",
+        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "frontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "1",
+            "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:0",
+                    "lamport": "4",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "resolved"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": [
+                  "00000000000000000000000000000011:1:1"
+                ]
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "4",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000011:1:2",
+            "lamport": "4"
+          }
+        ]
+      },
+      "stateSha256": "7baccbf78ab1df69bf07164270f2ca2fc8ef97f2565cc2eb6d2f0a44984ee870",
+      "order": [
+        "00000000000000000000000000000010:1:1",
+        "00000000000000000000000000000010:1:0",
+        "00000000000000000000000000000010:1:2"
+      ]
+    },
+    {
+      "name": "delete-wins",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000011:1:1"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000013",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "4",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "resolved"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000011:1:2"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "2",
+          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "delete",
+              "record": "00000000000000000000000000000010:1:0"
+            }
+          ]
+        }
+      ],
+      "state": {
+        "kind": "darkbox-sync-state",
+        "protocolVersion": "1.0.0",
+        "syncId": "00000000000000000000000000000001",
+        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "frontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "2",
+            "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [
+              "00000000000000000000000000000012:2:0"
+            ],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:0",
+                    "lamport": "4",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "resolved"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": [
+                  "00000000000000000000000000000011:1:1"
+                ]
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "4",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000011:1:2",
+            "lamport": "4"
+          }
+        ]
+      },
+      "stateSha256": "d10e3345384c153ad17882f033d9992331ab3f274affef1a6c8e54062a8b37fe",
+      "order": [
+        "00000000000000000000000000000010:1:1",
+        "00000000000000000000000000000010:1:2"
+      ]
+    },
+    {
+      "name": "explicit-new-id-restore",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000011:1:1"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000013",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "4",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "resolved"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000011:1:2"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "2",
+          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "delete",
+              "record": "00000000000000000000000000000010:1:0"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000014",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "2",
+              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            },
+            {
+              "replicaId": "00000000000000000000000000000013",
+              "sequence": "1",
+              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            }
+          ],
+          "lamport": "5",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000014:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "restored"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000014:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000013:1:1"
+            }
+          ]
+        }
+      ],
+      "state": {
+        "kind": "darkbox-sync-state",
+        "protocolVersion": "1.0.0",
+        "syncId": "00000000000000000000000000000001",
+        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "frontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "2",
+            "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+          },
+          {
+            "replicaId": "00000000000000000000000000000014",
+            "sequence": "1",
+            "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [
+              "00000000000000000000000000000012:2:0"
+            ],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:0",
+                    "lamport": "4",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "resolved"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": [
+                  "00000000000000000000000000000011:1:1"
+                ]
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "4",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000014:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:1",
+                    "lamport": "5",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "restored"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:2",
+                    "lamport": "5",
+                    "present": true,
+                    "node": "00000000000000000000000000000014:1:2"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000011:1:2",
+            "lamport": "4"
+          },
+          {
+            "id": "00000000000000000000000000000014:1:2",
+            "record": "00000000000000000000000000000014:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000013:1:1",
+            "lamport": "5"
+          }
+        ]
+      },
+      "stateSha256": "27a4af611d0ec5e32a64c4b0d47139a8ead5dd33d724c9c31c84247d92062cc7",
+      "order": [
+        "00000000000000000000000000000010:1:1",
+        "00000000000000000000000000000010:1:2",
+        "00000000000000000000000000000014:1:0"
+      ]
+    },
+    {
+      "name": "exact-values",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000015",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "data",
+              "present": true,
+              "value": {
+                "type": "map",
+                "entries": [
+                  {
+                    "key": "big",
+                    "value": {
+                      "type": "integer",
+                      "value": "18446744073709551616"
+                    }
+                  },
+                  {
+                    "key": "decimal",
+                    "value": {
+                      "type": "decimal",
+                      "coefficient": "123456789012345678901",
+                      "exponent": "-21"
+                    }
+                  },
+                  {
+                    "key": "text",
+                    "value": {
+                      "type": "text",
+                      "value": "A\u000f\n\u20ac\ud83d\ude42"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "state": {
+        "kind": "darkbox-sync-state",
+        "protocolVersion": "1.0.0",
+        "syncId": "00000000000000000000000000000001",
+        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "frontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          },
+          {
+            "replicaId": "00000000000000000000000000000015",
+            "sequence": "1",
+            "sha256": "f20cff3db9dbfbebae722e9163782a803f4152787a80cc691eea3334b18030c8"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:3",
+                    "lamport": "1",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "initial"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:4",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:4"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:5",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "data",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000015:1:0",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "map",
+                      "entries": [
+                        {
+                          "key": "big",
+                          "value": {
+                            "type": "integer",
+                            "value": "18446744073709551616"
+                          }
+                        },
+                        {
+                          "key": "decimal",
+                          "value": {
+                            "type": "decimal",
+                            "coefficient": "123456789012345678901",
+                            "exponent": "-21"
+                          }
+                        },
+                        {
+                          "key": "text",
+                          "value": {
+                            "type": "text",
+                            "value": "A\u000f\n\u20ac\ud83d\ude42"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:6",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:6"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "1"
+          }
+        ]
+      },
+      "stateSha256": "10cb9f49900d88bb2eff25389a3a8fa7d8a31dcdc44159fdbf6ec5576db2dabb",
+      "order": [
+        "00000000000000000000000000000010:1:0",
+        "00000000000000000000000000000010:1:1",
+        "00000000000000000000000000000010:1:2"
+      ]
+    },
+    {
+      "name": "clear-and-unplace",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000011:1:1"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000013",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "4",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "resolved"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000011:1:2"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "2",
+          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "delete",
+              "record": "00000000000000000000000000000010:1:0"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000014",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "2",
+              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            },
+            {
+              "replicaId": "00000000000000000000000000000013",
+              "sequence": "1",
+              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            }
+          ],
+          "lamport": "5",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000014:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "restored"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000014:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000013:1:1"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000015",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "data",
+              "present": true,
+              "value": {
+                "type": "map",
+                "entries": [
+                  {
+                    "key": "big",
+                    "value": {
+                      "type": "integer",
+                      "value": "18446744073709551616"
+                    }
+                  },
+                  {
+                    "key": "decimal",
+                    "value": {
+                      "type": "decimal",
+                      "coefficient": "123456789012345678901",
+                      "exponent": "-21"
+                    }
+                  },
+                  {
+                    "key": "text",
+                    "value": {
+                      "type": "text",
+                      "value": "A\u000f\n\u20ac\ud83d\ude42"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "3",
+          "previous": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "2",
+              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            },
+            {
+              "replicaId": "00000000000000000000000000000013",
+              "sequence": "1",
+              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            },
+            {
+              "replicaId": "00000000000000000000000000000014",
+              "sequence": "1",
+              "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+            },
+            {
+              "replicaId": "00000000000000000000000000000015",
+              "sequence": "1",
+              "sha256": "f20cff3db9dbfbebae722e9163782a803f4152787a80cc691eea3334b18030c8"
+            }
+          ],
+          "lamport": "6",
+          "operations": [
+            {
+              "op": "unplace",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "data",
+              "present": false
+            }
+          ]
+        }
+      ],
+      "state": {
+        "kind": "darkbox-sync-state",
+        "protocolVersion": "1.0.0",
+        "syncId": "00000000000000000000000000000001",
+        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "frontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "3",
+            "sha256": "2d9f0e9a10ad5d5ada81e395c87e78708784c51ea3f479f454ccd7d4ee2db323"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "2",
+            "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+          },
+          {
+            "replicaId": "00000000000000000000000000000014",
+            "sequence": "1",
+            "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+          },
+          {
+            "replicaId": "00000000000000000000000000000015",
+            "sequence": "1",
+            "sha256": "f20cff3db9dbfbebae722e9163782a803f4152787a80cc691eea3334b18030c8"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [
+              "00000000000000000000000000000012:2:0"
+            ],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:0",
+                    "lamport": "4",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "resolved"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": [
+                  "00000000000000000000000000000011:1:1"
+                ]
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:3:0",
+                    "lamport": "6",
+                    "present": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "data",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:3:1",
+                    "lamport": "6",
+                    "present": false
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "4",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000014:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:1",
+                    "lamport": "5",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "restored"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:2",
+                    "lamport": "5",
+                    "present": true,
+                    "node": "00000000000000000000000000000014:1:2"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000011:1:2",
+            "lamport": "4"
+          },
+          {
+            "id": "00000000000000000000000000000014:1:2",
+            "record": "00000000000000000000000000000014:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000013:1:1",
+            "lamport": "5"
+          }
+        ]
+      },
+      "stateSha256": "6a1cc1e3b6f5f6bb74468c1350e6aceb17b684af0926bb513a54f123c1330995",
+      "order": [
+        "00000000000000000000000000000010:1:2",
+        "00000000000000000000000000000014:1:0"
+      ]
+    }
+  ],
+  "rejections": [
+    {
+      "name": "remove-unobserved-tag",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000012:1:1"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nonclosed-frontier",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000011:1:1"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000013",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "4",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "resolved"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000011:1:2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "unjustified-clock",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "999",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "same-id-fork",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "fork"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "edit-known-deleted-id",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "2",
+          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "1",
+              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "set_remove",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              },
+              "tags": [
+                "00000000000000000000000000000011:1:1"
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000013",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "4",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "resolved"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000011:1:2"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "2",
+          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "1",
+              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            }
+          ],
+          "lamport": "3",
+          "operations": [
+            {
+              "op": "delete",
+              "record": "00000000000000000000000000000010:1:0"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000014",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "2",
+              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            },
+            {
+              "replicaId": "00000000000000000000000000000013",
+              "sequence": "1",
+              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            }
+          ],
+          "lamport": "5",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000014:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "restored"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000014:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000013:1:1"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "3",
+          "previous": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e",
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            },
+            {
+              "replicaId": "00000000000000000000000000000011",
+              "sequence": "2",
+              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            },
+            {
+              "replicaId": "00000000000000000000000000000012",
+              "sequence": "2",
+              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            },
+            {
+              "replicaId": "00000000000000000000000000000013",
+              "sequence": "1",
+              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            },
+            {
+              "replicaId": "00000000000000000000000000000014",
+              "sequence": "1",
+              "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+            }
+          ],
+          "lamport": "6",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "resurrection"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "anchor-only-known-to-receiver",
+      "transactions": [
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [],
+          "lamport": "1",
+          "operations": [
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "create",
+              "collection": "items"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "initial"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": null
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:2",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:5"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000012",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "right"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:1",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000010:1:4"
+            }
+          ]
+        },
+        {
+          "kind": "darkbox-sync-transaction",
+          "protocolVersion": "1.0.0",
+          "syncId": "00000000000000000000000000000001",
+          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "replicaId": "00000000000000000000000000000011",
+          "sequence": "1",
+          "previous": null,
+          "dependencies": [
+            {
+              "replicaId": "00000000000000000000000000000010",
+              "sequence": "1",
+              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            }
+          ],
+          "lamport": "2",
+          "operations": [
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "title",
+              "present": true,
+              "value": {
+                "type": "text",
+                "value": "left"
+              }
+            },
+            {
+              "op": "set_add",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "tags",
+              "value": {
+                "type": "text",
+                "value": "red"
+              }
+            },
+            {
+              "op": "place",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "position",
+              "sequence": "items",
+              "owner": null,
+              "after": "00000000000000000000000000000012:1:2"
+            },
+            {
+              "op": "assign",
+              "record": "00000000000000000000000000000010:1:0",
+              "field": "asset",
+              "present": true,
+              "value": {
+                "type": "blob",
+                "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                "size": "15"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "canonicalExample": {
+    "transaction": {
+      "kind": "darkbox-sync-transaction",
+      "protocolVersion": "1.0.0",
+      "syncId": "00000000000000000000000000000001",
+      "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+      "replicaId": "00000000000000000000000000000011",
+      "sequence": "1",
+      "previous": null,
+      "dependencies": [
+        {
+          "replicaId": "00000000000000000000000000000010",
+          "sequence": "1",
+          "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+        }
+      ],
+      "lamport": "2",
+      "operations": [
+        {
+          "op": "assign",
+          "record": "00000000000000000000000000000010:1:0",
+          "field": "title",
+          "present": true,
+          "value": {
+            "type": "text",
+            "value": "left"
+          }
+        },
+        {
+          "op": "set_add",
+          "record": "00000000000000000000000000000010:1:0",
+          "field": "tags",
+          "value": {
+            "type": "text",
+            "value": "red"
+          }
+        },
+        {
+          "op": "place",
+          "record": "00000000000000000000000000000010:1:0",
+          "field": "position",
+          "sequence": "items",
+          "owner": null,
+          "after": "00000000000000000000000000000010:1:5"
+        },
+        {
+          "op": "assign",
+          "record": "00000000000000000000000000000010:1:0",
+          "field": "asset",
+          "present": true,
+          "value": {
+            "type": "blob",
+            "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+            "size": "15"
+          }
+        }
+      ]
+    },
+    "utf8": "{\"dependencies\":[{\"replicaId\":\"00000000000000000000000000000010\",\"sequence\":\"1\",\"sha256\":\"345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621\"}],\"kind\":\"darkbox-sync-transaction\",\"lamport\":\"2\",\"operations\":[{\"field\":\"title\",\"op\":\"assign\",\"present\":true,\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"type\":\"text\",\"value\":\"left\"}},{\"field\":\"tags\",\"op\":\"set_add\",\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"type\":\"text\",\"value\":\"red\"}},{\"after\":\"00000000000000000000000000000010:1:5\",\"field\":\"position\",\"op\":\"place\",\"owner\":null,\"record\":\"00000000000000000000000000000010:1:0\",\"sequence\":\"items\"},{\"field\":\"asset\",\"op\":\"assign\",\"present\":true,\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"sha256\":\"f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35\",\"size\":\"15\",\"type\":\"blob\"}}],\"previous\":null,\"protocolVersion\":\"1.0.0\",\"replicaId\":\"00000000000000000000000000000011\",\"rootSha256\":\"46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d\",\"sequence\":\"1\",\"syncId\":\"00000000000000000000000000000001\"}",
+    "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+  }
+}

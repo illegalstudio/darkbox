@@ -12,6 +12,8 @@ test:
 
 check:
 	$(PYTHON) scripts/bundle_catalog.py --check
+	$(PYTHON) scripts/sync_schema.py --check
+	$(PYTHON) scripts/sync_vectors.py --check
 	cargo fmt --all -- --check
 	cargo clippy --all-targets --locked -- -D warnings
 	$(MAKE) test

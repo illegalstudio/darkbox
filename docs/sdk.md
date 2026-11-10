@@ -4,7 +4,7 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 
 ```toml
 [dependencies]
-darkbox = { version = "1.4.2", default-features = false }
+darkbox = { version = "1.5.0", default-features = false }
 ```
 
 Releases are available on [crates.io](https://crates.io/crates/darkbox).
@@ -177,7 +177,7 @@ publication. Signed copies need external public trust, without signing keys.
 SQLite changes transfer whole database files. Complete editions are still read
 for verification; unchanged ordinary media is streamed without private copies.
 
-`Package::open` also accepts quiescent directories for common versions 1.2.0, 1.3.0 and 1.4.0. It packs and freezes a
+`Package::open` also accepts quiescent directories for common versions 1.2.0, 1.3.0, 1.4.0 and 1.5.0. It packs and freezes a
 private ZIP, then retains its verified resource snapshot. That immutable handle
 has `path() = None`; edits require `save_as` to a new ZIP. It does not write staged
 edits back into a live directory. Applications own live SQL/media operations and
@@ -214,7 +214,7 @@ access to all resources. Staging limits and cleanup apply to every path.
 
 `DirectoryLibrary` owns the exclusive interoperable sibling lock for a whole
 working session. `initialize(path, manifest, profile, limits)` creates absent
-storage directly with the canonical bundle and declared folders. Supply a 1.3.0 or 1.4.0
+storage directly with the canonical bundle and declared folders. Supply a 1.3.0, 1.4.0 or 1.5.0
 manifest with a stable `packageId`, then create its databases and resources while
 holding the returned handle. Initialization alone is not snapshot validation.
 `open(path)` also opens interrupted working storage so the owning application can
@@ -253,7 +253,7 @@ it never materializes an entire target ZIP or stages ordinary media.
 `TrustedDigests::sha256(path, size)` can provide a cached hash for resources whose
 unchanged bytes the application independently guarantees. Set
 `VerificationOptions::trusted_digests` explicitly. Return `None` for full reads.
-Common 1.3.0 and 1.4.0 directories support this optimization. Metadata, canonical documentation,
+Common 1.3.0, 1.4.0 and 1.5.0 directories support this optimization. Metadata, canonical documentation,
 profile text, databases and protected or callback-staged resources remain fully
 read. A small signature prefix is still checked for uninventoried databases.
 Caches may never come from untrusted manifests or timestamp comparisons alone.
@@ -303,5 +303,22 @@ remain hash-checked. A violated retention contract fails without publishing.
 The timeout covers capture and streaming, including time between API calls.
 Capture guards release their private snapshots on drop. Existing one-call APIs
 retain their whole-call coordination contract for common 1.3.0; the new split
-contract requires common 1.4.0. Protected live metadata rewriting retains its
+contract requires common 1.4.0 or 1.5.0. Protected live metadata rewriting retains its
 existing capability restriction.
+
+## Offline causal synchronization (1.5.0)
+
+The `darkbox::sync` module supplies immutable domain/profile registration, exact
+causal history, conflict-preserving registers and sets, ordered placements, private
+object storage, durable transactional queues, exchange scans, full checkpoints and
+bootstrap. Applications implement the pinned `SyncProjection` adapter and commit
+synchronized edits through `SyncSession`. See [the complete integration guide](sync.md)
+and [runnable example](../examples/sync_notes.rs).
+
+`VerificationOptions::default` registers `SyncVerifier`. Generic sealed-checkpoint
+verification checks causal replay, logical state and every historical resource
+digest, with application materialization explicitly unchecked without a profile
+adapter. Working sync metadata returns NotQuiescent to ordinary readers; use
+`SnapshotBuilder` for complete portable editions. Protocol 1.0.0 uses trusted-folder
+plaintext, fixed profiles and retained history without automatic deletion. It
+refuses protected libraries without downgrading their protection.

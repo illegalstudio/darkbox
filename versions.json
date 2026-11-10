@@ -24,6 +24,11 @@
       "version": "1.4.0",
       "released": true,
       "rules": "v1"
+    },
+    {
+      "version": "1.5.0",
+      "released": false,
+      "rules": "v1"
     }
   ]
 }

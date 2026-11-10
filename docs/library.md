@@ -112,7 +112,16 @@ See [live directory storage](sdk.md#live-directory-storage-130) for the 1.3.0
 `DirectoryLibrary` lifecycle, hot backup, direct deltas and `TrustedDigests`
 policy. Ordinary verification remains a full byte pass.
 
-For common 1.4.0, [short capture barriers](sdk.md#short-capture-barriers-140)
+For common 1.4.0 or 1.5.0, [short capture barriers](sdk.md#short-capture-barriers-140)
 use owned `HotCapture` handles to stream retained snapshots on a worker while
 application writes resume. The [SDK dependency and feature guidance](sdk.md)
 shows the published crate and the explicit `exact-numbers` precision option.
+
+## Synchronization extension
+
+Common 1.5.0 includes the official sync 1.0.0 reference, schema and independent
+replay vectors. The default extension registry recognizes `SyncVerifier`; ordinary
+writers preserve required extension presence and refuse checkpoint mutation.
+Applications use the [sync SDK](sync.md) to create fresh complete checkpoints,
+coordinate atomic projection/outbox commits and bootstrap local libraries.
+Generic replay checks do not certify application semantics.

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.4.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.4.0"></a>
+  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.5.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.5.0"></a>
   <a href="schema/manifest.schema.json"><img src="https://img.shields.io/static/v1?label=JSON%20Schema&amp;message=2020-12&amp;color=303A46&amp;style=flat-square" alt="JSON Schema 2020-12"></a>
 </p>
 
@@ -48,9 +48,10 @@ Preserving data also means preserving how to decode it. Every archive carries th
 - [Rust CLI: installation, commands and reports](docs/cli.md)
 - [Rust SDK: reading, editing, SQLite, protection and atomic saving](docs/sdk.md)
 - [Low-level library: verification, extension registration and progressive creation](docs/library.md)
+- [Offline causal synchronization](docs/sync.md)
 - [Building and publishing releases](docs/releases.md)
 - [Specification](docs/specification.md)
-- [Canonical Darkbox 1.4.0 README](archive/1.4.0/README.md), copied byte-for-byte to the archive root as `README.md`
+- [Canonical Darkbox 1.5.0 README](archive/1.5.0/README.md), copied byte-for-byte to the archive root as `README.md`
 - [Selective protection extension 1.0.0](archive/1.1.0/docs/darkbox/protection/1.0.0.md), with its schema and interoperable test vectors
 - [Original SQLite file-format reference](archive/1.0.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.0.0/docs/sqlite/SOURCE.md)
 - [Manifest JSON Schema](schema/manifest.schema.json), using JSON Schema Draft 2020-12
@@ -95,6 +96,14 @@ Software 1.4.2 creates new ZIP exports without persistent sibling lock files.
 Existing ZIP replacements and live directory libraries retain writer coordination;
 see [SDK publication and locks](docs/sdk.md#read-edit-and-save).
 
+Darkbox 1.5.0 adds the required-when-present synchronization extension 1.0.0.
+Applications keep local live libraries and exchange immutable causal transactions,
+resources and complete checkpoints through a separate cloud folder. Concurrent
+field alternatives, set changes, deletions and ordering have explicit merge rules.
+The SDK supplies transactional queues, replay, scanning and bootstrap with
+application-owned projection adapters. See [synchronization](docs/sync.md) for
+integration, plaintext security mode and retention limits.
+
 ## Install
 
 ### Rust SDK (crates.io)
@@ -103,7 +112,7 @@ Add the published [darkbox crate](https://crates.io/crates/darkbox) to your proj
 
 ```toml
 [dependencies]
-darkbox = { version = "1.4.2", default-features = false }
+darkbox = { version = "1.5.0", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable
@@ -204,7 +213,7 @@ example.project
 
 Darkbox fixes its root metadata names and canonical bundle paths. Other database and folder paths are declared in the manifest. Required `application.profilePath` locates the included application data-format documentation; `docs/profile.md` is a recommended path. Attachments may remain database BLOBs or become separate files, as defined by a profile.
 
-The specification version, application data-format version and optional creator-software version are independent. The current specification is identified by `darkbox.version = "1.4.0"`. Application profiles define their own data-format versions.
+The specification version, application data-format version and optional creator-software version are independent. The current specification is identified by `darkbox.version = "1.5.0"`. Application profiles define their own data-format versions.
 
 ## License
 

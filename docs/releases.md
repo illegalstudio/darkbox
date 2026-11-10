@@ -126,3 +126,10 @@ If the Cargo toolchain changes the package bytes on retry, investigate the check
 difference instead of bypassing it. A failed crates.io upload prevents GitHub
 publication. Registry versions themselves may become public before a later GitHub
 release failure, which can be recovered independently using the same tag.
+
+Sync protocol references are independently versioned under the new common 1.5.0
+bundle. Before publishing changed unpublished references, reproduce their schema
+and independent vectors with `python3 scripts/sync_schema.py --check` and
+`python3 scripts/sync_vectors.py --check`, then check the canonical catalogs.
+The generators refuse to rewrite a released bundle. Real cloud-client deployment
+qualification remains distinct from deterministic replay and local fault tests.

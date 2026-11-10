@@ -53,3 +53,11 @@ cargo run --example streaming -- example.project replacement
 ```
 
 The second command publishes a complete new edition at the same destination, removing `assets/private.bin` and adding the already encrypted `assets/new.bin`. Both editions follow the [streaming-notes profile](profiles/streaming-notes.md). The example uses publicly known test keys and deterministic ciphertext; real applications supply secure key management and coordinated nonce allocation.
+
+## Complete Rust synchronization example
+
+`cargo run --example sync_notes -- /absolute/new-demo-directory` runs the fictional
+notes profile through two offline local edits, immutable exchange, retained field
+conflicts and a third-library bootstrap from a complete checkpoint. The executable
+and documented adapter are `sync_notes.rs` and `support/sync_notes.rs`. See the
+[SDK sync guide](../docs/sync.md) for integration and security/retention boundaries.

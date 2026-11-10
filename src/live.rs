@@ -137,6 +137,18 @@ pub struct DirectoryLibrary {
     lock: Arc<DirectoryLock>,
 }
 impl DirectoryLibrary {
+    pub(crate) fn adopt_prepared(candidate: &Path, destination: &Path) -> Result<Self, Error> {
+        let root = crate::transfer::output_path(destination, &[])?;
+        let guard = lock(&root, true)?;
+        fs::create_dir(&root).map_err(crate::io_failure)?;
+        if let Err(error) = fs::rename(candidate, &root) {
+            let _ = fs::remove_dir(&root);
+            return Err(crate::io_failure(error));
+        }
+        sync_directory(root.parent().unwrap())?;
+        Ok(Self { root, lock: guard })
+    }
+
     /// Open working storage, including interrupted state, without modifying data.
     /// This grants coordination, not a conformance certificate.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, Error> {
@@ -319,7 +331,10 @@ impl DirectoryLibrary {
         databases: &BTreeMap<String, &crate::rusqlite::Connection>,
         limits: Limits,
     ) -> Result<HotCapture, Error> {
-        if manifest["darkbox"]["version"] != "1.4.0" {
+        if !matches!(
+            manifest["darkbox"]["version"].as_str(),
+            Some("1.4.0" | "1.5.0")
+        ) {
             return Err(Error::new(
                 Status::Unsupported,
                 "directory.capture_version",
@@ -646,7 +661,7 @@ struct Prepared {
 fn require_live(manifest: &Value) -> Result<(), Error> {
     if !matches!(
         manifest["darkbox"]["version"].as_str(),
-        Some("1.3.0" | "1.4.0")
+        Some("1.3.0" | "1.4.0" | "1.5.0")
     ) || !manifest["packageId"].is_string()
     {
         return Err(Error::new(
