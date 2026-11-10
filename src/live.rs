@@ -338,7 +338,7 @@ impl DirectoryLibrary {
             return Err(Error::new(
                 Status::Unsupported,
                 "directory.capture_version",
-                "Split-barrier capture requires common 1.4.0",
+                "Split-barrier capture requires common 1.4.0 or 1.5.0",
             ));
         }
         self.capture(manifest, databases, &limits, true)

@@ -310,7 +310,7 @@ remains a complete byte pass. Unsigned hashes provide no authenticity.
 A delta is a separate ZIP transfer envelope, not a conformant standalone project.
 It applies one exact complete base edition to produce one exact complete target
 edition. Both editions MUST conform to an explicitly supported delta-capable common
-version (1.2.0, 1.3.0 or 1.5.0) with the same
+version (1.2.0, 1.3.0, 1.4.0 or 1.5.0) with the same
 `packageId`. Delta envelope version `1.0.0` is independent of software and common
 specification versions. A delta MUST NOT remove or change the version of a
 required extension present in its base. Application migrations that produce the

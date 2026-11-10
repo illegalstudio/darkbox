@@ -1,8 +1,8 @@
-# Darkbox 1.4.0 library representations and transfers
+# Darkbox 1.5.0 library representations and transfers
 
 ## 13. Quiescent directory representation
 
-A Darkbox 1.4.0 package MAY be a directory containing exactly the same files,
+A Darkbox 1.5.0 package MAY be a directory containing exactly the same files,
 relative paths and canonical bytes as its ZIP representation. The root contains
 manifest.json and README.md, without an enclosing version directory. All folder,
 path, inventory, profile, SQLite, extension and protection rules apply. ZIP header,
@@ -69,7 +69,7 @@ remains a complete byte pass. Unsigned hashes provide no authenticity.
 A delta is a separate ZIP transfer envelope, not a conformant standalone project.
 It applies one exact complete base edition to produce one exact complete target
 edition. Both editions MUST conform to an explicitly supported delta-capable common
-version (1.2.0, 1.3.0 or 1.4.0) with the same
+version (1.2.0, 1.3.0, 1.4.0 or 1.5.0) with the same
 `packageId`. Delta envelope version `1.0.0` is independent of software and common
 specification versions. A delta MUST NOT remove or change the version of a
 required extension present in its base. Application migrations that produce the
@@ -154,7 +154,7 @@ sizes and deadlines. A limit increase never establishes conformance by itself.
 
 ## 17. Coordinated live directory storage
 
-A 1.4.0 directory MAY serve as live application working storage. Its databases
+A 1.5.0 directory MAY serve as live application working storage. Its databases
 MAY use WAL while active. Working state is not a conforming snapshot: ordinary
 readers MUST refuse it until the application has recovered and sealed it.
 Published 1.0.0, 1.1.0 and 1.2.0 references remain unchanged.
