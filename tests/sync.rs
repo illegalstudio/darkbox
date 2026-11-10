@@ -659,7 +659,7 @@ fn scanner_waits_for_complete_bytes_and_distinguishes_duplicates_from_forks() {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let bytes = canonical(&segment).unwrap();
     fs::create_dir_all(exchange.path().join("replicas/unrelated/a/b/c/d/e/f/g")).unwrap();
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     {
         use std::os::unix::ffi::OsStringExt;
         fs::write(
