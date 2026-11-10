@@ -571,7 +571,14 @@ impl Exchange {
         let mut files = Vec::new();
         let replicas = safe_path(&self.root, "replicas", false)?;
         if replicas.exists() {
-            collect(&self.root, &replicas, &mut files, &self.limits, end)?;
+            collect(
+                &self.root,
+                &replicas,
+                &mut files,
+                &mut result.diagnostics,
+                &self.limits,
+                end,
+            )?;
         }
         files.sort();
         let mut segments = Vec::new();
@@ -766,6 +773,7 @@ fn collect(
     root: &Path,
     directory: &Path,
     files: &mut Vec<String>,
+    ignored: &mut Vec<ScanDiagnostic>,
     limits: &SyncLimits,
     end: Instant,
 ) -> Result<()> {
@@ -781,14 +789,31 @@ fn collect(
             let entry = entry.map_err(crate::io_failure)?;
             let kind = entry.file_type().map_err(crate::io_failure)?;
             let path = entry.path();
-            let Some(relative) = path.strip_prefix(root).ok().and_then(|p| p.to_str()) else {
-                return Err(invalid("Non-UTF-8 sync path"));
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| invalid("Sync path escaped its root"))?;
+            let Some(relative) = relative.to_str() else {
+                ignored.push(diag(
+                    &relative.to_string_lossy(),
+                    "sync.ignored",
+                    "Non-UTF-8 names cannot be canonical protocol paths",
+                ));
+                continue;
             };
             if kind.is_dir() {
-                if relative.split('/').count() > 5 {
-                    return Err(super::limit("Sync folder depth"));
+                let parts: Vec<_> = relative.split('/').collect();
+                let canonical = match parts.as_slice() {
+                    ["replicas", replica] => hex(replica, 32),
+                    ["replicas", replica, "segments" | "snapshots" | "receipts"] => {
+                        hex(replica, 32)
+                    }
+                    _ => false,
+                };
+                if canonical {
+                    stack.push(path);
+                } else {
+                    ignored.push(diag(relative, "sync.ignored", "Unknown protocol subtree"));
                 }
-                stack.push(path);
             } else {
                 files.push(relative.into());
             }

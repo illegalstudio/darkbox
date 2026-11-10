@@ -658,6 +658,18 @@ fn scanner_waits_for_complete_bytes_and_distinguishes_duplicates_from_forks() {
     let path = exchange.path().join(segment.relative_path().unwrap());
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let bytes = canonical(&segment).unwrap();
+    fs::create_dir_all(exchange.path().join("replicas/unrelated/a/b/c/d/e/f/g")).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        fs::write(
+            path.parent()
+                .unwrap()
+                .join(std::ffi::OsString::from_vec(vec![0xff])),
+            b"foreign metadata",
+        )
+        .unwrap();
+    }
     fs::write(&path, &bytes[..bytes.len() / 2]).unwrap();
     assert_eq!(
         exchange.publish_segment(&segment).unwrap_err().code,
