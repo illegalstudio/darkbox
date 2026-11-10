@@ -187,6 +187,7 @@ pub fn attach_working(
         super::exchange::read_regular(root, "manifest.json", limits.max_metadata_bytes as usize)?;
     let mut manifest = crate::json::parse(&original)?;
     domain.check_manifest(&manifest)?;
+    require_working_writer(&manifest)?;
     if manifest["extensions"]
         .get(NAMESPACE)
         .is_some_and(|existing| existing != &working_extension(domain))
@@ -319,6 +320,7 @@ impl<'a> SyncSession<'a> {
             limits.io.max_metadata_bytes as usize,
         )?)?;
         domain.check_manifest(&manifest)?;
+        require_working_writer(&manifest)?;
         if manifest["extensions"][NAMESPACE] != working_extension(&domain) {
             return Err(invalid("Working sync metadata is absent or inconsistent"));
         }

@@ -794,3 +794,19 @@ impl Domain {
         Ok(())
     }
 }
+
+pub(crate) fn require_working_writer(manifest: &Value) -> Result<()> {
+    if manifest["extensions"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .any(|(namespace, descriptor)| {
+            namespace != super::NAMESPACE && descriptor["required"] == true
+        })
+    {
+        return Err(unsupported(
+            "Working sync mutation requires writer support for every required extension; additional required namespaces are not supported by this adapter",
+        ));
+    }
+    Ok(())
+}

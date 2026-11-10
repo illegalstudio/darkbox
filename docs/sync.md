@@ -119,7 +119,11 @@ projection. Existing local libraries merge checkpoint history through
 For a new compatible common 1.5.0 working library, `attach_working` installs the
 domain's exact metadata while the application owns its directory guard and write
 barrier. It refuses protected libraries and inconsistent existing sync metadata.
-It does not translate existing rows into sync operations.
+It does not translate existing rows into sync operations. The built-in working
+session, attachment and bootstrap adapters support sync as the only required
+extension; they refuse additional required namespaces without modifying the
+source. Custom required extensions need an integration that owns all their writer
+capabilities. Generic checkpoint reading can still use registered verifiers.
 
 Open the authoritative database with persistent journaling and durable commits:
 

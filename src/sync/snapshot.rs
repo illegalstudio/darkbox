@@ -700,6 +700,7 @@ impl SyncSnapshot {
         objects: &ObjectStore,
         adapter: &dyn SyncProjection,
     ) -> Result<crate::DirectoryLibrary> {
+        require_working_writer(self.package.manifest())?;
         self.verify_projection(adapter)?;
         self.import_objects(objects)?;
         let domain = self.history.domain();

@@ -1173,3 +1173,47 @@ fn future_required_sync_version_is_unsupported_instead_of_corrupt() {
     writer.finish().unwrap();
     assert_eq!(darkbox::verify(output).status, Status::Unsupported);
 }
+
+#[test]
+fn working_mutators_refuse_unowned_required_extensions_without_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let initial = history("exact-values");
+    let (mut library, objects) = new_library(root.path(), "required", &initial);
+    let mut connection = db(&library);
+    let path = library.path().join("manifest.json");
+    let mut metadata: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    metadata["extensions"]["org.example.required"] =
+        json!({"version":"1.0.0","required":true,"data":{"preserve":"exact"}});
+    let original = serde_json::to_vec(&metadata).unwrap();
+    fs::write(&path, &original).unwrap();
+    assert_eq!(
+        attach_working(&library, &domain(), &limits().io)
+            .unwrap_err()
+            .status,
+        Status::Unsupported
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert!(
+        SyncSession::open(
+            &mut library,
+            &mut connection,
+            domain(),
+            objects,
+            SessionOptions::new("4".repeat(32), "unsupported extension"),
+            &Notes
+        )
+        .is_err()
+    );
+    let incarnations: i64 = connection
+        .query_row(
+            "SELECT count(*) FROM _darkbox_sync_meta WHERE key LIKE 'replica:%'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(incarnations, 0);
+    Notes
+        .verify(&connection, &domain(), &initial.state())
+        .unwrap();
+    assert_eq!(fs::read(path).unwrap(), original);
+}
