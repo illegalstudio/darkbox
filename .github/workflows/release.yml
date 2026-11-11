@@ -118,11 +118,25 @@ jobs:
         timeout-minutes: 5
         run: |
           if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            printf '%s\tpriority:%s\n' \
-              'https://azure.archive.ubuntu.com/ubuntu/' 1 \
-              'https://archive.ubuntu.com/ubuntu/' 2 \
-              'https://security.ubuntu.com/ubuntu/' 3 \
-              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+            darkbox_apt_mirrors=()
+            darkbox_mirror_priority=1
+            for darkbox_mirror in \
+              azure.archive.ubuntu.com \
+              archive.ubuntu.com \
+              security.ubuntu.com \
+              mirrors.edge.kernel.org; do
+              if timeout 5s getent ahosts "$darkbox_mirror" >/dev/null; then
+                darkbox_apt_mirrors+=("https://${darkbox_mirror}/ubuntu/"$'\t'"priority:${darkbox_mirror_priority}")
+              else
+                echo "::warning::Skipping Ubuntu mirror with unavailable DNS: $darkbox_mirror"
+              fi
+              darkbox_mirror_priority=$((darkbox_mirror_priority + 1))
+            done
+            if [[ ${#darkbox_apt_mirrors[@]} -eq 0 ]]; then
+              echo '::error::No Ubuntu mirror has working DNS'
+              exit 1
+            fi
+            printf '%s\n' "${darkbox_apt_mirrors[@]}" | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
           fi
           darkbox_apt_options=(
             -o Acquire::Retries=2
