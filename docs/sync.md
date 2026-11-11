@@ -137,7 +137,7 @@ let session = repository.open_session(
 )?;
 ```
 
-The repository persists a generation high-water witness in the journal. The main database must be exactly the domain's declared database inside that
+The repository persists the newest observed generation as a high-water witness in the journal. Returning sessions reopen their locally pinned domain, even when its cloud generation has expired, so private recovery remains available. Their old-generation exchanges still refuse publication. Open the local session before using a freshly opened repository handle for maintenance; `open` alone has no access to an existing local journal. The main database must be exactly the domain's declared database inside that
 working library. `SyncSession` borrows the library guard exclusively. It creates
 a fresh replica incarnation on every opening, including after crash, backup
 restore or copied installation. A persistent device ID/label is display metadata,
@@ -313,7 +313,7 @@ Use the repository's `open_session` for local durable high-water tracking. On a 
 
 The complete private recovery `.darkbox` package includes the old seed/history, objects and deterministic projection. `extensions/studio.illegal.darkbox.sync/recovery/journal.json` preserves exact outgoing and incoming transaction records and identifies missing pending media. Available pending-only media is included as well. `RecoveryJournal` exposes the source revision and captured frontier. Application-local columns are preserved by the adapter's `copy_local(source, destination_transaction, domain)` hook, in both the recovery archive and fresh local library. The default refuses this operation when the mapping declares local columns and the adapter has no implementation.
 
-`prepare_rebase` returns `PreparedRebase` with a guarded fresh library, its generation, the source revision and any recovery path. Under the application's write barrier, call `check_prepared_rebase` and atomically update the application's own active-library configuration before closing the old session. The source working library and object store remain intact until the application completes adoption and applies its local cleanup/recovery retention policy. The SDK cannot change an application's external configuration pointer. Incoming pending changes invalidate the preparation just like local edits.
+`prepare_rebase` returns `PreparedRebase` with a guarded fresh library, its generation, the source revision and any recovery path. Under the application's write barrier, call `check_prepared_rebase(&session, &connection, &prepared, &adapter)` to durably recopy the latest local-only columns and recheck the source revision and generation, then atomically update the application's own active-library configuration before closing the old session. The source working library and object store remain intact until the application completes adoption and applies its local cleanup/recovery retention policy. The SDK cannot change an application's external configuration pointer. Incoming pending changes invalidate the preparation just like local edits.
 
 No old operation is automatically converted into a new-generation write. The application can open the recovery package for comparison and offer selective import as ordinary current-generation operations. Stable retained record IDs let a selected value be applied to an existing record. A recovered deleted or previously unknown record requires the profile's new-record/import flow. An old title therefore cannot silently replace a newer accepted title.
 

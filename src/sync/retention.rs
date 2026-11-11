@@ -563,6 +563,25 @@ impl SyncRepository {
             checkpoint,
         };
         generation.validate(self)?;
+        // Recheck after slow package publication and immediately before the control record.
+        if let Some(parent) = parent {
+            if replaces.is_empty() {
+                self.check_generation(&parent.id()?)?;
+            } else {
+                let expected: BTreeSet<_> = std::iter::once(parent)
+                    .chain(replaces.iter())
+                    .map(Generation::id)
+                    .collect::<Result<_>>()?;
+                let observed: BTreeSet<_> = self
+                    .generations()?
+                    .iter()
+                    .map(Generation::id)
+                    .collect::<Result<_>>()?;
+                if expected != observed {
+                    return Err(generation_conflict());
+                }
+            }
+        }
         // The control record is published last, after the entire independently usable package.
         super::exchange::publish_bytes(
             &self.root,
@@ -721,6 +740,7 @@ pub struct PreparedRebase {
     pub generation: Generation,
     pub source_revision: Counter,
     pub recovery: Option<PathBuf>,
+    domain: Domain,
 }
 impl SyncRepository {
     /// Build a fresh local library. Existing source paths remain available until the
@@ -840,6 +860,7 @@ impl SyncRepository {
             generation,
             source_revision: revision,
             recovery,
+            domain: checkpoint.history().domain().clone(),
         })
     }
     pub fn check_prepared_rebase(
@@ -847,7 +868,41 @@ impl SyncRepository {
         session: &SyncSession<'_>,
         connection: &rusqlite::Connection,
         prepared: &PreparedRebase,
+        adapter: &dyn SyncProjection,
     ) -> Result<()> {
+        session.check_rebase_revision(connection, prepared.source_revision)?;
+        self.check_generation(&prepared.generation.id()?)?;
+        let database = super::exchange::safe_path(
+            prepared.library.path(),
+            &prepared.domain.mapping().storage.database_path,
+            false,
+        )?;
+        let mut local = rusqlite::Connection::open_with_flags(
+            &database,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
+        )
+        .map_err(sql)?;
+        local
+            .execute_batch(
+                "PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;",
+            )
+            .map_err(sql)?;
+        let transaction = local
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        let history = super::journal::load_history(&transaction, &prepared.domain, &self.limits)?;
+        adapter.copy_local(connection, &transaction, &prepared.domain)?;
+        if transaction.is_autocommit() {
+            return Err(invalid("Local-column adapter ended its owning transaction"));
+        }
+        adapter.verify(&transaction, &prepared.domain, &history.state())?;
+        session.check_rebase_revision(connection, prepared.source_revision)?;
+        self.check_generation(&prepared.generation.id()?)?;
+        transaction.commit().map_err(sql)?;
+        local.close().map_err(|(_, error)| sql(error))?;
+        fs::File::open(database)
+            .and_then(|file| file.sync_all())
+            .map_err(crate::io_failure)?;
         session.check_rebase_revision(connection, prepared.source_revision)?;
         self.check_generation(&prepared.generation.id()?)
     }
@@ -1104,6 +1159,13 @@ impl SyncRepository {
         if session.domain().root_hash() != generation.checkpoint.root_sha256 {
             return Err(invalid("Session belongs to another generation"));
         }
+        self.record_generation(connection, generation)
+    }
+    fn record_generation(
+        &self,
+        connection: &rusqlite::Connection,
+        generation: &Generation,
+    ) -> Result<()> {
         let binding = RepositoryBinding {
             repository_sha256: self.hash.clone(),
             generation_sha256: generation.id()?,
@@ -1131,16 +1193,53 @@ impl SyncRepository {
         }
         self.observe_local_binding(connection)?;
         let generation = self.current()?;
-        let exchange = self.exchange(&generation)?;
+        let manifest = crate::json::parse(&super::exchange::read_regular(
+            library.path(),
+            "manifest.json",
+            self.limits.io.max_metadata_bytes as usize,
+        )?)?;
+        let profile_path = manifest["application"]["profilePath"]
+            .as_str()
+            .ok_or_else(|| invalid("Application profile path is absent"))?;
+        let root = super::exchange::read_regular(
+            library.path(),
+            &format!("{PREFIX}/root.json"),
+            MAX_SEGMENT_BYTES,
+        )?;
+        let descriptor: DomainRoot = decode(&root, MAX_SEGMENT_BYTES)?;
+        let mapping = super::exchange::read_regular(
+            library.path(),
+            &format!("{PREFIX}/mapping.json"),
+            MAX_SEGMENT_BYTES,
+        )?;
+        let profile =
+            super::exchange::read_regular(library.path(), profile_path, MAX_SEGMENT_BYTES)?;
+        let baseline = descriptor
+            .baseline
+            .as_ref()
+            .map(|_| {
+                super::exchange::read_regular(
+                    library.path(),
+                    &format!("{PREFIX}/base.json"),
+                    MAX_BASELINE_BYTES,
+                )
+            })
+            .transpose()?;
+        let domain =
+            Domain::from_parts_with_baseline(&root, &mapping, &profile, baseline.as_deref())?;
+        self.check_domain(&domain)?;
         let session = SyncSession::open(
             library,
             connection,
-            exchange.domain().clone(),
+            domain,
             objects,
             session_options,
             adapter,
         )?;
-        self.bind_session(&session, connection, &generation)?;
+        // A stale session needs its local domain for recovery, while this witness
+        // records the newest observed repository generation across restarts.
+        self.check_generation(&generation.id()?)?;
+        self.record_generation(connection, &generation)?;
         Ok(session)
     }
 }

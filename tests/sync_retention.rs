@@ -401,6 +401,39 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
             .generations
             .is_empty()
     );
+    // A late installation restarts after its cloud generation has already expired.
+    drop(old);
+    connection.close().unwrap();
+    let working_path = library.path().to_owned();
+    drop(library);
+    let restarted = SyncRepository::open(
+        repository.path(),
+        repository.root_hash(),
+        SyncLimits::default(),
+    )
+    .unwrap();
+    let mut library = DirectoryLibrary::open(&working_path).unwrap();
+    let mut connection = Connection::open(working_path.join("data/project.sqlite")).unwrap();
+    connection
+        .execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;")
+        .unwrap();
+    let old = restarted
+        .open_session(
+            &mut library,
+            &mut connection,
+            store(root.path(), "old-objects"),
+            SessionOptions::new("7".repeat(32), "restarted old peer"),
+            &Notes,
+        )
+        .unwrap();
+    assert_eq!(old.domain().root_hash(), original.domain().root_hash());
+    assert_eq!(old.queued_count(&connection).unwrap(), 1);
+    assert_eq!(
+        old.publish_pending(&connection, &old_exchange)
+            .unwrap_err()
+            .code,
+        "sync.generation_changed"
+    );
     let fresh_objects = store(root.path(), "fresh-objects");
     let destination = root.path().join("rebased-library");
     assert_eq!(
@@ -436,8 +469,14 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
             &options,
         )
         .unwrap();
+    connection
+        .execute(
+            "UPDATE items SET local_note='changed after preparation' WHERE id=?1",
+            [id.to_string()],
+        )
+        .unwrap();
     repository
-        .check_prepared_rebase(&old, &connection, &prepared)
+        .check_prepared_rebase(&old, &connection, &prepared, &Notes)
         .unwrap();
     assert_eq!(prepared.recovery, Some(recovery_path.clone()));
     let backup = SyncSnapshot::open(&recovery_path, SyncLimits::default(), &options).unwrap();
@@ -474,7 +513,7 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(note.as_deref(), Some("private installation note"));
+    assert_eq!(note.as_deref(), Some("changed after preparation"));
     let backup_note: Option<String> = backup
         .package()
         .database("data/project.sqlite")
@@ -510,7 +549,7 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
         .unwrap();
     assert_eq!(
         repository
-            .check_prepared_rebase(&old, &connection, &prepared)
+            .check_prepared_rebase(&old, &connection, &prepared, &Notes)
             .unwrap_err()
             .code,
         "sync.revision_changed"
@@ -529,10 +568,47 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
     .unwrap();
     assert_eq!(
         repository
-            .check_prepared_rebase(&old, &connection, &prepared)
+            .check_prepared_rebase(&old, &connection, &prepared, &Notes)
             .unwrap_err()
             .code,
         "sync.revision_changed"
+    );
+
+    // A second restart must retain the newer observation even if its cloud files disappear.
+    drop(old);
+    connection.close().unwrap();
+    drop(library);
+    fs::rename(
+        repository.path().join(third.relative_path().unwrap()),
+        root.path().join("temporarily-hidden-generation.json"),
+    )
+    .unwrap();
+    fs::rename(
+        repository.path().join("retention"),
+        root.path().join("hidden-proofs"),
+    )
+    .unwrap();
+    let restarted = SyncRepository::open(
+        repository.path(),
+        repository.root_hash(),
+        SyncLimits::default(),
+    )
+    .unwrap();
+    let mut library = DirectoryLibrary::open(&working_path).unwrap();
+    let mut connection = Connection::open(working_path.join("data/project.sqlite")).unwrap();
+    assert_eq!(
+        restarted
+            .open_session(
+                &mut library,
+                &mut connection,
+                store(root.path(), "old-objects"),
+                SessionOptions::new("7".repeat(32), "restarted during cloud gap"),
+                &Notes,
+            )
+            .err()
+            .unwrap()
+            .code,
+        "sync.pending_bytes"
     );
 }
 
@@ -545,6 +621,128 @@ fn copy_tree(source: &Path, destination: &Path) {
         } else {
             fs::copy(entry.path(), destination.join(entry.file_name())).unwrap();
         }
+    }
+}
+
+struct ArrivingGeneration<'a> {
+    archive: &'a Path,
+    repository: &'a Path,
+    generation: &'a Generation,
+}
+impl SyncProjection for ArrivingGeneration<'_> {
+    fn id(&self) -> &str {
+        Notes.id()
+    }
+    fn version(&self) -> &str {
+        Notes.version()
+    }
+    fn validate_mapping(
+        &self,
+        domain: &Domain,
+        connection: &Connection,
+    ) -> std::result::Result<(), darkbox::Error> {
+        Notes.validate_mapping(domain, connection)
+    }
+    fn initialize(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        domain: &Domain,
+    ) -> std::result::Result<(), darkbox::Error> {
+        Notes.initialize(transaction, domain)
+    }
+    fn project(
+        &self,
+        transaction: &rusqlite::Transaction<'_>,
+        domain: &Domain,
+        previous: &LogicalState,
+        next: &LogicalState,
+    ) -> std::result::Result<(), darkbox::Error> {
+        Notes.project(transaction, domain, previous, next)
+    }
+    fn verify(
+        &self,
+        connection: &Connection,
+        domain: &Domain,
+        state: &LogicalState,
+    ) -> std::result::Result<(), darkbox::Error> {
+        Notes.verify(connection, domain, state)?;
+        if self.archive.join("generations.json").exists() {
+            fs::write(
+                self.repository.join(self.generation.relative_path()?),
+                canonical(self.generation)?,
+            )
+            .unwrap();
+        }
+        Ok(())
+    }
+}
+
+#[test]
+fn resolution_rechecks_branches_after_slow_checkpoint_preparation() {
+    let root = tempfile::tempdir().unwrap();
+    let options = VerificationOptions::default();
+    let original = history("concurrent-values-and-moves");
+    let objects = store(root.path(), "objects");
+    let initial = snapshot(root.path(), "initial", &original, &objects);
+    let repository = SyncRepository::create(
+        root.path().join("cloud-a"),
+        original.domain(),
+        policy(),
+        SyncLimits::default(),
+    )
+    .unwrap();
+    repository.publish_initial(&initial, &Notes, 1).unwrap();
+    copy_tree(repository.path(), &root.path().join("cloud-b"));
+    let other = SyncRepository::open(
+        root.path().join("cloud-b"),
+        repository.root_hash(),
+        SyncLimits::default(),
+    )
+    .unwrap();
+    let a = repository
+        .compact(&initial, &objects, &Notes, 2, &options)
+        .unwrap();
+    let b = other
+        .compact(&initial, &objects, &Notes, 3, &options)
+        .unwrap();
+    copy_tree(other.path(), repository.path());
+    let b_snapshot = other.checkpoint(&b, &options).unwrap();
+    let arriving = other
+        .compact(&b_snapshot, &objects, &Notes, 4, &options)
+        .unwrap();
+    let selected = repository.checkpoint(&a, &options).unwrap();
+    let archive = root.path().join("branch-recovery");
+    let adapter = ArrivingGeneration {
+        archive: &archive,
+        repository: repository.path(),
+        generation: &arriving,
+    };
+    assert_eq!(
+        repository
+            .resolve_with_checkpoint(
+                &a,
+                &selected,
+                ResolutionTarget {
+                    objects: &objects,
+                    recovery_directory: &archive,
+                    now: 5,
+                },
+                &adapter,
+                &options,
+            )
+            .unwrap_err()
+            .code,
+        "sync.generation_conflict"
+    );
+    assert_eq!(repository.generations().unwrap().len(), 4);
+    for generation in [a, b] {
+        let recovered = SyncSnapshot::open(
+            archive.join(format!("{}.darkbox", generation.id().unwrap())),
+            SyncLimits::default(),
+            &options,
+        )
+        .unwrap();
+        recovered.verify_projection(&Notes).unwrap();
     }
 }
 #[test]

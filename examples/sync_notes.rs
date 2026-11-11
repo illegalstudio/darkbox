@@ -159,7 +159,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &Notes,
         &options,
     )?;
-    repository.check_prepared_rebase(&sb, &cb, &prepared)?;
+    repository.check_prepared_rebase(&sb, &cb, &prepared, &Notes)?;
     let full = repository.checkpoint(&next, &options)?;
     let objects_c = ObjectStore::open(root.join("objects-c"), limits)?;
     let c = full.bootstrap(root.join("library-c"), &objects_c, &Notes)?;
