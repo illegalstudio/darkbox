@@ -115,11 +115,13 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Install Arch package inspection tools
+        timeout-minutes: 5
         run: |
           if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-            printf '%s\n' \
-              'https://archive.ubuntu.com/ubuntu/' \
-              'https://security.ubuntu.com/ubuntu/' \
+            printf '%s\tpriority:%s\n' \
+              'https://azure.archive.ubuntu.com/ubuntu/' 1 \
+              'https://archive.ubuntu.com/ubuntu/' 2 \
+              'https://security.ubuntu.com/ubuntu/' 3 \
               | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
           fi
           darkbox_apt_options=(
@@ -127,7 +129,7 @@ jobs:
             -o Acquire::http::Timeout=15
             -o Acquire::https::Timeout=15
           )
-          sudo apt-get "${darkbox_apt_options[@]}" update
+          sudo apt-get "${darkbox_apt_options[@]}" --error-on=any update
           sudo apt-get "${darkbox_apt_options[@]}" install --no-install-recommends --yes libarchive-tools
       - name: Validate final packages and collect checksums
         env:
