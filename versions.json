@@ -27,7 +27,7 @@
     },
     {
       "version": "1.5.0",
-      "released": false,
+      "released": true,
       "rules": "v1"
     }
   ]
