@@ -262,3 +262,5 @@ even after SQLite connections close. Generic readers never recover that journal.
 The application exports a fresh sealed checkpoint through the SDK; normal exact-base
 deltas can transfer those complete editions but do not merge concurrent edits.
 See [synchronization integration and limits](sync.md).
+
+For compact synchronization checkpoints, verification checks the root-bound baseline, all subsequent transactions and complete retained resource closure. Pre-generation edits belong to separate recovery archives. Cloud generation scheduling, retention and local rebase are provided through the [SDK](sync.md#compaction-and-bounded-retention).

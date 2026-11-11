@@ -10,8 +10,25 @@ use std::{
 };
 
 pub(crate) fn directory(path: &Path) -> Result<PathBuf> {
-    if !path.exists() {
-        fs::create_dir_all(path).map_err(crate::io_failure)?;
+    let absolute = if path.is_absolute() {
+        path.to_owned()
+    } else {
+        std::env::current_dir()
+            .map_err(crate::io_failure)?
+            .join(path)
+    };
+    let mut missing = Vec::new();
+    let mut ancestor = absolute.as_path();
+    while !ancestor.exists() {
+        missing.push(ancestor.to_owned());
+        ancestor = ancestor
+            .parent()
+            .ok_or_else(|| invalid("Missing filesystem root"))?;
+    }
+    fs::create_dir_all(&absolute).map_err(crate::io_failure)?;
+    for created in missing.iter().rev() {
+        sync_dir(created)?;
+        sync_dir(created.parent().unwrap())?;
     }
     if !fs::symlink_metadata(path)
         .map_err(crate::io_failure)?
@@ -34,7 +51,7 @@ pub(crate) fn safe_path(root: &Path, relative: &str, create: bool) -> Result<Pat
     crate::paths::validate(relative)?;
     checked_path(root, relative, create)
 }
-fn checked_path(root: &Path, relative: &str, create: bool) -> Result<PathBuf> {
+pub(crate) fn checked_path(root: &Path, relative: &str, create: bool) -> Result<PathBuf> {
     if relative.is_empty()
         || relative.contains('\\')
         || relative.contains('\0')
@@ -133,7 +150,10 @@ pub(crate) fn publish_bytes(root: &Path, relative: &str, bytes: &[u8]) -> Result
         Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
             let existing = read_regular(root, relative, bytes.len());
             if existing.as_ref().is_ok_and(|actual| actual == bytes) {
-                Ok(())
+                File::open(&path)
+                    .and_then(|file| file.sync_all())
+                    .map_err(crate::io_failure)?;
+                sync_dir(path.parent().unwrap())
             } else if advertised(relative.rsplit('/').next().unwrap_or("")).is_some() {
                 Err(super::pending_bytes("Existing content-addressed publication is incomplete or mismatched; retry without replacing it").at(relative))
             } else {
@@ -142,6 +162,45 @@ pub(crate) fn publish_bytes(root: &Path, relative: &str, bytes: &[u8]) -> Result
         }
         Err(e) => Err(crate::io_failure(e.error)),
     }
+}
+
+pub(crate) fn read_expected(root: &Path, reference: &FileRef, maximum: usize) -> Result<Vec<u8>> {
+    let path = safe_path(root, &reference.path, false)?;
+    if let Err(error) = fs::symlink_metadata(&path) {
+        return Err(if error.kind() == std::io::ErrorKind::NotFound {
+            super::pending_bytes("Pinned domain resource has not arrived")
+        } else {
+            crate::io_failure(error)
+        });
+    }
+    let bytes = read_regular(root, &reference.path, maximum)?;
+    if reference.size.0 != bytes.len() as u64 || reference.sha256 != sha256(&bytes) {
+        return Err(
+            super::pending_bytes("Pinned domain resource is incomplete or mismatched")
+                .at(&reference.path),
+        );
+    }
+    Ok(bytes)
+}
+pub(crate) fn read_domain(root: &Path, bytes: &[u8]) -> Result<Domain> {
+    let descriptor: DomainRoot = decode(bytes, MAX_SEGMENT_BYTES)?;
+    if descriptor.mapping.path != "profile/mapping.json"
+        || descriptor.profile.path != "profile/profile.md"
+        || descriptor
+            .baseline
+            .as_ref()
+            .is_some_and(|reference| reference.path != "profile/base.json")
+    {
+        return Err(invalid("Pinned domain resource path differs"));
+    }
+    let mapping = read_expected(root, &descriptor.mapping, MAX_SEGMENT_BYTES)?;
+    let profile = read_expected(root, &descriptor.profile, MAX_SEGMENT_BYTES)?;
+    let baseline = descriptor
+        .baseline
+        .as_ref()
+        .map(|reference| read_expected(root, reference, MAX_BASELINE_BYTES))
+        .transpose()?;
+    Domain::from_parts_with_baseline(bytes, &mapping, &profile, baseline.as_deref())
 }
 
 /// A private local immutable object store. It must not be the exchange directory.
@@ -207,6 +266,10 @@ impl ObjectStore {
                         "Existing immutable object is damaged",
                     ));
                 }
+                File::open(&target)
+                    .and_then(|file| file.sync_all())
+                    .map_err(crate::io_failure)?;
+                sync_dir(target.parent().unwrap())?;
             }
             Err(e) => return Err(crate::io_failure(e.error)),
         }
@@ -470,17 +533,22 @@ pub struct Exchange {
     pub(crate) root: PathBuf,
     domain: Domain,
     limits: SyncLimits,
+    pub(crate) generation_guard: Option<(SyncRepository, String)>,
 }
 impl Exchange {
     pub fn create(path: impl AsRef<Path>, domain: Domain, limits: SyncLimits) -> Result<Self> {
         let root = directory(path.as_ref())?;
         publish_bytes(&root, "profile/profile.md", domain.profile())?;
         publish_bytes(&root, "profile/mapping.json", &canonical(domain.mapping())?)?;
+        if let Some(base) = domain.baseline() {
+            publish_bytes(&root, "profile/base.json", &canonical(base)?)?;
+        }
         publish_bytes(&root, "library.json", &canonical(domain.root())?)?;
         Ok(Self {
             root,
             domain,
             limits,
+            generation_guard: None,
         })
     }
     pub fn open(path: impl AsRef<Path>, pinned_root: &str, limits: SyncLimits) -> Result<Self> {
@@ -496,9 +564,7 @@ impl Exchange {
             decode::<DomainRoot>(&bytes, MAX_SEGMENT_BYTES).map_err(|_| {
                 super::pending_bytes("Selected exchange root is incomplete or noncanonical")
             })?;
-            let mapping = read_regular(&root, "profile/mapping.json", MAX_SEGMENT_BYTES)?;
-            let profile = read_regular(&root, "profile/profile.md", MAX_SEGMENT_BYTES)?;
-            Domain::from_parts(&bytes, &mapping, &profile).map_err(|_| {
+            read_domain(&root, &bytes).map_err(|_| {
                 super::pending_bytes("Selected root/profile bytes are incomplete or mismatched")
             })?;
             return Err(crate::Error::invalid(
@@ -506,13 +572,12 @@ impl Exchange {
                 "Selected exchange root differs from the pinned identity",
             ));
         }
-        let mapping = read_regular(&root, "profile/mapping.json", MAX_SEGMENT_BYTES)?;
-        let profile = read_regular(&root, "profile/profile.md", MAX_SEGMENT_BYTES)?;
-        let domain = Domain::from_parts(&bytes, &mapping, &profile)?;
+        let domain = read_domain(&root, &bytes)?;
         Ok(Self {
             root,
             domain,
             limits,
+            generation_guard: None,
         })
     }
     pub fn path(&self) -> &Path {
@@ -525,6 +590,9 @@ impl Exchange {
         self.check_root_with_evidence(&mut Vec::new())
     }
     fn check_root_with_evidence(&self, evidence: &mut Vec<Vec<u8>>) -> Result<()> {
+        if let Some((repository, generation)) = &self.generation_guard {
+            repository.check_generation(generation)?;
+        }
         let actual = read_regular(&self.root, "library.json", MAX_SEGMENT_BYTES)?;
         let pinned = canonical(self.domain.root())?;
         if actual != pinned {
@@ -533,7 +601,7 @@ impl Exchange {
             if parsed.sync_id == self.domain.root().sync_id {
                 let mapping = read_regular(&self.root, "profile/mapping.json", MAX_SEGMENT_BYTES)?;
                 let profile = read_regular(&self.root, "profile/profile.md", MAX_SEGMENT_BYTES)?;
-                Domain::from_parts(&actual, &mapping, &profile).map_err(|_| {
+                read_domain(&self.root, &actual).map_err(|_| {
                     super::pending_bytes(
                         "Changed root does not yet have complete matching profile resources",
                     )

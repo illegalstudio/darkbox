@@ -104,6 +104,65 @@ def sequence(state):
     return result
 
 
+def compact_state(state):
+    records = copy.deepcopy([record for record in state["records"] if not record["deletedBy"]])
+    node_index = {node["id"]: node for node in state["nodes"]}
+    needed = set()
+    def references(value):
+        if isinstance(value, dict):
+            if value.get("type") == "record": needed.add(value["id"])
+            for child in value.values(): references(child)
+        elif isinstance(value, list):
+            for child in value: references(child)
+    retained = set()
+    for record in records:
+        for field in record["sets"]:
+            values = {}
+            for add in sorted(field["adds"], key=lambda add: dot_key(add["dot"])):
+                if add["dot"] not in field["removed"]: values.setdefault(canonical(add["value"]), add)
+            field["adds"] = sorted(values.values(), key=lambda add: dot_key(add["dot"]))
+            field["removed"] = []
+        references(record["registers"])
+        references(record["sets"])
+        for field in record["positions"]:
+            for candidate in field["candidates"]:
+                if candidate.get("node"):
+                    retained.add(candidate["node"])
+                    owner = node_index[candidate["node"]]["owner"]
+                    if owner: needed.add(owner)
+    for record in state["records"]:
+        if record["deletedBy"] and record["id"] in needed:
+            records.append({"id": record["id"], "collection": record["collection"], "deletedBy": sorted(record["deletedBy"], key=dot_key)[:1], "registers": [], "sets": [], "positions": []})
+    groups = {}
+    for node in state["nodes"]:
+        group = (node["field"], node["sequence"], node["owner"] or "")
+        groups.setdefault(group, {}).setdefault(node["after"], []).append(node)
+    nodes = []
+    for children in groups.values():
+        ordered = []
+        def visit(anchor):
+            for node in sorted(children.get(anchor, []), key=lambda node: (int(node["lamport"]), dot_key(node["id"])), reverse=True):
+                if node["id"] in retained: ordered.append(node)
+                visit(node["id"])
+        visit(None)
+        previous = None
+        for node in ordered:
+            normalized = copy.deepcopy(node)
+            normalized["after"] = previous
+            nodes.append(normalized)
+            previous = node["id"]
+    priorities = set()
+    for record in records:
+        for field in record["registers"] + record["positions"]:
+            for candidate in field["candidates"]: priorities.add((int(candidate["lamport"]), dot_key(candidate["dot"])))
+    ranks = {priority: str(rank + 1) for rank, priority in enumerate(sorted(priorities))}
+    for record in records:
+        for field in record["registers"] + record["positions"]:
+            for candidate in field["candidates"]: candidate["lamport"] = ranks[(int(candidate["lamport"]), dot_key(candidate["dot"]))]
+    for node in nodes: node["lamport"] = ranks[(int(node["lamport"]), dot_key(node["id"]))]
+    return {"kind": "darkbox-sync-baseline", "protocolVersion": "1.0.0", "sourceRootSha256": state["rootSha256"], "sourceFrontier": state["frontier"], "records": sorted(records, key=lambda record: dot_key(record["id"])), "nodes": sorted(nodes, key=lambda node: dot_key(node["id"]))}
+
+
 def generate():
     app = {"profile": "org.example.sync-notes", "formatVersion": "1"}
     def field(name, kind, types): return {"name": name, "kind": kind, "columns": [name], "codec": "typed", "valueTypes": types}
@@ -124,12 +183,16 @@ columns asset, data and title contain the canonical selected typed value, or SQL
 NULL when absent. tags contains the canonical array of visible typed set values;
 position contains the canonical PositionField object, or SQL NULL when absent.
 The item_conflicts(id TEXT PRIMARY KEY, payload BLOB NOT NULL) table contains the
-canonical complete RecordState JSON for every record, including deleted records.
+canonical complete RecordState JSON for every record in the current generation,
+including retained deletion markers.
 Its BLOB bytes are UTF-8 JSON, not encrypted data. This retains competing values,
 set tags and deletion markers independently of the displayed items rows.
 local_note is installation-local and is retained on rebuild.
 A deterministic conflict view retains all concurrent candidates and hidden records;
-record deletion never erases history. There are no cross-record constraints.
+record deletion preserves history within its generation. A compact generation
+retains live records and unresolved alternatives, with referenced deleted targets
+as minimal stubs. Local rebase and recovery preserve local_note by stable id.
+There are no cross-record constraints.
 No value or file is executable. Resources are immutable byte objects selected by
 SHA-256 and size through the complete checkpoint object index. Missing keys are
 not applicable because this profile uses the trusted-folder plaintext sync mode.
@@ -180,7 +243,8 @@ protocol interpretation is in the included Darkbox synchronization reference.
     rejects.append({"name": "edit-known-deleted-id", "transactions": [g, a1, b1, a2, c1, b2, d1, later]})
     bad = copy.deepcopy(a1); bad["operations"][2]["after"] = event_dot(b1, 2)
     rejects.append({"name": "anchor-only-known-to-receiver", "transactions": [g, b1, bad]})
-    return {"extension": "studio.illegal.darkbox.sync", "version": "1.0.0", "generator": "Independent Python set-based materializer; no Rust output is used", "profile": profile, "mapping": mapping, "root": root, "rootSha256": digest(root), "objects": [{"sha256": blob["sha256"], "size": blob["size"], "hex": payload.hex()}], "vectors": vectors, "rejections": rejects, "canonicalExample": {"transaction": a1, "utf8": canonical(a1).decode(), "sha256": digest(a1)}}
+    compact_vectors = [{"name": vector["name"], "baseline": compact_state(vector["state"]), "baselineSha256": digest(compact_state(vector["state"]))} for vector in vectors]
+    return {"extension": "studio.illegal.darkbox.sync", "version": "1.0.0", "generator": "Independent Python set-based materializer; no Rust output is used", "profile": profile, "mapping": mapping, "root": root, "rootSha256": digest(root), "objects": [{"sha256": blob["sha256"], "size": blob["size"], "hex": payload.hex()}], "vectors": vectors, "compactVectors": compact_vectors, "rejections": rejects, "canonicalExample": {"transaction": a1, "utf8": canonical(a1).decode(), "sha256": digest(a1)}}
 
 
 def main():

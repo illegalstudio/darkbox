@@ -322,3 +322,5 @@ adapter. Working sync metadata returns NotQuiescent to ordinary readers; use
 `SnapshotBuilder` for complete portable editions. Protocol 1.0.0 uses trusted-folder
 plaintext, fixed profiles and retained history without automatic deletion. It
 refuses protected libraries without downgrading their protection.
+
+Repository synchronization supports compact checkpoint generations, bounded retention without device membership, and private stale-base recovery. Use `SyncRepository::open_session` and its guarded exchanges, and preserve local columns with `SyncProjection::copy_local`. See [the synchronization guide](sync.md#compaction-and-bounded-retention).

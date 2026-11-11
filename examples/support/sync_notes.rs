@@ -81,6 +81,31 @@ impl SyncProjection for Notes {
     fn version(&self) -> &str {
         "1"
     }
+    fn copy_local(
+        &self,
+        source: &Connection,
+        destination: &Transaction<'_>,
+        _: &Domain,
+    ) -> Result<(), Error> {
+        let mut query = source
+            .prepare("SELECT id,local_note FROM items")
+            .map_err(failure)?;
+        let rows = query
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?))
+            })
+            .map_err(failure)?;
+        for row in rows {
+            let (id, note) = row.map_err(failure)?;
+            destination
+                .execute(
+                    "UPDATE items SET local_note=?1 WHERE id=?2",
+                    params![note, id],
+                )
+                .map_err(failure)?;
+        }
+        Ok(())
+    }
     fn initialize(&self, transaction: &Transaction<'_>, _: &Domain) -> Result<(), Error> {
         transaction.execute_batch("CREATE TABLE items(id TEXT PRIMARY KEY,asset TEXT,data TEXT,position TEXT,tags TEXT,title TEXT,local_note TEXT);CREATE TABLE item_conflicts(id TEXT PRIMARY KEY,payload BLOB NOT NULL);").map_err(failure)
     }

@@ -1,4 +1,4 @@
-use super::{Result, VERSION, invalid, unsupported};
+use super::{Baseline, MAX_BASELINE_BYTES, Result, VERSION, invalid, unsupported};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -508,6 +508,8 @@ pub struct DomainRoot {
     pub application: Application,
     pub profile: FileRef,
     pub mapping: FileRef,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline: Option<FileRef>,
     pub encoding: String,
     pub merge: String,
     pub security: String,
@@ -686,6 +688,7 @@ pub struct Domain {
     mapping: SyncMapping,
     profile: Vec<u8>,
     hash: String,
+    baseline: Option<Baseline>,
 }
 impl Domain {
     pub fn generate(mapping: SyncMapping, profile: Vec<u8>) -> Result<Self> {
@@ -716,6 +719,7 @@ impl Domain {
                 size: Counter(mapping_bytes.len() as u64),
                 sha256: sha256(&mapping_bytes),
             },
+            baseline: None,
             encoding: "jcs-strings-v1".into(),
             merge: "causal-records-v1".into(),
             security: "trusted-folder-plaintext".into(),
@@ -723,11 +727,24 @@ impl Domain {
         Self::from_parts(&canonical(&root)?, &mapping_bytes, &profile)
     }
     pub fn from_parts(root_bytes: &[u8], mapping_bytes: &[u8], profile: &[u8]) -> Result<Self> {
+        Self::from_parts_with_baseline(root_bytes, mapping_bytes, profile, None)
+    }
+    pub fn from_parts_with_baseline(
+        root_bytes: &[u8],
+        mapping_bytes: &[u8],
+        profile: &[u8],
+        baseline: Option<&[u8]>,
+    ) -> Result<Self> {
         let root: DomainRoot = decode(root_bytes, MAX_SEGMENT_BYTES)?;
         version(&root.kind, &root.protocol_version, "darkbox-sync-domain")?;
         if root.common_version != "1.5.0"
             || root.encoding != "jcs-strings-v1"
-            || root.merge != "causal-records-v1"
+            || root.merge
+                != if root.baseline.is_some() {
+                    "causal-records-seed-v1"
+                } else {
+                    "causal-records-v1"
+                }
             || root.security != "trusted-folder-plaintext"
         {
             return Err(unsupported("Unsupported sync domain capability"));
@@ -752,12 +769,46 @@ impl Domain {
         if root.application != mapping.application {
             return Err(invalid("Profile identity differs"));
         }
+        let baseline = match (&root.baseline, baseline) {
+            (None, None) => None,
+            (Some(reference), Some(bytes))
+                if reference.path == "profile/base.json"
+                    && reference.size.0 == bytes.len() as u64
+                    && reference.sha256 == sha256(bytes) =>
+            {
+                let base: Baseline = decode(bytes, MAX_BASELINE_BYTES)?;
+                base.validate(&mapping)?;
+                Some(base)
+            }
+            _ => return Err(invalid("Pinned compact baseline is missing or mismatched")),
+        };
         Ok(Self {
             root,
             mapping,
             profile: profile.to_vec(),
             hash: sha256(root_bytes),
+            baseline,
         })
+    }
+    pub fn baseline(&self) -> Option<&Baseline> {
+        self.baseline.as_ref()
+    }
+    pub(crate) fn with_baseline(&self, base: Baseline) -> Result<Self> {
+        let bytes = canonical(&base)?;
+        let mut root = self.root.clone();
+        root.sync_id = random_id()?;
+        root.baseline = Some(FileRef {
+            path: "profile/base.json".into(),
+            size: Counter(bytes.len() as u64),
+            sha256: sha256(&bytes),
+        });
+        root.merge = "causal-records-seed-v1".into();
+        Self::from_parts_with_baseline(
+            &canonical(&root)?,
+            &canonical(&self.mapping)?,
+            &self.profile,
+            Some(&bytes),
+        )
     }
     pub fn root(&self) -> &DomainRoot {
         &self.root

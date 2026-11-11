@@ -83,6 +83,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cb = Connection::open(b.path().join("data/project.sqlite"))?;
     ca.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=FULL;")?;
     cb.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=FULL;")?;
+    let repository = SyncRepository::create(
+        root.join("exchange"),
+        &domain,
+        RetentionPolicy::default(),
+        limits.clone(),
+    )?;
+    let generation = repository.publish_initial(&checkpoint, &Notes, 100)?;
     let session_options = |label: &str| -> Result<SessionOptions, darkbox::Error> {
         Ok(SessionOptions {
             device_id: random_id()?,
@@ -90,22 +97,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             limits: limits.clone(),
         })
     };
-    let sa = SyncSession::open(
-        &mut a,
-        &mut ca,
-        domain.clone(),
-        objects_a,
-        session_options("PC A")?,
-        &Notes,
-    )?;
-    let sb = SyncSession::open(
-        &mut b,
-        &mut cb,
-        domain.clone(),
-        objects_b,
-        session_options("PC B")?,
-        &Notes,
-    )?;
+    let sa =
+        repository.open_session(&mut a, &mut ca, objects_a, session_options("PC A")?, &Notes)?;
+    let sb =
+        repository.open_session(&mut b, &mut cb, objects_b, session_options("PC B")?, &Notes)?;
     let change = |title: &str| Operation::Assign {
         record: record.clone(),
         field: "title".into(),
@@ -114,7 +109,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     sa.edit(&mut ca, vec![change("offline edit from A")], &Notes)?;
     sb.edit(&mut cb, vec![change("offline edit from B")], &Notes)?;
-    let exchange = Exchange::create(root.join("exchange"), domain.clone(), limits.clone())?;
+    let exchange = repository.exchange(&generation)?;
     sa.publish_pending(&ca, &exchange)?;
     sb.publish_pending(&cb, &exchange)?;
     sa.receive_exchange(&mut ca, &exchange)?;
@@ -141,12 +136,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .finish()?;
     let full = SyncSnapshot::open(&full_path, limits.clone(), &options)?;
     full.publish(&exchange, sa.replica())?;
+    let compact = repository.compact(&full, sa.objects(), &Notes, 110, &options)?;
+    let compact_snapshot = repository.checkpoint(&compact, &options)?;
+    let next = repository.compact(&compact_snapshot, sa.objects(), &Notes, 120, &options)?;
+    repository.prune(3_000_000, &Notes, &options)?;
+    sb.edit(
+        &mut cb,
+        vec![change("late offline edit retained for recovery")],
+        &Notes,
+    )?;
+    let rebased_objects = ObjectStore::open(root.join("objects-b-rebased"), limits.clone())?;
+    let rebased_path = root.join("library-b-rebased");
+    let recovery_path = root.join("old-b-recovery.darkbox");
+    let prepared = repository.prepare_rebase(
+        &sb,
+        &cb,
+        RebaseTarget {
+            destination: &rebased_path,
+            objects: &rebased_objects,
+            recovery_path: Some(&recovery_path),
+        },
+        &Notes,
+        &options,
+    )?;
+    repository.check_prepared_rebase(&sb, &cb, &prepared)?;
+    let full = repository.checkpoint(&next, &options)?;
     let objects_c = ObjectStore::open(root.join("objects-c"), limits)?;
     let c = full.bootstrap(root.join("library-c"), &objects_c, &Notes)?;
     let cc = Connection::open(c.path().join("data/project.sqlite"))?;
-    Notes.verify(&cc, &domain, &state)?;
+    Notes.verify(&cc, full.history().domain(), &full.history().state())?;
     println!(
-        "Two peers converged; both title alternatives are retained. A third peer was rebuilt from the complete checkpoint."
+        "Two peers converged with both title alternatives retained. Compact generations were pruned, a stale peer produced a private recovery package, and a third peer bootstrapped from the compact checkpoint."
     );
     println!("Example files: {}", root.display());
     Ok(())

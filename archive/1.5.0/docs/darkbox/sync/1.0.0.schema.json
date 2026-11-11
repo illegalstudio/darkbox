@@ -33,6 +33,21 @@
     },
     {
       "$ref": "#/$defs/extension"
+    },
+    {
+      "$ref": "#/$defs/baseline"
+    },
+    {
+      "$ref": "#/$defs/repository"
+    },
+    {
+      "$ref": "#/$defs/generation"
+    },
+    {
+      "$ref": "#/$defs/retirement"
+    },
+    {
+      "$ref": "#/$defs/recovery"
     }
   ],
   "$defs": {
@@ -743,12 +758,41 @@
           "const": "jcs-strings-v1"
         },
         "merge": {
-          "const": "causal-records-v1"
+          "enum": [
+            "causal-records-v1",
+            "causal-records-seed-v1"
+          ]
         },
         "security": {
           "const": "trusted-folder-plaintext"
+        },
+        "baseline": {
+          "$ref": "#/$defs/file"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "baseline"
+            ]
+          },
+          "then": {
+            "properties": {
+              "merge": {
+                "const": "causal-records-seed-v1"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "merge": {
+                "const": "causal-records-v1"
+              }
+            }
+          }
+        }
+      ]
     },
     "field": {
       "oneOf": [
@@ -1375,6 +1419,265 @@
         },
         "stateSha256": {
           "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "sourceRootSha256",
+        "sourceFrontier",
+        "records",
+        "nodes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-baseline"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "sourceRootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "sourceFrontier": {
+          "$ref": "#/$defs/frontier"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/recordState"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      }
+    },
+    "retentionPolicy": {
+      "type": "object",
+      "required": [
+        "retentionSeconds",
+        "keepCheckpoints",
+        "checkpointIntervalSeconds",
+        "checkpointTransactions",
+        "checkpointHistoryBytes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "retentionSeconds": {
+          "$ref": "#/$defs/counter"
+        },
+        "keepCheckpoints": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpointIntervalSeconds": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpointTransactions": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpointHistoryBytes": {
+          "$ref": "#/$defs/counter"
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "repositoryId",
+        "packageId",
+        "application",
+        "mappingSha256",
+        "profileSha256",
+        "policy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-repository"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/id"
+        },
+        "packageId": {
+          "$ref": "#/$defs/id"
+        },
+        "application": {
+          "$ref": "#/$defs/application"
+        },
+        "mappingSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "profileSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "policy": {
+          "$ref": "#/$defs/retentionPolicy"
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "repositorySha256",
+        "ordinal",
+        "parent",
+        "createdAt",
+        "checkpoint"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-generation"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "repositorySha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "ordinal": {
+          "$ref": "#/$defs/counter"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "replaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hash"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "createdAt": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/snapshot"
+        }
+      }
+    },
+    "retirement": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "repositorySha256",
+        "retiredBefore",
+        "checkedAt",
+        "witnesses"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-retirement"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "repositorySha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "retiredBefore": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkedAt": {
+          "$ref": "#/$defs/counter"
+        },
+        "witnesses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/generation"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "sourceRevision",
+        "frontier",
+        "outgoing",
+        "incoming",
+        "missingObjects"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-recovery"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "sourceRevision": {
+          "$ref": "#/$defs/counter"
+        },
+        "frontier": {
+          "$ref": "#/$defs/frontier"
+        },
+        "outgoing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transaction"
+          }
+        },
+        "incoming": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transaction"
+          }
+        },
+        "missingObjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "sha256",
+              "size"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "size": {
+                "$ref": "#/$defs/counter"
+              }
+            }
+          }
         }
       }
     },

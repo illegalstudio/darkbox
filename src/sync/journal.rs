@@ -21,6 +21,25 @@ pub trait SyncProjection {
         next: &LogicalState,
     ) -> Result<()>;
     fn verify(&self, connection: &Connection, domain: &Domain, state: &LogicalState) -> Result<()>;
+    /// Preserve installation-local columns for stable record IDs during rebase/recovery.
+    fn copy_local(
+        &self,
+        _source: &Connection,
+        _destination: &Transaction<'_>,
+        domain: &Domain,
+    ) -> Result<()> {
+        if domain
+            .mapping()
+            .collections
+            .iter()
+            .any(|collection| !collection.local_columns.is_empty())
+        {
+            return Err(unsupported(
+                "The application adapter must implement local-column preservation for rebase and recovery",
+            ));
+        }
+        Ok(())
+    }
     /// Initialize a fresh private database for bootstrap/snapshot projection.
     fn initialize(&self, _transaction: &Transaction<'_>, _domain: &Domain) -> Result<()> {
         Err(unsupported(
@@ -211,6 +230,9 @@ pub fn attach_working(
         &format!("{PREFIX}/mapping.json"),
         &canonical(domain.mapping())?,
     )?;
+    if let Some(base) = domain.baseline() {
+        super::exchange::publish_bytes(root, &format!("{PREFIX}/base.json"), &canonical(base)?)?;
+    }
     if !manifest["extensions"].is_object() {
         manifest["extensions"] = serde_json::json!({});
     }
@@ -246,6 +268,20 @@ pub fn attach_working(
     temp.persist(root.join("manifest.json"))
         .map_err(|e| crate::io_failure(e.error))?;
     super::exchange::sync_dir(root)
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecoveryJournal {
+    pub kind: String,
+    pub protocol_version: String,
+    pub sync_id: String,
+    pub root_sha256: String,
+    pub source_revision: Counter,
+    pub frontier: Frontier,
+    pub outgoing: Vec<SyncTransaction>,
+    pub incoming: Vec<SyncTransaction>,
+    pub missing_objects: Vec<Blob>,
 }
 
 /// Metadata-only pending status. Local publication does not certify cloud upload.
@@ -339,6 +375,15 @@ impl<'a> SyncSession<'a> {
         {
             return Err(invalid("Working domain resources differ"));
         }
+        if let Some(base) = domain.baseline()
+            && super::exchange::read_regular(
+                library.path(),
+                &format!("{PREFIX}/base.json"),
+                MAX_BASELINE_BYTES,
+            )? != canonical(base)?
+        {
+            return Err(invalid("Working compact baseline differs"));
+        }
         let profile_path = manifest["application"]["profilePath"]
             .as_str()
             .ok_or_else(|| invalid("Application profile path is absent"))?;
@@ -386,6 +431,9 @@ impl<'a> SyncSession<'a> {
             objects,
             limits,
         })
+    }
+    pub fn working_path(&self) -> &Path {
+        self.library.path()
     }
     pub fn replica(&self) -> &ReplicaDescriptor {
         &self.replica
@@ -549,6 +597,7 @@ impl<'a> SyncSession<'a> {
             )
             .map_err(sql)?;
             check_budget(&tx, &self.limits)?;
+            bump_revision(&tx)?;
         }
         tx.commit().map_err(sql)
     }
@@ -914,6 +963,121 @@ impl<'a> SyncSession<'a> {
             .map_err(sql)?;
         Ok(n as usize)
     }
+    /// Export a complete old-generation package plus exact outgoing and pending input.
+    /// The application must hold its write barrier through checking the returned revision
+    /// and switching libraries. The old working library is never removed here.
+    pub fn export_recovery(
+        &self,
+        connection: &Connection,
+        destination: impl AsRef<Path>,
+        adapter: &dyn SyncProjection,
+        options: &crate::VerificationOptions<'_>,
+    ) -> Result<RecoveryJournal> {
+        self.check(connection)?;
+        let read = connection.unchecked_transaction().map_err(sql)?;
+        let history = self.history(&read)?;
+        let source_revision = cache_revision(&read)?;
+        let transactions = |query: &str| -> Result<Vec<SyncTransaction>> {
+            let mut statement = read.prepare(query).map_err(sql)?;
+            let mut rows = statement.query([]).map_err(sql)?;
+            let mut result = Vec::new();
+            while let Some(row) = rows.next().map_err(sql)? {
+                let bytes: Vec<u8> = row.get(0).map_err(sql)?;
+                result.push(decode(&bytes, MAX_TRANSACTION_BYTES)?);
+            }
+            Ok(result)
+        };
+        check_budget(&read, &self.limits)?;
+        let outgoing = transactions(
+            "SELECT bytes FROM _darkbox_sync_outbox WHERE published=0 ORDER BY replica,length(sequence),sequence",
+        )?;
+        let incoming = transactions(
+            "SELECT bytes FROM _darkbox_sync_pending ORDER BY replica,length(sequence),sequence",
+        )?;
+        read.commit().map_err(sql)?;
+        let mut requested = BTreeSet::new();
+        for transaction in &incoming {
+            requested.extend(transaction.blobs()?);
+        }
+        let historical = history.blobs()?;
+        let mut available = Vec::new();
+        let mut missing_objects = Vec::new();
+        for blob in requested.difference(&historical) {
+            if self.objects.contains(blob)? {
+                available.push(blob.clone());
+            } else {
+                missing_objects.push(blob.clone());
+            }
+        }
+        let recovery = RecoveryJournal {
+            kind: "darkbox-sync-recovery".into(),
+            protocol_version: VERSION.into(),
+            sync_id: self.domain.root().sync_id.clone(),
+            root_sha256: self.domain.root_hash().into(),
+            source_revision,
+            frontier: history.frontier(),
+            outgoing,
+            incoming,
+            missing_objects,
+        };
+        let metadata_path = format!("{PREFIX}/recovery/journal.json");
+        let object_paths: Vec<_> = available
+            .iter()
+            .map(|blob| Ok(format!("{PREFIX}/recovery/{}", blob.relative_path()?)))
+            .collect::<Result<_>>()?;
+        let mut paths = object_paths.clone();
+        paths.push(metadata_path.clone());
+        let mut manifest = crate::json::parse(&super::exchange::read_regular(
+            self.library.path(),
+            "manifest.json",
+            self.limits.io.max_metadata_bytes as usize,
+        )?)?;
+        super::snapshot::ensure_folders(&mut manifest, &paths)?;
+        let mut builder = SnapshotBuilder::from_local(
+            destination,
+            manifest.clone(),
+            &history,
+            &self.objects,
+            LocalProjection {
+                adapter,
+                source: connection,
+            },
+            self.limits.io.clone(),
+            options,
+        )?;
+        add_recovery_resources(
+            &mut builder,
+            self.library.path(),
+            &manifest,
+            &self.domain,
+            &self.limits.io,
+        )?;
+        builder.add_reader(&metadata_path, canonical(&recovery)?.as_slice())?;
+        for (blob, path) in available.iter().zip(object_paths) {
+            self.objects
+                .with_blob(blob, |reader| builder.add_reader(&path, reader))?;
+        }
+        builder.finish()?;
+        Ok(recovery)
+    }
+    pub fn check_rebase_revision(&self, connection: &Connection, expected: Counter) -> Result<()> {
+        self.check(connection)?;
+        if meta(connection, "forked")?.is_some() {
+            return Err(fork("Source was forked during rebase"));
+        }
+        if cache_revision(connection)? != expected {
+            return Err(crate::Error::new(
+                crate::Status::OperationalError,
+                "sync.revision_changed",
+                "Source changed while preparing rebase; preserve the current library and prepare again",
+            ));
+        }
+        Ok(())
+    }
+    pub fn revision(&self, connection: &Connection) -> Result<Counter> {
+        self.check(connection)?;
+        cache_revision(connection)
+    }
     /// Merge verified checkpoint history without dropping local unpublished operations.
     pub fn receive_history(
         &self,
@@ -1031,4 +1195,84 @@ pub fn verified_receipts(
         result.insert(receipt.replica_id.clone(), receipt);
     }
     Ok(result)
+}
+
+fn add_recovery_resources(
+    builder: &mut SnapshotBuilder<'_>,
+    root: &Path,
+    manifest: &serde_json::Value,
+    domain: &Domain,
+    limits: &crate::Limits,
+) -> Result<()> {
+    let spec = crate::creation::specification(manifest)?;
+    let canonical: BTreeSet<_> = spec
+        .files
+        .iter()
+        .map(|file| file.path)
+        .chain(std::iter::once(crate::versions::CATALOG_PATH))
+        .collect();
+    let databases: BTreeSet<_> = manifest["databases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|db| db["path"].as_str().unwrap().to_owned())
+        .collect();
+    let profile = manifest["application"]["profilePath"].as_str().unwrap();
+    let end = crate::transfer::deadline(limits)?;
+    let mut stack = vec![root.to_owned()];
+    let mut count = 0;
+    while let Some(directory) = stack.pop() {
+        for entry in fs::read_dir(directory).map_err(crate::io_failure)? {
+            crate::container::check_deadline(end)?;
+            count += 1;
+            if count > limits.max_entries {
+                return Err(super::limit("Recovery resources"));
+            }
+            let entry = entry.map_err(crate::io_failure)?;
+            let path = entry.path();
+            let relative = path
+                .strip_prefix(root)
+                .unwrap()
+                .to_str()
+                .ok_or_else(|| invalid("Recovery resource path"))?;
+            if relative == PREFIX || relative.starts_with(&format!("{PREFIX}/")) {
+                continue;
+            }
+            let kind = entry.file_type().map_err(crate::io_failure)?;
+            if kind.is_symlink() {
+                return Err(invalid("Recovery refuses linked resources").at(relative));
+            }
+            if kind.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if relative == "manifest.json"
+                || relative == profile
+                || canonical.contains(relative)
+                || relative == domain.mapping().storage.database_path
+            {
+                continue;
+            }
+            if databases.iter().any(|database| {
+                ["-wal", "-shm", "-journal"]
+                    .iter()
+                    .any(|suffix| relative == format!("{database}{suffix}"))
+            }) {
+                continue;
+            }
+            let checked = super::exchange::safe_path(root, relative, false)?;
+            if databases.contains(relative) {
+                let connection = Connection::open_with_flags(
+                    checked,
+                    rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+                )
+                .map_err(sql)?;
+                let snapshot = crate::package::database_snapshot(&connection, limits, end)?;
+                builder.add_path(relative, snapshot.path())?;
+            } else {
+                builder.add_path(relative, checked)?;
+            }
+        }
+    }
+    Ok(())
 }

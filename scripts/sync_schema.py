@@ -62,6 +62,9 @@ def build_schema():
     defs["replica"] = record("replica", {"replicaId": ref("id"), "deviceId": ref("id"), "label": {"type": "string", "maxLength": 1024, "$comment": "1024 UTF-8 bytes, not just characters."}})
     defs["receipt"] = record("receipt", {"replicaId": ref("id"), "serial": ref("counter"), "frontier": ref("frontier")})
     defs["domain"] = obj({"kind": {"const": "darkbox-sync-domain"}, "protocolVersion": {"const": "1.0.0"}, "syncId": ref("id"), "packageId": ref("id"), "commonVersion": {"const": "1.5.0"}, "application": ref("application"), "profile": ref("file"), "mapping": ref("file"), "encoding": {"const": "jcs-strings-v1"}, "merge": {"const": "causal-records-v1"}, "security": {"const": "trusted-folder-plaintext"}})
+    defs["domain"]["properties"]["baseline"] = ref("file")
+    defs["domain"]["properties"]["merge"] = enum("causal-records-v1", "causal-records-seed-v1")
+    defs["domain"]["allOf"] = [{"if": {"required": ["baseline"]}, "then": {"properties": {"merge": {"const": "causal-records-seed-v1"}}}, "else": {"properties": {"merge": {"const": "causal-records-v1"}}}}]
     kinds = enum("null", "bool", "text", "integer", "decimal", "list", "map", "record", "blob")
     sql_name = {"type": "string", "minLength": 1, "maxLength": 255, "$comment": "Also UTF-8 byte length <=255 and no NUL."}
     base_field = {"name": ref("name"), "kind": enum("register", "set"), "columns": arr(sql_name, minItems=1, uniqueItems=True), "codec": ref("name"), "valueTypes": arr(kinds, minItems=1, uniqueItems=True)}
@@ -83,11 +86,17 @@ def build_schema():
     defs["state"] = record("state", {"frontier": ref("frontier"), "records": arr(ref("recordState")), "nodes": arr(ref("node"))})
     defs["checkpoint"] = record("checkpoint", {"frontier": ref("frontier"), "history": ref("file"), "state": ref("file"), "objects": arr(obj({"sha256": ref("hash"), "size": ref("counter"), "path": ref("path")}))})
     defs["snapshot"] = record("snapshot", {"replicaId": ref("id"), "package": ref("file"), "frontier": ref("frontier"), "stateSha256": ref("hash")})
+    defs["baseline"] = obj({"kind": {"const": "darkbox-sync-baseline"}, "protocolVersion": {"const": "1.0.0"}, "sourceRootSha256": ref("hash"), "sourceFrontier": ref("frontier"), "records": arr(ref("recordState")), "nodes": arr(ref("node"))})
+    defs["retentionPolicy"] = obj({"retentionSeconds": ref("counter"), "keepCheckpoints": ref("counter"), "checkpointIntervalSeconds": ref("counter"), "checkpointTransactions": ref("counter"), "checkpointHistoryBytes": ref("counter")})
+    defs["repository"] = obj({"kind": {"const": "darkbox-sync-repository"}, "protocolVersion": {"const": "1.0.0"}, "repositoryId": ref("id"), "packageId": ref("id"), "application": ref("application"), "mappingSha256": ref("hash"), "profileSha256": ref("hash"), "policy": ref("retentionPolicy")})
+    defs["generation"] = obj({"kind": {"const": "darkbox-sync-generation"}, "protocolVersion": {"const": "1.0.0"}, "repositorySha256": ref("hash"), "ordinal": ref("counter"), "parent": nullable("hash"), "replaces": arr(ref("hash"), minItems=1, uniqueItems=True), "createdAt": ref("counter"), "checkpoint": ref("snapshot")}, optional=("replaces",))
+    defs["retirement"] = obj({"kind": {"const": "darkbox-sync-retirement"}, "protocolVersion": {"const": "1.0.0"}, "repositorySha256": ref("hash"), "retiredBefore": ref("counter"), "checkedAt": ref("counter"), "witnesses": arr(ref("generation"), minItems=1)})
+    defs["recovery"] = record("recovery", {"sourceRevision": ref("counter"), "frontier": ref("frontier"), "outgoing": arr(ref("transaction")), "incoming": arr(ref("transaction")), "missingObjects": arr(obj({"sha256": ref("hash"), "size": ref("counter")}))})
     common_data = {"syncId": ref("id"), "rootSha256": ref("hash"), "rootPath": {"const": NS + "/root.json"}, "mappingPath": {"const": NS + "/mapping.json"}}
     working = obj({"mode": {"const": "working"}, **common_data, "journalDatabase": ref("path"), "journalSchemaVersion": {"const": "1.0.0"}})
     sealed = obj({"mode": {"const": "sealed"}, **common_data, "checkpointPath": {"const": NS + "/checkpoint.json"}})
     defs["extension"] = obj({"version": {"const": "1.0.0"}, "required": {"const": True}, "data": {"oneOf": [working, sealed]}})
-    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "urn:darkbox:sync-schema:1.0.0", "title": "Darkbox synchronization extension 1.0.0", "$comment": "Structural validation only. Canonical bytes, identity, counters, causal closure, author-context operation validity, hash/length, sorted uniqueness, complete resource closure and projection require additional checks.", "oneOf": [ref(name) for name in ["domain", "mapping", "replica", "transaction", "segment", "receipt", "state", "checkpoint", "snapshot", "extension"]], "$defs": defs}
+    return {"$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "urn:darkbox:sync-schema:1.0.0", "title": "Darkbox synchronization extension 1.0.0", "$comment": "Structural validation only. Canonical bytes, identity, counters, causal closure, author-context operation validity, hash/length, sorted uniqueness, complete resource closure and projection require additional checks.", "oneOf": [ref(name) for name in ["domain", "mapping", "replica", "transaction", "segment", "receipt", "state", "checkpoint", "snapshot", "extension", "baseline", "repository", "generation", "retirement", "recovery"]], "$defs": defs}
 
 
 def main():

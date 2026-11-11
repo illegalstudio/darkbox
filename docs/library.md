@@ -125,3 +125,5 @@ writers preserve required extension presence and refuse checkpoint mutation.
 Applications use the [sync SDK](sync.md) to create fresh complete checkpoints,
 coordinate atomic projection/outbox commits and bootstrap local libraries.
 Generic replay checks do not certify application semantics.
+
+Repository synchronization supports compact checkpoint generations, bounded retention without device membership, and private stale-base recovery. Use `SyncRepository::open_session` and its guarded exchanges, and preserve local columns with `SyncProjection::copy_local`. See [the synchronization guide](sync.md#compaction-and-bounded-retention).

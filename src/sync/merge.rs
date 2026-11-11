@@ -208,6 +208,7 @@ struct Core {
     records: BTreeMap<Dot, RecordState>,
     nodes: BTreeMap<Dot, PositionNode>,
     removals: BTreeMap<Dot, BTreeSet<Dot>>,
+    baseline: BTreeSet<Dot>,
 }
 fn observes(tx: &SyncTransaction, index: usize, dot: &Dot) -> bool {
     (dot.replica_id == tx.replica_id && dot.sequence == tx.sequence && dot.index.0 < index as u64)
@@ -218,7 +219,7 @@ fn observes(tx: &SyncTransaction, index: usize, dot: &Dot) -> bool {
 }
 impl Core {
     fn author_context(&self, tx: &SyncTransaction) -> Self {
-        let known = |dot: &Dot| observes(tx, 0, dot);
+        let known = |dot: &Dot| self.baseline.contains(dot) || observes(tx, 0, dot);
         let records = self
             .records
             .iter()
@@ -269,6 +270,7 @@ impl Core {
                 .map(|(id, node)| (id.clone(), node.clone()))
                 .collect(),
             removals: BTreeMap::new(),
+            baseline: self.baseline.clone(),
         }
     }
     fn record(&self, id: &Dot) -> Result<&RecordState> {
@@ -431,7 +433,8 @@ impl Core {
                     .find(|f| &f.field == field)
                     .unwrap()
                     .candidates;
-                candidates.retain(|c| !observes(tx, index, &c.dot));
+                candidates
+                    .retain(|c| !(self.baseline.contains(&c.dot) || observes(tx, index, &c.dot)));
                 candidates.push(RegisterCandidate {
                     dot,
                     lamport: tx.lamport,
@@ -521,7 +524,8 @@ impl Core {
                     .find(|f| &f.field == field)
                     .unwrap()
                     .candidates;
-                candidates.retain(|c| !observes(tx, index, &c.dot));
+                candidates
+                    .retain(|c| !(self.baseline.contains(&c.dot) || observes(tx, index, &c.dot)));
                 candidates.push(PositionCandidate {
                     dot,
                     lamport: tx.lamport,
@@ -558,13 +562,36 @@ pub struct History {
 }
 impl History {
     pub fn new(domain: Domain, limits: SyncLimits) -> Self {
+        let core = domain
+            .baseline()
+            .map(|base| Core {
+                records: base
+                    .records
+                    .iter()
+                    .map(|row| (row.id.clone(), row.clone()))
+                    .collect(),
+                nodes: base
+                    .nodes
+                    .iter()
+                    .map(|node| (node.id.clone(), node.clone()))
+                    .collect(),
+                removals: BTreeMap::new(),
+                baseline: base.dots(),
+            })
+            .unwrap_or_default();
         Self {
             domain,
             entries: BTreeMap::new(),
-            core: Core::default(),
+            core,
             bytes: 0,
             limits,
         }
+    }
+    /// Start a new domain from current live state, retaining unresolved alternatives.
+    pub fn compact(&self) -> Result<Self> {
+        let base = Baseline::compact(&self.state())?;
+        let domain = self.domain.with_baseline(base)?;
+        Ok(Self::new(domain, self.limits.clone()))
     }
     pub fn domain(&self) -> &Domain {
         &self.domain
@@ -590,7 +617,12 @@ impl History {
         self.entries.values().map(|e| e.bytes.as_slice())
     }
     pub fn blobs(&self) -> Result<BTreeSet<Blob>> {
-        let mut blobs = BTreeSet::new();
+        let mut blobs = self
+            .domain
+            .baseline()
+            .map(Baseline::blobs)
+            .transpose()?
+            .unwrap_or_default();
         for tx in self.transactions() {
             blobs.extend(tx.blobs()?);
         }
@@ -622,6 +654,16 @@ impl History {
         }
     }
     pub fn prepare(&self, replica_id: &str, operations: Vec<Operation>) -> Result<SyncTransaction> {
+        if self
+            .core
+            .baseline
+            .iter()
+            .any(|dot| dot.replica_id == replica_id)
+        {
+            return Err(invalid(
+                "New generation cannot reuse a baseline actor identity",
+            ));
+        }
         let dependencies = self.frontier();
         let own = dependencies.iter().find(|t| t.replica_id == replica_id);
         let sequence = own
@@ -633,6 +675,7 @@ impl History {
             .map(|e| e.tx.lamport.0)
             .max()
             .unwrap_or(0)
+            .max(self.domain.baseline().map_or(0, Baseline::clock_floor))
             .checked_add(1)
             .ok_or_else(|| unsupported("Logical clock exhausted"))?;
         let tx = SyncTransaction {
@@ -694,6 +737,16 @@ impl History {
     }
     pub fn accept(&mut self, tx: SyncTransaction) -> Result<ApplyStatus> {
         tx.shape(&self.domain)?;
+        if self
+            .core
+            .baseline
+            .iter()
+            .any(|dot| dot.replica_id == tx.replica_id)
+        {
+            return Err(invalid(
+                "New generation cannot reuse a baseline actor identity",
+            ));
+        }
         let bytes = tx.bytes()?;
         let hash = sha256(&bytes);
         let key = (tx.replica_id.clone(), tx.sequence);
@@ -713,7 +766,7 @@ impl History {
             return Err(super::limit("Sync history budget"));
         }
         let mut pending = Vec::new();
-        let mut max_clock = 0;
+        let mut max_clock = self.domain.baseline().map_or(0, Baseline::clock_floor);
         for tip in &tx.dependencies {
             match self.entries.get(&(tip.replica_id.clone(), tip.sequence)) {
                 None => pending.push(tip.clone()),

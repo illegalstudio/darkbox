@@ -2,7 +2,7 @@
   "extension": "studio.illegal.darkbox.sync",
   "version": "1.0.0",
   "generator": "Independent Python set-based materializer; no Rust output is used",
-  "profile": "# Example synchronized notes profile 1\n\nProfile identifier: org.example.sync-notes. Application format version: 1.\nThis fictional profile uses the sync 1.0.0 typed-value codecs. The items collection\nis stored in items(id TEXT PRIMARY KEY, asset TEXT, data TEXT, position TEXT,\ntags TEXT, title TEXT, local_note TEXT). IDs are create-operation dots. Synchronized\ncolumns asset, data and title contain the canonical selected typed value, or SQL\nNULL when absent. tags contains the canonical array of visible typed set values;\nposition contains the canonical PositionField object, or SQL NULL when absent.\nThe item_conflicts(id TEXT PRIMARY KEY, payload BLOB NOT NULL) table contains the\ncanonical complete RecordState JSON for every record, including deleted records.\nIts BLOB bytes are UTF-8 JSON, not encrypted data. This retains competing values,\nset tags and deletion markers independently of the displayed items rows.\nlocal_note is installation-local and is retained on rebuild.\nA deterministic conflict view retains all concurrent candidates and hidden records;\nrecord deletion never erases history. There are no cross-record constraints.\nNo value or file is executable. Resources are immutable byte objects selected by\nSHA-256 and size through the complete checkpoint object index. Missing keys are\nnot applicable because this profile uses the trusted-folder plaintext sync mode.\nThe _darkbox_sync_ tables are reserved for the causal journal, pending input,\noutbox, immutable domain/session metadata and retained fork evidence. Their exact\nprotocol interpretation is in the included Darkbox synchronization reference.\n",
+  "profile": "# Example synchronized notes profile 1\n\nProfile identifier: org.example.sync-notes. Application format version: 1.\nThis fictional profile uses the sync 1.0.0 typed-value codecs. The items collection\nis stored in items(id TEXT PRIMARY KEY, asset TEXT, data TEXT, position TEXT,\ntags TEXT, title TEXT, local_note TEXT). IDs are create-operation dots. Synchronized\ncolumns asset, data and title contain the canonical selected typed value, or SQL\nNULL when absent. tags contains the canonical array of visible typed set values;\nposition contains the canonical PositionField object, or SQL NULL when absent.\nThe item_conflicts(id TEXT PRIMARY KEY, payload BLOB NOT NULL) table contains the\ncanonical complete RecordState JSON for every record in the current generation,\nincluding retained deletion markers.\nIts BLOB bytes are UTF-8 JSON, not encrypted data. This retains competing values,\nset tags and deletion markers independently of the displayed items rows.\nlocal_note is installation-local and is retained on rebuild.\nA deterministic conflict view retains all concurrent candidates and hidden records;\nrecord deletion preserves history within its generation. A compact generation\nretains live records and unresolved alternatives, with referenced deleted targets\nas minimal stubs. Local rebase and recovery preserve local_note by stable id.\nThere are no cross-record constraints.\nNo value or file is executable. Resources are immutable byte objects selected by\nSHA-256 and size through the complete checkpoint object index. Missing keys are\nnot applicable because this profile uses the trusted-folder plaintext sync mode.\nThe _darkbox_sync_ tables are reserved for the causal journal, pending input,\noutbox, immutable domain/session metadata and retained fork evidence. Their exact\nprotocol interpretation is in the included Darkbox synchronization reference.\n",
   "mapping": {
     "kind": "darkbox-sync-mapping",
     "mappingVersion": "1.0.0",
@@ -108,8 +108,8 @@
     },
     "profile": {
       "path": "profile/profile.md",
-      "size": "1623",
-      "sha256": "e6059bf2e604a6d3d235850086caa06545562a52cfaddf5f447e063f8da977fd"
+      "size": "1859",
+      "sha256": "182dcdd08a852028d16a0946a1c2e982aecd461f1018032f85391e60f13eb548"
     },
     "mapping": {
       "path": "profile/mapping.json",
@@ -120,7 +120,7 @@
     "merge": "causal-records-v1",
     "security": "trusted-folder-plaintext"
   },
-  "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+  "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
   "objects": [
     {
       "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
@@ -136,7 +136,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -195,7 +195,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -203,7 +203,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -252,7 +252,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -260,7 +260,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -299,22 +299,22 @@
         "kind": "darkbox-sync-state",
         "protocolVersion": "1.0.0",
         "syncId": "00000000000000000000000000000001",
-        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
         "frontier": [
           {
             "replicaId": "00000000000000000000000000000010",
             "sequence": "1",
-            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
           },
           {
             "replicaId": "00000000000000000000000000000011",
             "sequence": "1",
-            "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+            "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
           },
           {
             "replicaId": "00000000000000000000000000000012",
             "sequence": "1",
-            "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
           }
         ],
         "records": [
@@ -487,7 +487,7 @@
           }
         ]
       },
-      "stateSha256": "818992473f3ccddab78fe88bd4e890dc9650dd3df3b684f29914daf98f080beb",
+      "stateSha256": "a7fec3ec1e1329ee82d0340e0f4f8ac122957661491f78d7511c1c36f8dcb78d",
       "order": [
         "00000000000000000000000000000010:1:1",
         "00000000000000000000000000000010:1:0",
@@ -501,7 +501,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -560,7 +560,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -568,7 +568,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -617,7 +617,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -625,7 +625,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -663,20 +663,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -700,22 +700,22 @@
         "kind": "darkbox-sync-state",
         "protocolVersion": "1.0.0",
         "syncId": "00000000000000000000000000000001",
-        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
         "frontier": [
           {
             "replicaId": "00000000000000000000000000000010",
             "sequence": "1",
-            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
           },
           {
             "replicaId": "00000000000000000000000000000011",
             "sequence": "2",
-            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
           },
           {
             "replicaId": "00000000000000000000000000000012",
             "sequence": "1",
-            "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
           }
         ],
         "records": [
@@ -890,7 +890,7 @@
           }
         ]
       },
-      "stateSha256": "992a9a55448ee1f4a8acb7fa6ff906b0cf7b5a01cf885385dfc20a02f56641be",
+      "stateSha256": "ba1b73533af2e01ebb0a9d4bdd9d91e5261492d137fb2b6b3dfc97c506d78eb1",
       "order": [
         "00000000000000000000000000000010:1:1",
         "00000000000000000000000000000010:1:0",
@@ -904,7 +904,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -963,7 +963,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -971,7 +971,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -1020,7 +1020,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -1028,7 +1028,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -1066,20 +1066,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -1102,7 +1102,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000013",
           "sequence": "1",
           "previous": null,
@@ -1110,17 +1110,17 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "4",
@@ -1150,27 +1150,27 @@
         "kind": "darkbox-sync-state",
         "protocolVersion": "1.0.0",
         "syncId": "00000000000000000000000000000001",
-        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
         "frontier": [
           {
             "replicaId": "00000000000000000000000000000010",
             "sequence": "1",
-            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
           },
           {
             "replicaId": "00000000000000000000000000000011",
             "sequence": "2",
-            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
           },
           {
             "replicaId": "00000000000000000000000000000012",
             "sequence": "1",
-            "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+            "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
           },
           {
             "replicaId": "00000000000000000000000000000013",
             "sequence": "1",
-            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
           }
         ],
         "records": [
@@ -1345,7 +1345,7 @@
           }
         ]
       },
-      "stateSha256": "7baccbf78ab1df69bf07164270f2ca2fc8ef97f2565cc2eb6d2f0a44984ee870",
+      "stateSha256": "fa54528b6203d474ad530caf628ff925c4a329e37cf8be373ff49130277abeca",
       "order": [
         "00000000000000000000000000000010:1:1",
         "00000000000000000000000000000010:1:0",
@@ -1359,7 +1359,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -1418,7 +1418,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -1426,7 +1426,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -1475,7 +1475,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -1483,7 +1483,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -1521,20 +1521,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -1557,7 +1557,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000013",
           "sequence": "1",
           "previous": null,
@@ -1565,17 +1565,17 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "4",
@@ -1604,20 +1604,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "2",
-          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "previous": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "3",
@@ -1633,27 +1633,27 @@
         "kind": "darkbox-sync-state",
         "protocolVersion": "1.0.0",
         "syncId": "00000000000000000000000000000001",
-        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
         "frontier": [
           {
             "replicaId": "00000000000000000000000000000010",
             "sequence": "1",
-            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
           },
           {
             "replicaId": "00000000000000000000000000000011",
             "sequence": "2",
-            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
           },
           {
             "replicaId": "00000000000000000000000000000012",
             "sequence": "2",
-            "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
           },
           {
             "replicaId": "00000000000000000000000000000013",
             "sequence": "1",
-            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
           }
         ],
         "records": [
@@ -1830,7 +1830,7 @@
           }
         ]
       },
-      "stateSha256": "d10e3345384c153ad17882f033d9992331ab3f274affef1a6c8e54062a8b37fe",
+      "stateSha256": "be627ea4764f9ea8efecbfa7f6aa8e9f0b40fbc33cb7c8989c31f6c6a95c7b1d",
       "order": [
         "00000000000000000000000000000010:1:1",
         "00000000000000000000000000000010:1:2"
@@ -1843,7 +1843,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -1902,7 +1902,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -1910,7 +1910,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -1959,7 +1959,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -1967,7 +1967,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -2005,20 +2005,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -2041,7 +2041,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000013",
           "sequence": "1",
           "previous": null,
@@ -2049,17 +2049,17 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "4",
@@ -2088,20 +2088,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "2",
-          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "previous": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "3",
@@ -2116,7 +2116,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000014",
           "sequence": "1",
           "previous": null,
@@ -2124,22 +2124,22 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "2",
-              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+              "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
             },
             {
               "replicaId": "00000000000000000000000000000013",
               "sequence": "1",
-              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+              "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
             }
           ],
           "lamport": "5",
@@ -2173,32 +2173,32 @@
         "kind": "darkbox-sync-state",
         "protocolVersion": "1.0.0",
         "syncId": "00000000000000000000000000000001",
-        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
         "frontier": [
           {
             "replicaId": "00000000000000000000000000000010",
             "sequence": "1",
-            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
           },
           {
             "replicaId": "00000000000000000000000000000011",
             "sequence": "2",
-            "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
           },
           {
             "replicaId": "00000000000000000000000000000012",
             "sequence": "2",
-            "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
           },
           {
             "replicaId": "00000000000000000000000000000013",
             "sequence": "1",
-            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
           },
           {
             "replicaId": "00000000000000000000000000000014",
             "sequence": "1",
-            "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+            "sha256": "621f699c13fb12e3c3c36a470c70b96dfd97577c8d4b1dae4a2923edd341bb5d"
           }
         ],
         "records": [
@@ -2419,7 +2419,7 @@
           }
         ]
       },
-      "stateSha256": "27a4af611d0ec5e32a64c4b0d47139a8ead5dd33d724c9c31c84247d92062cc7",
+      "stateSha256": "067b1b23e48054a05be467110adf71fda3ad5a82ec30884ba4267d86e6a6c1e9",
       "order": [
         "00000000000000000000000000000010:1:1",
         "00000000000000000000000000000010:1:2",
@@ -2433,7 +2433,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -2492,7 +2492,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000015",
           "sequence": "1",
           "previous": null,
@@ -2500,7 +2500,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -2545,17 +2545,17 @@
         "kind": "darkbox-sync-state",
         "protocolVersion": "1.0.0",
         "syncId": "00000000000000000000000000000001",
-        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
         "frontier": [
           {
             "replicaId": "00000000000000000000000000000010",
             "sequence": "1",
-            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
           },
           {
             "replicaId": "00000000000000000000000000000015",
             "sequence": "1",
-            "sha256": "f20cff3db9dbfbebae722e9163782a803f4152787a80cc691eea3334b18030c8"
+            "sha256": "30d238759f9a6997c7dee40eb57dbb02a8805907d23bfeef4571921463b0cf7c"
           }
         ],
         "records": [
@@ -2703,7 +2703,7 @@
           }
         ]
       },
-      "stateSha256": "10cb9f49900d88bb2eff25389a3a8fa7d8a31dcdc44159fdbf6ec5576db2dabb",
+      "stateSha256": "2c70be1f1093015934ca485fd2ecf0ad9dd1b85b4636edb3812323a57249b5d3",
       "order": [
         "00000000000000000000000000000010:1:0",
         "00000000000000000000000000000010:1:1",
@@ -2717,7 +2717,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -2776,7 +2776,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -2784,7 +2784,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -2833,7 +2833,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -2841,7 +2841,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -2879,20 +2879,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -2915,7 +2915,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000013",
           "sequence": "1",
           "previous": null,
@@ -2923,17 +2923,17 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "4",
@@ -2962,20 +2962,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "2",
-          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "previous": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "3",
@@ -2990,7 +2990,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000014",
           "sequence": "1",
           "previous": null,
@@ -2998,22 +2998,22 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "2",
-              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+              "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
             },
             {
               "replicaId": "00000000000000000000000000000013",
               "sequence": "1",
-              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+              "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
             }
           ],
           "lamport": "5",
@@ -3046,7 +3046,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000015",
           "sequence": "1",
           "previous": null,
@@ -3054,7 +3054,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -3098,40 +3098,40 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "3",
-          "previous": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e",
+          "previous": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "2",
-              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+              "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
             },
             {
               "replicaId": "00000000000000000000000000000013",
               "sequence": "1",
-              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+              "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
             },
             {
               "replicaId": "00000000000000000000000000000014",
               "sequence": "1",
-              "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+              "sha256": "621f699c13fb12e3c3c36a470c70b96dfd97577c8d4b1dae4a2923edd341bb5d"
             },
             {
               "replicaId": "00000000000000000000000000000015",
               "sequence": "1",
-              "sha256": "f20cff3db9dbfbebae722e9163782a803f4152787a80cc691eea3334b18030c8"
+              "sha256": "30d238759f9a6997c7dee40eb57dbb02a8805907d23bfeef4571921463b0cf7c"
             }
           ],
           "lamport": "6",
@@ -3154,37 +3154,37 @@
         "kind": "darkbox-sync-state",
         "protocolVersion": "1.0.0",
         "syncId": "00000000000000000000000000000001",
-        "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+        "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
         "frontier": [
           {
             "replicaId": "00000000000000000000000000000010",
             "sequence": "1",
-            "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
           },
           {
             "replicaId": "00000000000000000000000000000011",
             "sequence": "3",
-            "sha256": "2d9f0e9a10ad5d5ada81e395c87e78708784c51ea3f479f454ccd7d4ee2db323"
+            "sha256": "df853bbb5568ac7a7e9e0862b28f5abe465b7a81d77a9e93602d7baf8fc752a2"
           },
           {
             "replicaId": "00000000000000000000000000000012",
             "sequence": "2",
-            "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+            "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
           },
           {
             "replicaId": "00000000000000000000000000000013",
             "sequence": "1",
-            "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
           },
           {
             "replicaId": "00000000000000000000000000000014",
             "sequence": "1",
-            "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+            "sha256": "621f699c13fb12e3c3c36a470c70b96dfd97577c8d4b1dae4a2923edd341bb5d"
           },
           {
             "replicaId": "00000000000000000000000000000015",
             "sequence": "1",
-            "sha256": "f20cff3db9dbfbebae722e9163782a803f4152787a80cc691eea3334b18030c8"
+            "sha256": "30d238759f9a6997c7dee40eb57dbb02a8805907d23bfeef4571921463b0cf7c"
           }
         ],
         "records": [
@@ -3415,11 +3415,1067 @@
           }
         ]
       },
-      "stateSha256": "6a1cc1e3b6f5f6bb74468c1350e6aceb17b684af0926bb513a54f123c1330995",
+      "stateSha256": "609d55b03cac437e1622b8fb21d5011d18f0410cfdd971bcb81a8c17fb0189d3",
       "order": [
         "00000000000000000000000000000010:1:2",
         "00000000000000000000000000000014:1:0"
       ]
+    }
+  ],
+  "compactVectors": [
+    {
+      "name": "concurrent-values-and-moves",
+      "baseline": {
+        "kind": "darkbox-sync-baseline",
+        "protocolVersion": "1.0.0",
+        "sourceRootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
+        "sourceFrontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "1",
+            "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "1",
+            "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "4",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:0",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "left"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:0",
+                    "lamport": "5",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "right"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": []
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "3",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "6",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:6",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:6"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000011:1:2",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000012:1:2",
+            "lamport": "3"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "6"
+          }
+        ]
+      },
+      "baselineSha256": "58f190eb640b6e939f387d76d587c35d00de6b79d0d9d02ecca8bf5e5d59800b"
+    },
+    {
+      "name": "observed-remove-concurrent-add",
+      "baseline": {
+        "kind": "darkbox-sync-baseline",
+        "protocolVersion": "1.0.0",
+        "sourceRootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
+        "sourceFrontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "1",
+            "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "4",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:0",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "left"
+                    }
+                  },
+                  {
+                    "dot": "00000000000000000000000000000012:1:0",
+                    "lamport": "5",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "right"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": []
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "3",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "6",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:6",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:6"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000011:1:2",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000012:1:2",
+            "lamport": "3"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "6"
+          }
+        ]
+      },
+      "baselineSha256": "204e97aba5dc897a3ba79eb95ab1bbbf9c546a71fb7e57760e69f6e70cec58b1"
+    },
+    {
+      "name": "causal-resolution",
+      "baseline": {
+        "kind": "darkbox-sync-baseline",
+        "protocolVersion": "1.0.0",
+        "sourceRootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
+        "sourceFrontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "1",
+            "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "asset",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:3",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "blob",
+                      "sha256": "f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35",
+                      "size": "15"
+                    }
+                  }
+                ]
+              },
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:0",
+                    "lamport": "4",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "resolved"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [
+              {
+                "field": "tags",
+                "adds": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:1",
+                    "value": {
+                      "type": "text",
+                      "value": "red"
+                    }
+                  }
+                ],
+                "removed": []
+              }
+            ],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:1:2",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000011:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "3",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "5",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000011:1:2",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000012:1:2",
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "3"
+          },
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000011:1:2",
+            "lamport": "5"
+          }
+        ]
+      },
+      "baselineSha256": "3704b8196e80ae034a53412eeacaa339e206babacea669bdaf8ce45ed7b7e9e2"
+    },
+    {
+      "name": "delete-wins",
+      "baseline": {
+        "kind": "darkbox-sync-baseline",
+        "protocolVersion": "1.0.0",
+        "sourceRootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
+        "sourceFrontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "2",
+            "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000012:1:2",
+            "lamport": "2"
+          }
+        ]
+      },
+      "baselineSha256": "920b3f5e8215c98dcf20e36dae768fd08c825e52267f7f06f4f55486ae65dce9"
+    },
+    {
+      "name": "explicit-new-id-restore",
+      "baseline": {
+        "kind": "darkbox-sync-baseline",
+        "protocolVersion": "1.0.0",
+        "sourceRootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
+        "sourceFrontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "2",
+            "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "2",
+            "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
+          },
+          {
+            "replicaId": "00000000000000000000000000000014",
+            "sequence": "1",
+            "sha256": "621f699c13fb12e3c3c36a470c70b96dfd97577c8d4b1dae4a2923edd341bb5d"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000012:1:2",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000012:1:2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000014:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:1",
+                    "lamport": "3",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "restored"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:2",
+                    "lamport": "4",
+                    "present": true,
+                    "node": "00000000000000000000000000000014:1:2"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000012:1:2",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000012:1:2",
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000014:1:2",
+            "record": "00000000000000000000000000000014:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000013:1:1",
+            "lamport": "4"
+          }
+        ]
+      },
+      "baselineSha256": "80b42628b69868b24a8b469cf371aa85a2cfa9231b8d1570451709b817906492"
+    },
+    {
+      "name": "exact-values",
+      "baseline": {
+        "kind": "darkbox-sync-baseline",
+        "protocolVersion": "1.0.0",
+        "sourceRootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
+        "sourceFrontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000015",
+            "sequence": "1",
+            "sha256": "30d238759f9a6997c7dee40eb57dbb02a8805907d23bfeef4571921463b0cf7c"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:3",
+                    "lamport": "1",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "initial"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:4",
+                    "lamport": "2",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:4"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:5",
+                    "lamport": "3",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:5"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "data",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000015:1:0",
+                    "lamport": "5",
+                    "present": true,
+                    "value": {
+                      "type": "map",
+                      "entries": [
+                        {
+                          "key": "big",
+                          "value": {
+                            "type": "integer",
+                            "value": "18446744073709551616"
+                          }
+                        },
+                        {
+                          "key": "decimal",
+                          "value": {
+                            "type": "decimal",
+                            "coefficient": "123456789012345678901",
+                            "exponent": "-21"
+                          }
+                        },
+                        {
+                          "key": "text",
+                          "value": {
+                            "type": "text",
+                            "value": "A\u000f\n\u20ac\ud83d\ude42"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000010:1:6",
+                    "lamport": "4",
+                    "present": true,
+                    "node": "00000000000000000000000000000010:1:6"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000010:1:4",
+            "record": "00000000000000000000000000000010:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "2"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:5",
+            "record": "00000000000000000000000000000010:1:1",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:4",
+            "lamport": "3"
+          },
+          {
+            "id": "00000000000000000000000000000010:1:6",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000010:1:5",
+            "lamport": "4"
+          }
+        ]
+      },
+      "baselineSha256": "2696ffbf1714aab6fe3403beda2147e2070ad8862bf5db5118eda0b942dcd57c"
+    },
+    {
+      "name": "clear-and-unplace",
+      "baseline": {
+        "kind": "darkbox-sync-baseline",
+        "protocolVersion": "1.0.0",
+        "sourceRootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
+        "sourceFrontier": [
+          {
+            "replicaId": "00000000000000000000000000000010",
+            "sequence": "1",
+            "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
+          },
+          {
+            "replicaId": "00000000000000000000000000000011",
+            "sequence": "3",
+            "sha256": "df853bbb5568ac7a7e9e0862b28f5abe465b7a81d77a9e93602d7baf8fc752a2"
+          },
+          {
+            "replicaId": "00000000000000000000000000000012",
+            "sequence": "2",
+            "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
+          },
+          {
+            "replicaId": "00000000000000000000000000000013",
+            "sequence": "1",
+            "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
+          },
+          {
+            "replicaId": "00000000000000000000000000000014",
+            "sequence": "1",
+            "sha256": "621f699c13fb12e3c3c36a470c70b96dfd97577c8d4b1dae4a2923edd341bb5d"
+          },
+          {
+            "replicaId": "00000000000000000000000000000015",
+            "sequence": "1",
+            "sha256": "30d238759f9a6997c7dee40eb57dbb02a8805907d23bfeef4571921463b0cf7c"
+          }
+        ],
+        "records": [
+          {
+            "id": "00000000000000000000000000000010:1:1",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:3:0",
+                    "lamport": "4",
+                    "present": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000010:1:2",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "data",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000011:3:1",
+                    "lamport": "5",
+                    "present": false
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000013:1:1",
+                    "lamport": "1",
+                    "present": true,
+                    "node": "00000000000000000000000000000013:1:1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "00000000000000000000000000000014:1:0",
+            "collection": "items",
+            "deletedBy": [],
+            "registers": [
+              {
+                "field": "title",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:1",
+                    "lamport": "2",
+                    "present": true,
+                    "value": {
+                      "type": "text",
+                      "value": "restored"
+                    }
+                  }
+                ]
+              }
+            ],
+            "sets": [],
+            "positions": [
+              {
+                "field": "position",
+                "candidates": [
+                  {
+                    "dot": "00000000000000000000000000000014:1:2",
+                    "lamport": "3",
+                    "present": true,
+                    "node": "00000000000000000000000000000014:1:2"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "nodes": [
+          {
+            "id": "00000000000000000000000000000013:1:1",
+            "record": "00000000000000000000000000000010:1:2",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": null,
+            "lamport": "1"
+          },
+          {
+            "id": "00000000000000000000000000000014:1:2",
+            "record": "00000000000000000000000000000014:1:0",
+            "field": "position",
+            "sequence": "items",
+            "owner": null,
+            "after": "00000000000000000000000000000013:1:1",
+            "lamport": "3"
+          }
+        ]
+      },
+      "baselineSha256": "edf2f7821f52de3c165b7b5c0d07879ef5692f82d988921a36c5bc5c35d38199"
     }
   ],
   "rejections": [
@@ -3430,7 +4486,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -3489,7 +4545,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -3497,7 +4553,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -3546,7 +4602,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -3554,7 +4610,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -3592,20 +4648,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -3633,7 +4689,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -3692,7 +4748,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -3700,7 +4756,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -3749,7 +4805,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -3757,7 +4813,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -3795,20 +4851,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -3831,7 +4887,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000013",
           "sequence": "1",
           "previous": null,
@@ -3839,12 +4895,12 @@
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "4",
@@ -3878,7 +4934,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -3937,7 +4993,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -3945,7 +5001,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "999",
@@ -3999,7 +5055,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -4058,7 +5114,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -4066,7 +5122,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -4115,7 +5171,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -4123,7 +5179,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -4177,7 +5233,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -4236,7 +5292,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -4244,7 +5300,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -4293,7 +5349,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -4301,7 +5357,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -4339,20 +5395,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "2",
-          "previous": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f",
+          "previous": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "1",
-              "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+              "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
             }
           ],
           "lamport": "3",
@@ -4375,7 +5431,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000013",
           "sequence": "1",
           "previous": null,
@@ -4383,17 +5439,17 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "4",
@@ -4422,20 +5478,20 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "2",
-          "previous": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee",
+          "previous": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "1",
-              "sha256": "3f05d47f0f631475d7d61304a098bf0c95a32d581836697edd6bd14784c183ee"
+              "sha256": "052c58d39cc8aad5b8cdc30f0d0ed91adfc3b86ec033a821e8e1d6639b31dd69"
             }
           ],
           "lamport": "3",
@@ -4450,7 +5506,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000014",
           "sequence": "1",
           "previous": null,
@@ -4458,22 +5514,22 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "2",
-              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+              "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
             },
             {
               "replicaId": "00000000000000000000000000000013",
               "sequence": "1",
-              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+              "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
             }
           ],
           "lamport": "5",
@@ -4506,35 +5562,35 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "3",
-          "previous": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e",
+          "previous": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c",
           "dependencies": [
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             },
             {
               "replicaId": "00000000000000000000000000000011",
               "sequence": "2",
-              "sha256": "05332b58833d43a3dc86e9b0fccfac97d067b426634667310dfa995161bd457e"
+              "sha256": "aadad2ed6cf266381420627760627bcf0dd579c0844551dd352045ad187cab6c"
             },
             {
               "replicaId": "00000000000000000000000000000012",
               "sequence": "2",
-              "sha256": "4e5b021432c6f08f46256c216716759c08edb67e946791c50bed3c1439339b56"
+              "sha256": "3f848659554a8a730f77ba1e377df981367a246b94d52f25d6921fca7a9463ef"
             },
             {
               "replicaId": "00000000000000000000000000000013",
               "sequence": "1",
-              "sha256": "689087f540f67259e49efb32995685db48c7ec2eb96f1e670097c75f46c6ce13"
+              "sha256": "41b7dd7250364b16ad42559dd78b8f314c04347633cdd3403f29772a3c898465"
             },
             {
               "replicaId": "00000000000000000000000000000014",
               "sequence": "1",
-              "sha256": "ef5ba1cb6f25e6f676450913f301640b978365f3055253a7b0e5e6130925d705"
+              "sha256": "621f699c13fb12e3c3c36a470c70b96dfd97577c8d4b1dae4a2923edd341bb5d"
             }
           ],
           "lamport": "6",
@@ -4560,7 +5616,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
           "previous": null,
@@ -4619,7 +5675,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000012",
           "sequence": "1",
           "previous": null,
@@ -4627,7 +5683,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -4665,7 +5721,7 @@
           "kind": "darkbox-sync-transaction",
           "protocolVersion": "1.0.0",
           "syncId": "00000000000000000000000000000001",
-          "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+          "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
           "replicaId": "00000000000000000000000000000011",
           "sequence": "1",
           "previous": null,
@@ -4673,7 +5729,7 @@
             {
               "replicaId": "00000000000000000000000000000010",
               "sequence": "1",
-              "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+              "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
             }
           ],
           "lamport": "2",
@@ -4726,7 +5782,7 @@
       "kind": "darkbox-sync-transaction",
       "protocolVersion": "1.0.0",
       "syncId": "00000000000000000000000000000001",
-      "rootSha256": "46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d",
+      "rootSha256": "2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5",
       "replicaId": "00000000000000000000000000000011",
       "sequence": "1",
       "previous": null,
@@ -4734,7 +5790,7 @@
         {
           "replicaId": "00000000000000000000000000000010",
           "sequence": "1",
-          "sha256": "345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621"
+          "sha256": "c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c"
         }
       ],
       "lamport": "2",
@@ -4779,7 +5835,7 @@
         }
       ]
     },
-    "utf8": "{\"dependencies\":[{\"replicaId\":\"00000000000000000000000000000010\",\"sequence\":\"1\",\"sha256\":\"345b5f6b5b2569b343bd5aab87c3dfbe6408913794533334cb2951f04fa8e621\"}],\"kind\":\"darkbox-sync-transaction\",\"lamport\":\"2\",\"operations\":[{\"field\":\"title\",\"op\":\"assign\",\"present\":true,\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"type\":\"text\",\"value\":\"left\"}},{\"field\":\"tags\",\"op\":\"set_add\",\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"type\":\"text\",\"value\":\"red\"}},{\"after\":\"00000000000000000000000000000010:1:5\",\"field\":\"position\",\"op\":\"place\",\"owner\":null,\"record\":\"00000000000000000000000000000010:1:0\",\"sequence\":\"items\"},{\"field\":\"asset\",\"op\":\"assign\",\"present\":true,\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"sha256\":\"f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35\",\"size\":\"15\",\"type\":\"blob\"}}],\"previous\":null,\"protocolVersion\":\"1.0.0\",\"replicaId\":\"00000000000000000000000000000011\",\"rootSha256\":\"46c19575927928e5a96e38fd836b89ae132e82cb188c2867561588d9e12b749d\",\"sequence\":\"1\",\"syncId\":\"00000000000000000000000000000001\"}",
-    "sha256": "2a93b23d264417d4a86b31914676a452dfdd4ed196b2e48fe45669ca7c8f0e0f"
+    "utf8": "{\"dependencies\":[{\"replicaId\":\"00000000000000000000000000000010\",\"sequence\":\"1\",\"sha256\":\"c763bd65243b9b4966c11bb397bbb143c6e6e59f6a75532e76352046374d0c9c\"}],\"kind\":\"darkbox-sync-transaction\",\"lamport\":\"2\",\"operations\":[{\"field\":\"title\",\"op\":\"assign\",\"present\":true,\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"type\":\"text\",\"value\":\"left\"}},{\"field\":\"tags\",\"op\":\"set_add\",\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"type\":\"text\",\"value\":\"red\"}},{\"after\":\"00000000000000000000000000000010:1:5\",\"field\":\"position\",\"op\":\"place\",\"owner\":null,\"record\":\"00000000000000000000000000000010:1:0\",\"sequence\":\"items\"},{\"field\":\"asset\",\"op\":\"assign\",\"present\":true,\"record\":\"00000000000000000000000000000010:1:0\",\"value\":{\"sha256\":\"f121548cfc35f72042d231d3bafe13cd07da43af73107fa77ea8ae1b6caf4f35\",\"size\":\"15\",\"type\":\"blob\"}}],\"previous\":null,\"protocolVersion\":\"1.0.0\",\"replicaId\":\"00000000000000000000000000000011\",\"rootSha256\":\"2cd42be7e40112398de6fd721fafadbfd75e82206d5869e873e5ce4b28afc8e5\",\"sequence\":\"1\",\"syncId\":\"00000000000000000000000000000001\"}",
+    "sha256": "03caf048c311fb649217fc6d5e88f49a08d5cfe49347bcbbe978471ca7716ff1"
   }
 }

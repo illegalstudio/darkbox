@@ -237,10 +237,29 @@ fn verify_core(
     let profile_path = manifest["application"]["profilePath"]
         .as_str()
         .ok_or_else(|| invalid("Application profile absent"))?;
-    let domain = Domain::from_parts(
-        &read(&root_path, MAX_SEGMENT_BYTES as u64)?,
+    let root_bytes = read(&root_path, MAX_SEGMENT_BYTES as u64)?;
+    let root: DomainRoot = decode(&root_bytes, MAX_SEGMENT_BYTES)?;
+    let baseline = root
+        .baseline
+        .as_ref()
+        .map(|reference| {
+            bound_resource(
+                inventory,
+                &FileRef {
+                    path: format!("{PREFIX}/base.json"),
+                    size: reference.size,
+                    sha256: reference.sha256.clone(),
+                },
+                MAX_BASELINE_BYTES as u64,
+            )?;
+            read(&format!("{PREFIX}/base.json"), MAX_BASELINE_BYTES as u64)
+        })
+        .transpose()?;
+    let domain = Domain::from_parts_with_baseline(
+        &root_bytes,
         &read(&mapping_path, MAX_SEGMENT_BYTES as u64)?,
         &read(profile_path, MAX_SEGMENT_BYTES as u64)?,
+        baseline.as_deref(),
     )?;
     domain.bind(&sync_id, &root_hash)?;
     domain.check_manifest(manifest)?;
@@ -323,6 +342,7 @@ impl ExtensionVerifier for SyncVerifier {
     fn resources_to_stage(&self, manifest: &Value) -> Option<BTreeSet<String>> {
         let mut paths = BTreeSet::from([
             format!("{PREFIX}/root.json"),
+            format!("{PREFIX}/base.json"),
             format!("{PREFIX}/mapping.json"),
             format!("{PREFIX}/checkpoint.json"),
             format!("{PREFIX}/history.jsonl"),
@@ -340,7 +360,7 @@ impl ExtensionVerifier for SyncVerifier {
             max_transactions: self.max_transactions,
             ..Default::default()
         };
-        let (_, checkpoint) = verify_core(
+        let (history, checkpoint) = verify_core(
             context.manifest,
             context.inventory,
             &limits,
@@ -371,6 +391,9 @@ impl ExtensionVerifier for SyncVerifier {
             "sync.logical_state",
             "sync.object_closure",
         ]);
+        if history.domain().baseline().is_some() {
+            report.note("sync.compact_baseline", "A compact generation is verified from its pinned baseline and subsequent history; pre-compaction edits are outside this checkpoint");
+        }
         report.note("sync.projection_unchecked","Sync core state verified; application database projection requires the pinned application adapter");
         Ok(())
     }
@@ -396,19 +419,72 @@ impl ExtensionVerifier for SyncVerifier {
 
 /// Produce a fresh closed projection and full causal checkpoint. Additional profile
 /// resources/caches can be streamed through `add_path`/`add_reader` before finish.
+pub struct LocalProjection<'a> {
+    pub adapter: &'a dyn SyncProjection,
+    pub source: &'a Connection,
+}
+struct ProjectionInput<'a> {
+    adapter: &'a dyn SyncProjection,
+    source: Option<&'a Connection>,
+}
 pub struct SnapshotBuilder<'a> {
     writer: crate::PackageWriter<'a>,
 }
 impl<'a> SnapshotBuilder<'a> {
     pub fn new(
         destination: impl AsRef<Path>,
-        mut manifest: Value,
+        manifest: Value,
         history: &History,
         objects: &ObjectStore,
         adapter: &dyn SyncProjection,
         limits: crate::Limits,
         options: &'a crate::VerificationOptions<'a>,
     ) -> Result<Self> {
+        Self::create(
+            destination,
+            manifest,
+            history,
+            objects,
+            ProjectionInput {
+                adapter,
+                source: None,
+            },
+            limits,
+            options,
+        )
+    }
+    pub fn from_local(
+        destination: impl AsRef<Path>,
+        manifest: Value,
+        history: &History,
+        objects: &ObjectStore,
+        local: LocalProjection<'_>,
+        limits: crate::Limits,
+        options: &'a crate::VerificationOptions<'a>,
+    ) -> Result<Self> {
+        Self::create(
+            destination,
+            manifest,
+            history,
+            objects,
+            ProjectionInput {
+                adapter: local.adapter,
+                source: Some(local.source),
+            },
+            limits,
+            options,
+        )
+    }
+    fn create(
+        destination: impl AsRef<Path>,
+        mut manifest: Value,
+        history: &History,
+        objects: &ObjectStore,
+        projection: ProjectionInput<'_>,
+        limits: crate::Limits,
+        options: &'a crate::VerificationOptions<'a>,
+    ) -> Result<Self> {
+        let adapter = projection.adapter;
         if options.trusted_digests.is_some() {
             return Err(unsupported(
                 "Complete sync checkpoint creation requires full byte verification",
@@ -435,6 +511,9 @@ impl<'a> SnapshotBuilder<'a> {
             &History::new(domain.clone(), history.limits().clone()).state(),
             &history.state(),
         )?;
+        if let Some(source) = projection.source {
+            adapter.copy_local(source, &transaction, domain)?;
+        }
         adapter.verify(&transaction, domain, &history.state())?;
         transaction.commit().map_err(sql)?;
         connection.close().map_err(|(_, e)| sql(e))?;
@@ -497,6 +576,9 @@ impl<'a> SnapshotBuilder<'a> {
             (checkpoint.state.path.clone(), state),
             (profile, domain.profile().to_vec()),
         ];
+        if let Some(base) = domain.baseline() {
+            files.push((format!("{PREFIX}/base.json"), canonical(base)?));
+        }
         let mut paths: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
         paths.push(domain.mapping().storage.database_path.clone());
         paths.extend(checkpoint.objects.iter().map(|o| o.path.clone()));
@@ -528,7 +610,7 @@ impl<'a> SnapshotBuilder<'a> {
         self.writer.finish()
     }
 }
-fn ensure_folders(manifest: &mut Value, paths: &[String]) -> Result<()> {
+pub(crate) fn ensure_folders(manifest: &mut Value, paths: &[String]) -> Result<()> {
     let folders = manifest["folders"]
         .as_array_mut()
         .ok_or_else(|| invalid("Missing folder inventory"))?;
@@ -773,6 +855,13 @@ impl SyncSnapshot {
             &format!("{PREFIX}/mapping.json"),
             &canonical(domain.mapping())?,
         )?;
+        if let Some(base) = domain.baseline() {
+            super::exchange::publish_bytes(
+                library.path(),
+                &format!("{PREFIX}/base.json"),
+                &canonical(base)?,
+            )?;
+        }
         let database = super::exchange::safe_path(
             library.path(),
             &domain.mapping().storage.database_path,
@@ -871,7 +960,10 @@ fn publish_package(
                 .is_file()
                 && hash == reference.sha256
             {
-                Ok(())
+                File::open(&target)
+                    .and_then(|file| file.sync_all())
+                    .map_err(crate::io_failure)?;
+                super::exchange::sync_dir(target.parent().unwrap())
             } else {
                 Err(super::pending_bytes(
                     "Existing checkpoint publication is incomplete or mismatched; retry without replacing it",

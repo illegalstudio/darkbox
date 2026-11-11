@@ -100,8 +100,9 @@ Darkbox 1.5.0 adds the required-when-present synchronization extension 1.0.0.
 Applications keep local live libraries and exchange immutable causal transactions,
 resources and complete checkpoints through a separate cloud folder. Concurrent
 field alternatives, set changes, deletions and ordering have explicit merge rules.
-The SDK supplies transactional queues, replay, scanning and bootstrap with
-application-owned projection adapters. See [synchronization](docs/sync.md) for
+The SDK supplies transactional queues, replay, scanning, compact checkpoints and
+membership-free bounded retention with application-owned projection adapters.
+Old installations preserve unpublished edits in private recovery packages before rebase. See [synchronization](docs/sync.md) for
 integration, plaintext security mode and retention limits.
 
 ## Install

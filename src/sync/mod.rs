@@ -1,14 +1,18 @@
 //! Offline causal replication through an immutable, application-selected folder.
 //! Applications own projection code, the cloud client and the local write barrier.
+mod baseline;
 mod exchange;
 mod journal;
 mod merge;
+mod retention;
 mod snapshot;
 mod wire;
 
+pub use baseline::*;
 pub use exchange::*;
 pub use journal::*;
 pub use merge::*;
+pub use retention::*;
 pub use snapshot::*;
 pub use wire::*;
 

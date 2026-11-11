@@ -3,8 +3,8 @@
 Software 1.5.0 provides the `darkbox::sync` SDK for the official
 `studio.illegal.darkbox.sync` extension 1.0.0 and common Darkbox 1.5.0.
 Each computer uses its own local live library. An existing cloud client copies a
-separate exchange folder containing immutable transactions, resources and complete
-checkpoints. Darkbox requires no additional sync executable, server or CRDT runtime.
+separate repository containing immutable transactions, resources and independently
+complete checkpoint generations. Retention is independent of device membership. Darkbox requires no additional sync executable, server or CRDT runtime.
 
 The [normative reference](../archive/1.5.0/docs/darkbox/sync/1.0.0.md),
 [JSON Schema](../archive/1.5.0/docs/darkbox/sync/1.0.0.schema.json) and
@@ -25,8 +25,8 @@ cargo run --example sync_notes -- /absolute/path/to/a-new-demo-directory
 The directory must be absent. The example creates an initial checkpoint, two
 separate live libraries, private object stores and one exchange folder. Both
 peers edit the same title offline, exchange their transactions and retain both
-competing values. It then produces a full checkpoint and rebuilds a third local
-library. This demonstrates folder transport locally; a cloud client can copy the
+competing values. It then publishes compact generations, prunes expired data, prepares a private
+recovery package for a stale peer and rebuilds a third local library. This demonstrates folder transport locally; a cloud client can copy the
 exchange folder between actual computers.
 
 The executable is [examples/sync_notes.rs](../examples/sync_notes.rs). Its
@@ -45,21 +45,20 @@ new identities. When importing the same logical existing library, use
 its package identity. The format/profile change needed to integrate sync belongs
 to the application; attaching sync never silently migrates an older library.
 
-Use three distinct locations:
+Use three distinct locations. For bounded retention, open the shared location through `SyncRepository` and obtain its current generation `Exchange`:
 
 | Location | Contents | Owner |
 | --- | --- | --- |
 | Local working library | Authoritative SQLite database, live WAL and working metadata | Application holding `DirectoryLibrary` |
 | Private `ObjectStore` | Complete immutable resource bytes, addressed by hash and length | Application/SDK |
-| Shared `Exchange` | Immutable root/profile, per-incarnation segments/checkpoints/receipts and object pool | SDK plus the selected cloud client |
+| Shared `SyncRepository` | Immutable policy, generation exchanges, checkpoints and retirement proofs | SDK plus the selected cloud client |
 
 The working library and private store must remain outside the selected exchange.
 The SDK rejects overlap between those paths. The application must also ensure
 its local live database is outside any other cloud-synchronized directory.
 Local OS locks coordinate processes on one computer; they never coordinate peers.
 
-Create an exchange with `Exchange::create(path, domain, limits)`. Join an existing
-one with `Exchange::open(path, pinned_root_sha256, limits)`. Obtain/pin the intended
+Create a repository with `SyncRepository::create(path, &domain, policy, limits)` and publish a verified initial checkpoint with `publish_initial`. Join with `SyncRepository::open(path, pinned_repository_hash, limits)`. Obtain an exchange with `repository.exchange(&repository.current()?)`. Standalone `Exchange::create` and `open` retain their per-domain behavior for integrations that manage generations themselves. Obtain/pin the intended
 root identity through the application's library-selection flow; a root file
 changing under the same domain is a conflict, not a migration.
 
@@ -104,8 +103,8 @@ independent copy of the original database.
 
 `SnapshotBuilder` creates a new closed application projection from verified
 history using the registered adapter. It adds the common canonical bundle,
-profile, exact root/mapping, complete transaction history, logical state and
-all historically referenced objects. Additional declared profile files or cache
+profile, exact root/mapping, a pinned compact baseline when present, subsequent transaction history, logical
+state and every object referenced by that retained baseline/history. Additional declared profile files or cache
 databases can be supplied with `add_path`/`add_reader`. The output must be absent;
 checkpoints are never edited or replaced.
 
@@ -129,17 +128,16 @@ Open the authoritative database with persistent journaling and durable commits:
 
 ```rust,ignore
 connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;")?;
-let session = SyncSession::open(
+let session = repository.open_session(
     &mut library,
     &mut connection,
-    domain,
     objects,
     SessionOptions::new(persisted_device_id, "My computer"),
     &adapter,
 )?;
 ```
 
-The main database must be exactly the domain's declared database inside that
+The repository persists a generation high-water witness in the journal. The main database must be exactly the domain's declared database inside that
 working library. `SyncSession` borrows the library guard exclusively. It creates
 a fresh replica incarnation on every opening, including after crash, backup
 restore or copied installation. A persistent device ID/label is display metadata,
@@ -194,9 +192,11 @@ sequence.
 
 ## Publish, receive and apply
 
-The application schedules background exchange work:
+The application schedules background exchange work. Repository exchanges check the current generation before scanning or publishing:
 
 ```rust,ignore
+let generation = repository.current()?;
+let exchange = repository.exchange(&generation)?;
 session.publish_pending(&connection, &exchange)?;
 let scan = session.receive_exchange(&mut connection, &exchange)?;
 let applied = session.apply_ready(&mut connection, &adapter)?;
@@ -254,7 +254,7 @@ dots support the application's conflict UI; `LogicalState::ordered_records`
 provides the prescribed order for one position field/sequence/owner.
 
 A `SyncSnapshot` retains deleted-resource bytes and causal metadata as well as the
-visible projection. `publish` stores its exact package bytes before publishing its
+visible projection within its generation. `publish` stores its exact package bytes before publishing its
 external descriptor. `SyncSnapshot::fetch` checks that descriptor against the
 frozen, verified package. `select_snapshot` chooses by verified causal coverage,
 with deterministic ties, and rejects divergent histories. Filesystem timestamps
@@ -282,13 +282,9 @@ not author authentication. Sync v1 refuses protected libraries and never removes
 protection to make attachment succeed. Authenticated/encrypted sync requires a
 separately defined compatible mode.
 
-The application profile, data-format version and mapping stay fixed per domain.
-Version 1 does not perform distributed migrations, automatic garbage collection,
-replica retirement or tombstone pruning. Every writing session adds an incarnation
-frontier entry. Full checkpoints include history and historical resources, so
-storage can grow substantially. Format migration/compaction needs explicit
-reconciliation and rebootstrap into a new domain; an offline old computer is not
-silently migrated.
+The application profile, data-format version and mapping stay fixed across a repository's generations. `History::compact` produces a fresh domain with a root-bound baseline and no tail transactions. The baseline preserves live record IDs, unresolved register/placement alternatives and visible ordering. It removes superseded transactions, inactive set tags, obsolete ordering anchors and unreferenced deleted records. Resource closure follows the retained seed and current-generation history.
+
+Baseline trust is explicit. Its exact bytes are pinned by the root and structurally checked, then the verifier replays all subsequent history and checks state/resource closure. Removed pre-generation edits are outside that verification claim. Generic verification continues to leave application projection to its registered adapter.
 
 `SyncLimits` bounds history bytes, transaction count, folder scan entries and
 ordinary I/O through `Limits`. Wire limits also bound individual transactions,
@@ -297,3 +293,32 @@ errors; they never authorize truncation, skipping a causal gap or deleting old
 history. A transport must eventually deliver and preserve complete published
 files for convergence to progress. Actual cloud-client configuration and availability
 remain application deployment responsibilities.
+
+
+## Compaction and bounded retention
+
+`RetentionPolicy::default()` uses a 30-day grace window, at least two checkpoints, a seven-day checkpoint interval with nonempty history, 10,000 transactions or 16 MiB of tail history. The policy is immutable in the pinned repository root. Applications can choose different positive thresholds and a checkpoint count of at least two when creating a repository. `compaction_due(&history, now)` reports whether the application's background scheduler should capture a complete current checkpoint. There is no external daemon.
+
+Build a private current `SyncSnapshot` under the application's capture barrier, then call `repository.compact(&snapshot, &objects, &adapter, now, &options)`. The snapshot's current domain must be the repository head. Additional profile resources and secondary closed databases survive compaction. A new syncId, exact seed/root and independently complete package are published before the generation record. An old generation is never mutated into a new one.
+
+`repository.prune(now, &adapter, &options)` fully verifies the current checkpoint and its projection, checks predecessor grace periods and preserves the configured recent generations. Before deleting data it publishes a self-contained retirement proof. Domain paths include their ordinal, so a cloud client resurrecting old files cannot make an expired generation current or prevent later cleanup. Retirement proofs themselves are compacted after a higher verified cutoff is published. The SDK uses explicit UTC seconds supplied by the application, not filesystem timestamps. Clock rollback or a retirement proof ahead of the local maintenance clock postpones deletion.
+
+Pruning touches only expired reserved domain namespaces and their control records. Symlinks and special files stop cleanup. Interruptions leave a verified cutoff and retryable remaining work. In a healthy repository the retained state consists of current data/conflicts, recent generation checkpoints, tail history within the configured window and a current retirement proof. Real live data, unresolved conflicts, ongoing writes and deliberately retained private recovery packages still consume space. Operational scan/byte limits always fail rather than silently omit input.
+
+## Rebase and recovery of a stale installation
+
+A repository exchange returns `sync.generation_changed` when its base is superseded. Old offline edits remain local or in their old ordinal namespace. `base_status(domain, now)` distinguishes current, superseded-with-grace and expired bases. Retention does not enumerate or retire devices.
+
+Use the repository's `open_session` for local durable high-water tracking. On a base change, call `prepare_rebase` with a `RebaseTarget` containing an absent private working-library path, a private object store and an optional absent recovery-package path. A fresh private store lets the application discard obsolete local media when adoption is complete. If the exact captured source boundary cannot be certified, or outgoing/pending rows exist, omitting recovery_path returns `sync.recovery_required` before building the replacement. This conservative recovery rule also applies to concurrent edits on a recently superseded base.
+
+The complete private recovery `.darkbox` package includes the old seed/history, objects and deterministic projection. `extensions/studio.illegal.darkbox.sync/recovery/journal.json` preserves exact outgoing and incoming transaction records and identifies missing pending media. Available pending-only media is included as well. `RecoveryJournal` exposes the source revision and captured frontier. Application-local columns are preserved by the adapter's `copy_local(source, destination_transaction, domain)` hook, in both the recovery archive and fresh local library. The default refuses this operation when the mapping declares local columns and the adapter has no implementation.
+
+`prepare_rebase` returns `PreparedRebase` with a guarded fresh library, its generation, the source revision and any recovery path. Under the application's write barrier, call `check_prepared_rebase` and atomically update the application's own active-library configuration before closing the old session. The source working library and object store remain intact until the application completes adoption and applies its local cleanup/recovery retention policy. The SDK cannot change an application's external configuration pointer. Incoming pending changes invalidate the preparation just like local edits.
+
+No old operation is automatically converted into a new-generation write. The application can open the recovery package for comparison and offer selective import as ordinary current-generation operations. Stable retained record IDs let a selected value be applied to an existing record. A recovered deleted or previously unknown record requires the profile's new-record/import flow. An old title therefore cannot silently replace a newer accepted title.
+
+## Concurrent checkpoint publication
+
+Distinct complete records at the greatest ordinal produce `sync.generation_conflict`. Unreconciled retained branches also stop pruning. The SDK retains their bytes. Inspect `generations()` and the retained checkpoints, then construct the desired reconciled source checkpoint through the application's conflict UI.
+
+`resolve_with_checkpoint` requires an explicitly selected branch and `ResolutionTarget` with a private recovery directory. It exports complete recovery packages for every observed branch, including ready exchange history and resources, before publishing the selected compact state. Missing or invalid branch input blocks resolution. A changed observed branch set requires retry and leaves the exported archives available. The resolution record names its parent and replaced branches. Their cloud data still follows grace and retirement proofs. This operation requires an application decision and never picks a branch by wall-clock time.

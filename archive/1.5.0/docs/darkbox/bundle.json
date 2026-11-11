@@ -14,8 +14,8 @@
   "files": [
     {
       "path": "README.md",
-      "size": 17261,
-      "sha256": "7589fd55eb7bb68eb4b49d7349772de462976c5a0500eeb65a2434f07a86d78d"
+      "size": 17414,
+      "sha256": "b315e77f2d9e7b458c7305e2864a7a0482d7567b6270d5025fc6c61d219428d8"
     },
     {
       "path": "docs/darkbox/delta.schema.json",
@@ -44,18 +44,18 @@
     },
     {
       "path": "docs/darkbox/sync/1.0.0.md",
-      "size": 49127,
-      "sha256": "3730e32faa401073c59013e11e12d839144c6eb3fd3a90e7de096cf170072e3f"
+      "size": 59213,
+      "sha256": "4a3158dad848be19c58e16ac49ee9691d6af996f23a85eced83c5a3fa2ff43a9"
     },
     {
       "path": "docs/darkbox/sync/1.0.0.schema.json",
-      "size": 34800,
-      "sha256": "4616b9d9931fc4ccda7910aa20c146e44d60e63b0d7bf043e9969559847f899a"
+      "size": 41443,
+      "sha256": "9486475ae81d92a67e1bc2fee04c594bd22e756adeefff091b8dfca17fdd450d"
     },
     {
       "path": "docs/darkbox/sync/1.0.0.vectors.json",
-      "size": 160932,
-      "sha256": "a831055d434b6f5994d13f9985c2edeb37e139901d7805c08f8ab0075e4a26d0"
+      "size": 195439,
+      "sha256": "86338ecd77fbe96441ae9ab97d97d9bfca1c70ee3fa79b2f88d0dc95b0399605"
     },
     {
       "path": "docs/sqlite/SOURCE.md",
