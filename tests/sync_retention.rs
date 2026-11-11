@@ -478,7 +478,10 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
     repository
         .check_prepared_rebase(&old, &connection, &prepared, &Notes)
         .unwrap();
-    assert_eq!(prepared.recovery, Some(recovery_path.clone()));
+    assert_eq!(
+        prepared.recovery,
+        Some(fs::canonicalize(&recovery_path).unwrap())
+    );
     let backup = SyncSnapshot::open(&recovery_path, SyncLimits::default(), &options).unwrap();
     backup.verify_projection(&Notes).unwrap();
     let mut bytes = Vec::new();
