@@ -116,8 +116,19 @@ jobs:
           merge-multiple: true
       - name: Install Arch package inspection tools
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes libarchive-tools
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            printf '%s\n' \
+              'https://archive.ubuntu.com/ubuntu/' \
+              'https://security.ubuntu.com/ubuntu/' \
+              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          darkbox_apt_options=(
+            -o Acquire::Retries=2
+            -o Acquire::http::Timeout=15
+            -o Acquire::https::Timeout=15
+          )
+          sudo apt-get "${darkbox_apt_options[@]}" update
+          sudo apt-get "${darkbox_apt_options[@]}" install --no-install-recommends --yes libarchive-tools
       - name: Validate final packages and collect checksums
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
