@@ -374,13 +374,13 @@ pub fn unpack(
     if input.source.is_directory()
         || !matches!(
             input.manifest()["darkbox"]["version"].as_str(),
-            Some("1.2.0" | "1.3.0" | "1.4.0")
+            Some("1.2.0" | "1.3.0" | "1.4.0" | "1.5.0")
         )
     {
         return Err(Error::new(
             Status::Unsupported,
             "unpack.version",
-            "Unpacking requires a Darkbox 1.2.0 or 1.3.0 ZIP",
+            "Unpacking requires a supported common version with directory storage",
         ));
     }
     let candidate = tempfile::Builder::new()
@@ -452,12 +452,12 @@ struct Delta {
 fn identity(input: &Verified) -> Result<Identity, Error> {
     if !matches!(
         input.manifest()["darkbox"]["version"].as_str(),
-        Some("1.2.0" | "1.3.0" | "1.4.0")
+        Some("1.2.0" | "1.3.0" | "1.4.0" | "1.5.0")
     ) {
         return Err(Error::new(
             Status::Unsupported,
             "delta.version",
-            "Delta editions require Darkbox 1.2.0 or 1.3.0",
+            "Delta editions require a supported common version with delta transfers",
         ));
     }
     let id = input.manifest()["packageId"]

@@ -18,6 +18,7 @@ pub mod protection;
 mod resource_inventory;
 mod source;
 mod sqlite;
+pub mod sync;
 mod transfer;
 pub use media::StoredResource;
 pub use transfer::{create_delta, merge, pack, unpack, verify_delta};
@@ -378,11 +379,11 @@ fn run(
             report.checks.push("inventory");
         }
     }
-    if directory_form && !matches!(version, Some("1.2.0" | "1.3.0" | "1.4.0")) {
+    if directory_form && !matches!(version, Some("1.2.0" | "1.3.0" | "1.4.0" | "1.5.0")) {
         return Err(Failure::new(
             Status::Unsupported,
             "directory.version",
-            "Directory form requires Darkbox 1.2.0 or 1.3.0",
+            "Directory form requires an explicitly supported common version with directory storage",
         ));
     }
     if mode == Mode::Inventory {
@@ -471,7 +472,7 @@ fn run(
         let expected_size = file.size;
         let trusted = if allow_cached
             && directory_form
-            && matches!(version, Some("1.3.0" | "1.4.0"))
+            && matches!(version, Some("1.3.0" | "1.4.0" | "1.5.0"))
             && common
             && !capture
             && destination.is_none()

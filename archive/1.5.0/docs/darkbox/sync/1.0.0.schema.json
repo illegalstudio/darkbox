@@ -1,0 +1,1774 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:darkbox:sync-schema:1.0.0",
+  "title": "Darkbox synchronization extension 1.0.0",
+  "$comment": "Structural validation only. Canonical bytes, identity, counters, causal closure, author-context operation validity, hash/length, sorted uniqueness, complete resource closure and projection require additional checks.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/domain"
+    },
+    {
+      "$ref": "#/$defs/mapping"
+    },
+    {
+      "$ref": "#/$defs/replica"
+    },
+    {
+      "$ref": "#/$defs/transaction"
+    },
+    {
+      "$ref": "#/$defs/segment"
+    },
+    {
+      "$ref": "#/$defs/receipt"
+    },
+    {
+      "$ref": "#/$defs/state"
+    },
+    {
+      "$ref": "#/$defs/checkpoint"
+    },
+    {
+      "$ref": "#/$defs/snapshot"
+    },
+    {
+      "$ref": "#/$defs/extension"
+    },
+    {
+      "$ref": "#/$defs/baseline"
+    },
+    {
+      "$ref": "#/$defs/repository"
+    },
+    {
+      "$ref": "#/$defs/generation"
+    },
+    {
+      "$ref": "#/$defs/retirement"
+    },
+    {
+      "$ref": "#/$defs/recovery"
+    }
+  ],
+  "$defs": {
+    "counter": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]{0,19})$",
+      "$comment": "Additionally enforce unsigned 64-bit maximum 18446744073709551615."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+    },
+    "dot": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}:[1-9][0-9]{0,19}:(?:0|[1-9][0-9]{0,3})$",
+      "$comment": "Sequence is unsigned 64-bit and positive; index is at most 4095."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._/-]+$",
+      "$comment": "Also enforce common path identity, reserved paths, ancestors and no dot traversal."
+    },
+    "integer": {
+      "type": "string",
+      "pattern": "^(?:0|-?[1-9][0-9]*)$",
+      "maxLength": 4097,
+      "$comment": "At most 4096 digits, excluding sign."
+    },
+    "application": {
+      "type": "object",
+      "required": [
+        "profile",
+        "formatVersion"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "formatVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": [
+        "path",
+        "size",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "size": {
+          "$ref": "#/$defs/counter"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "tip": {
+      "type": "object",
+      "required": [
+        "replicaId",
+        "sequence",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "replicaId": {
+          "$ref": "#/$defs/id"
+        },
+        "sequence": {
+          "$ref": "#/$defs/counter"
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "frontier": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/tip"
+      },
+      "uniqueItems": true
+    },
+    "value": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "bool"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "integer"
+            },
+            "value": {
+              "$ref": "#/$defs/integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "coefficient",
+            "exponent"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "decimal"
+            },
+            "coefficient": {
+              "$ref": "#/$defs/integer"
+            },
+            "exponent": {
+              "$ref": "#/$defs/integer"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "values"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "list"
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/value"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "entries"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "map"
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "key",
+                  "value"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "$ref": "#/$defs/value"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "collection",
+            "id"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "record"
+            },
+            "collection": {
+              "$ref": "#/$defs/name"
+            },
+            "id": {
+              "$ref": "#/$defs/dot"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "sha256",
+            "size"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "blob"
+            },
+            "sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "size": {
+              "$ref": "#/$defs/counter"
+            }
+          }
+        }
+      ],
+      "$comment": "Typed-value depth at most 64; exact decimal normalization and exponent bounds are semantic checks."
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "collection"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "create"
+            },
+            "collection": {
+              "$ref": "#/$defs/name"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "record",
+            "field",
+            "present"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "assign"
+            },
+            "record": {
+              "$ref": "#/$defs/dot"
+            },
+            "field": {
+              "$ref": "#/$defs/name"
+            },
+            "present": {
+              "type": "boolean"
+            },
+            "value": {
+              "$ref": "#/$defs/value"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "present": {
+                    "const": true
+                  }
+                }
+              },
+              "then": {
+                "required": [
+                  "value"
+                ]
+              },
+              "else": {
+                "not": {
+                  "required": [
+                    "value"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "record",
+            "field",
+            "value"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "set_add"
+            },
+            "record": {
+              "$ref": "#/$defs/dot"
+            },
+            "field": {
+              "$ref": "#/$defs/name"
+            },
+            "value": {
+              "$ref": "#/$defs/value"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "record",
+            "field",
+            "value",
+            "tags"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "set_remove"
+            },
+            "record": {
+              "$ref": "#/$defs/dot"
+            },
+            "field": {
+              "$ref": "#/$defs/name"
+            },
+            "value": {
+              "$ref": "#/$defs/value"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/dot"
+              },
+              "uniqueItems": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "record"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "delete"
+            },
+            "record": {
+              "$ref": "#/$defs/dot"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "record",
+            "field",
+            "sequence",
+            "owner",
+            "after"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "place"
+            },
+            "record": {
+              "$ref": "#/$defs/dot"
+            },
+            "field": {
+              "$ref": "#/$defs/name"
+            },
+            "sequence": {
+              "$ref": "#/$defs/name"
+            },
+            "owner": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/dot"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "after": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/dot"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "op",
+            "record",
+            "field"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "unplace"
+            },
+            "record": {
+              "$ref": "#/$defs/dot"
+            },
+            "field": {
+              "$ref": "#/$defs/name"
+            }
+          }
+        }
+      ]
+    },
+    "transaction": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "replicaId",
+        "sequence",
+        "previous",
+        "dependencies",
+        "lamport",
+        "operations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-transaction"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "replicaId": {
+          "$ref": "#/$defs/id"
+        },
+        "sequence": {
+          "$ref": "#/$defs/counter"
+        },
+        "previous": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dependencies": {
+          "$ref": "#/$defs/frontier"
+        },
+        "lamport": {
+          "$ref": "#/$defs/counter"
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/operation"
+          },
+          "minItems": 1,
+          "maxItems": 4096
+        }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "replicaId",
+        "first",
+        "last",
+        "transactions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-segment"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "replicaId": {
+          "$ref": "#/$defs/id"
+        },
+        "first": {
+          "$ref": "#/$defs/counter"
+        },
+        "last": {
+          "$ref": "#/$defs/counter"
+        },
+        "transactions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transaction"
+          },
+          "minItems": 1,
+          "maxItems": 256
+        }
+      }
+    },
+    "replica": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "replicaId",
+        "deviceId",
+        "label"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-replica"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "replicaId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 1024,
+          "$comment": "1024 UTF-8 bytes, not just characters."
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "replicaId",
+        "serial",
+        "frontier"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-receipt"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "replicaId": {
+          "$ref": "#/$defs/id"
+        },
+        "serial": {
+          "$ref": "#/$defs/counter"
+        },
+        "frontier": {
+          "$ref": "#/$defs/frontier"
+        }
+      }
+    },
+    "domain": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "packageId",
+        "commonVersion",
+        "application",
+        "profile",
+        "mapping",
+        "encoding",
+        "merge",
+        "security"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-domain"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "packageId": {
+          "$ref": "#/$defs/id"
+        },
+        "commonVersion": {
+          "const": "1.5.0"
+        },
+        "application": {
+          "$ref": "#/$defs/application"
+        },
+        "profile": {
+          "$ref": "#/$defs/file"
+        },
+        "mapping": {
+          "$ref": "#/$defs/file"
+        },
+        "encoding": {
+          "const": "jcs-strings-v1"
+        },
+        "merge": {
+          "enum": [
+            "causal-records-v1",
+            "causal-records-seed-v1"
+          ]
+        },
+        "security": {
+          "const": "trusted-folder-plaintext"
+        },
+        "baseline": {
+          "$ref": "#/$defs/file"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "baseline"
+            ]
+          },
+          "then": {
+            "properties": {
+              "merge": {
+                "const": "causal-records-seed-v1"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "merge": {
+                "const": "causal-records-v1"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "field": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "name",
+            "kind",
+            "columns",
+            "codec",
+            "valueTypes"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "enum": [
+                "register",
+                "set"
+              ]
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "$comment": "Also UTF-8 byte length <=255 and no NUL."
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "codec": {
+              "$ref": "#/$defs/name"
+            },
+            "valueTypes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "null",
+                  "bool",
+                  "text",
+                  "integer",
+                  "decimal",
+                  "list",
+                  "map",
+                  "record",
+                  "blob"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "name",
+            "kind",
+            "columns",
+            "codec",
+            "valueTypes",
+            "sequences",
+            "ownerCollections",
+            "allowRootOwner"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "kind": {
+              "const": "position"
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "$comment": "Also UTF-8 byte length <=255 and no NUL."
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "codec": {
+              "$ref": "#/$defs/name"
+            },
+            "valueTypes": {
+              "const": []
+            },
+            "sequences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/name"
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "ownerCollections": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/name"
+              },
+              "uniqueItems": true
+            },
+            "allowRootOwner": {
+              "type": "boolean"
+            }
+          }
+        }
+      ]
+    },
+    "mapping": {
+      "type": "object",
+      "required": [
+        "kind",
+        "mappingVersion",
+        "application",
+        "storage",
+        "collections",
+        "projection"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-mapping"
+        },
+        "mappingVersion": {
+          "const": "1.0.0"
+        },
+        "application": {
+          "$ref": "#/$defs/application"
+        },
+        "storage": {
+          "type": "object",
+          "required": [
+            "mode",
+            "databasePath",
+            "reservedPrefix"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "single-database",
+                "journal-with-caches"
+              ]
+            },
+            "databasePath": {
+              "$ref": "#/$defs/path"
+            },
+            "reservedPrefix": {
+              "const": "_darkbox_sync_"
+            }
+          }
+        },
+        "collections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "table",
+              "idColumn",
+              "fields",
+              "localColumns"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "table": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "$comment": "Also UTF-8 byte length <=255 and no NUL."
+              },
+              "idColumn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "$comment": "Also UTF-8 byte length <=255 and no NUL."
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/field"
+                }
+              },
+              "localColumns": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "$comment": "Also UTF-8 byte length <=255 and no NUL."
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "projection": {
+          "type": "object",
+          "required": [
+            "id",
+            "version",
+            "conflictPolicy",
+            "documentationPath"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conflictPolicy": {
+              "const": "quarantine"
+            },
+            "documentationPath": {
+              "const": "profile/profile.md"
+            }
+          }
+        }
+      }
+    },
+    "recordState": {
+      "type": "object",
+      "required": [
+        "id",
+        "collection",
+        "deletedBy",
+        "registers",
+        "sets",
+        "positions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/dot"
+        },
+        "collection": {
+          "$ref": "#/$defs/name"
+        },
+        "deletedBy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dot"
+          },
+          "uniqueItems": true
+        },
+        "registers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field",
+              "candidates"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "$ref": "#/$defs/name"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "dot",
+                    "lamport",
+                    "present"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "dot": {
+                      "$ref": "#/$defs/dot"
+                    },
+                    "lamport": {
+                      "$ref": "#/$defs/counter"
+                    },
+                    "present": {
+                      "type": "boolean"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/value"
+                    }
+                  },
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "present": {
+                            "const": true
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "value"
+                        ]
+                      },
+                      "else": {
+                        "not": {
+                          "required": [
+                            "value"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "sets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field",
+              "adds",
+              "removed"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "$ref": "#/$defs/name"
+              },
+              "adds": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "dot",
+                    "value"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "dot": {
+                      "$ref": "#/$defs/dot"
+                    },
+                    "value": {
+                      "$ref": "#/$defs/value"
+                    }
+                  }
+                }
+              },
+              "removed": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/dot"
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field",
+              "candidates"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "$ref": "#/$defs/name"
+              },
+              "candidates": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "dot",
+                    "lamport",
+                    "present"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "dot": {
+                      "$ref": "#/$defs/dot"
+                    },
+                    "lamport": {
+                      "$ref": "#/$defs/counter"
+                    },
+                    "present": {
+                      "type": "boolean"
+                    },
+                    "node": {
+                      "$ref": "#/$defs/dot"
+                    }
+                  },
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "present": {
+                            "const": true
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "node"
+                        ]
+                      },
+                      "else": {
+                        "not": {
+                          "required": [
+                            "node"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                },
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "id",
+        "record",
+        "field",
+        "sequence",
+        "owner",
+        "after",
+        "lamport"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/dot"
+        },
+        "record": {
+          "$ref": "#/$defs/dot"
+        },
+        "field": {
+          "$ref": "#/$defs/name"
+        },
+        "sequence": {
+          "$ref": "#/$defs/name"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/dot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/dot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lamport": {
+          "$ref": "#/$defs/counter"
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "frontier",
+        "records",
+        "nodes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-state"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "frontier": {
+          "$ref": "#/$defs/frontier"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/recordState"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "frontier",
+        "history",
+        "state",
+        "objects"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-checkpoint"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "frontier": {
+          "$ref": "#/$defs/frontier"
+        },
+        "history": {
+          "$ref": "#/$defs/file"
+        },
+        "state": {
+          "$ref": "#/$defs/file"
+        },
+        "objects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "sha256",
+              "size",
+              "path"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "size": {
+                "$ref": "#/$defs/counter"
+              },
+              "path": {
+                "$ref": "#/$defs/path"
+              }
+            }
+          }
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "replicaId",
+        "package",
+        "frontier",
+        "stateSha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-snapshot"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "replicaId": {
+          "$ref": "#/$defs/id"
+        },
+        "package": {
+          "$ref": "#/$defs/file"
+        },
+        "frontier": {
+          "$ref": "#/$defs/frontier"
+        },
+        "stateSha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "sourceRootSha256",
+        "sourceFrontier",
+        "records",
+        "nodes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-baseline"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "sourceRootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "sourceFrontier": {
+          "$ref": "#/$defs/frontier"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/recordState"
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      }
+    },
+    "retentionPolicy": {
+      "type": "object",
+      "required": [
+        "retentionSeconds",
+        "keepCheckpoints",
+        "checkpointIntervalSeconds",
+        "checkpointTransactions",
+        "checkpointHistoryBytes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "retentionSeconds": {
+          "$ref": "#/$defs/counter"
+        },
+        "keepCheckpoints": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpointIntervalSeconds": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpointTransactions": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpointHistoryBytes": {
+          "$ref": "#/$defs/counter"
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "repositoryId",
+        "packageId",
+        "application",
+        "mappingSha256",
+        "profileSha256",
+        "policy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-repository"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "repositoryId": {
+          "$ref": "#/$defs/id"
+        },
+        "packageId": {
+          "$ref": "#/$defs/id"
+        },
+        "application": {
+          "$ref": "#/$defs/application"
+        },
+        "mappingSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "profileSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "policy": {
+          "$ref": "#/$defs/retentionPolicy"
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "repositorySha256",
+        "ordinal",
+        "parent",
+        "createdAt",
+        "checkpoint"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-generation"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "repositorySha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "ordinal": {
+          "$ref": "#/$defs/counter"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "replaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hash"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "createdAt": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/snapshot"
+        }
+      }
+    },
+    "retirement": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "repositorySha256",
+        "retiredBefore",
+        "checkedAt",
+        "witnesses"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-retirement"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "repositorySha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "retiredBefore": {
+          "$ref": "#/$defs/counter"
+        },
+        "checkedAt": {
+          "$ref": "#/$defs/counter"
+        },
+        "witnesses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/generation"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "required": [
+        "kind",
+        "protocolVersion",
+        "syncId",
+        "rootSha256",
+        "sourceRevision",
+        "frontier",
+        "outgoing",
+        "incoming",
+        "missingObjects"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "darkbox-sync-recovery"
+        },
+        "protocolVersion": {
+          "const": "1.0.0"
+        },
+        "syncId": {
+          "$ref": "#/$defs/id"
+        },
+        "rootSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "sourceRevision": {
+          "$ref": "#/$defs/counter"
+        },
+        "frontier": {
+          "$ref": "#/$defs/frontier"
+        },
+        "outgoing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transaction"
+          }
+        },
+        "incoming": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/transaction"
+          }
+        },
+        "missingObjects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "sha256",
+              "size"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "size": {
+                "$ref": "#/$defs/counter"
+              }
+            }
+          }
+        }
+      }
+    },
+    "extension": {
+      "type": "object",
+      "required": [
+        "version",
+        "required",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": "1.0.0"
+        },
+        "required": {
+          "const": true
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "mode",
+                "syncId",
+                "rootSha256",
+                "rootPath",
+                "mappingPath",
+                "journalDatabase",
+                "journalSchemaVersion"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "working"
+                },
+                "syncId": {
+                  "$ref": "#/$defs/id"
+                },
+                "rootSha256": {
+                  "$ref": "#/$defs/hash"
+                },
+                "rootPath": {
+                  "const": "extensions/studio.illegal.darkbox.sync/root.json"
+                },
+                "mappingPath": {
+                  "const": "extensions/studio.illegal.darkbox.sync/mapping.json"
+                },
+                "journalDatabase": {
+                  "$ref": "#/$defs/path"
+                },
+                "journalSchemaVersion": {
+                  "const": "1.0.0"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "mode",
+                "syncId",
+                "rootSha256",
+                "rootPath",
+                "mappingPath",
+                "checkpointPath"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "const": "sealed"
+                },
+                "syncId": {
+                  "$ref": "#/$defs/id"
+                },
+                "rootSha256": {
+                  "$ref": "#/$defs/hash"
+                },
+                "rootPath": {
+                  "const": "extensions/studio.illegal.darkbox.sync/root.json"
+                },
+                "mappingPath": {
+                  "const": "extensions/studio.illegal.darkbox.sync/mapping.json"
+                },
+                "checkpointPath": {
+                  "const": "extensions/studio.illegal.darkbox.sync/checkpoint.json"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

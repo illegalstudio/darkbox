@@ -44,3 +44,18 @@ Moving attachments from BLOBs to resource files changes application conventions 
 Existing portable-package formats, local caches, installed libraries, licenses and readable-folder exports do not become Darkbox projects automatically. A profile decides what belongs inside a project and what remains an optional external dependency. The common container never embeds external material solely because an application happens to use it locally.
 
 When a migration changes the data-format version, package the matching profile documentation together with the migrated payload and updated manifest. The archived documentation must continue to describe the exact data being saved.
+
+## Synchronization mappings (1.5.0)
+
+A profile adopting `studio.illegal.darkbox.sync` 1.0.0 includes its exact immutable
+`SyncMapping` and documents stable record/codec interpretation, synchronized and
+local-only columns, ordered owner relationships, its deterministic conflict view
+and the reserved `_darkbox_sync_` journal tables. The application registers the
+exact projection adapter version. A mapping alone cannot enforce arbitrary
+business invariants or authorize execution of packaged SQL/code.
+
+Concurrent valid operations remain in causal state even when the visible database
+needs to quarantine conflicting records. Profiles define deterministic projection
+and fallback semantics independently of arrival order, locale or wall clock.
+Data-format changes require an explicitly reconciled new sync domain in protocol
+1.0.0. See [the sync guide](sync.md) and [normative reference](../archive/1.5.0/docs/darkbox/sync/1.0.0.md).

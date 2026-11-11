@@ -306,6 +306,9 @@ fn snapshot_resource(snapshot: &Arc<Snapshot>, path: &str) -> Result<Resource, E
 }
 
 impl Package {
+    pub(crate) fn archive_path(&self) -> &Path {
+        self.snapshot.archive.path()
+    }
     /// Freeze and validate ZIP bytes from the current position of any reader.
     /// Saving such a package requires save_as to select its filesystem destination.
     pub fn from_reader(
