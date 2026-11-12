@@ -791,6 +791,7 @@ impl SyncSnapshot {
             exchange.path(),
             &descriptor.relative_path()?,
             &canonical(&descriptor)?,
+            &self.history.limits().io,
         )?;
         Ok(descriptor)
     }
@@ -849,17 +850,20 @@ impl SyncSnapshot {
             library.path(),
             &format!("{PREFIX}/root.json"),
             &canonical(domain.root())?,
+            limits,
         )?;
         super::exchange::publish_bytes(
             library.path(),
             &format!("{PREFIX}/mapping.json"),
             &canonical(domain.mapping())?,
+            limits,
         )?;
         if let Some(base) = domain.baseline() {
             super::exchange::publish_bytes(
                 library.path(),
                 &format!("{PREFIX}/base.json"),
                 &canonical(base)?,
+                limits,
             )?;
         }
         let database = super::exchange::safe_path(
@@ -950,7 +954,7 @@ fn publish_package(
         return Err(invalid("Snapshot package changed"));
     }
     temp.as_file().sync_all().map_err(crate::io_failure)?;
-    match temp.persist_noclobber(&target) {
+    match super::publication::persist(temp, &target, end) {
         Ok(_) => super::exchange::sync_dir(target.parent().unwrap()),
         Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
             let actual = crate::writer::file_digest(&target, limits.max_archive_bytes, end)?;
@@ -970,7 +974,7 @@ fn publish_package(
                 ))
             }
         }
-        Err(e) => Err(crate::io_failure(e.error)),
+        Err(e) => Err(super::publication::error(e.error)),
     }
 }
 

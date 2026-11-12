@@ -166,7 +166,7 @@ impl SyncRepository {
         };
         let bytes = canonical(&descriptor)?;
         let root = super::exchange::directory(path.as_ref())?;
-        super::exchange::publish_bytes(&root, "repository.json", &bytes)?;
+        super::exchange::publish_bytes(&root, "repository.json", &bytes, &limits.io)?;
         Ok(Self {
             root,
             descriptor,
@@ -587,6 +587,7 @@ impl SyncRepository {
             &self.root,
             &generation.relative_path()?,
             &canonical(&generation)?,
+            &self.limits.io,
         )?;
         Ok(generation)
     }
@@ -974,7 +975,12 @@ impl SyncRepository {
                 options,
             )?;
         }
-        super::exchange::publish_bytes(&candidate, "generations.json", &canonical(&generations)?)?;
+        super::exchange::publish_bytes(
+            &candidate,
+            "generations.json",
+            &canonical(&generations)?,
+            &self.limits.io,
+        )?;
         super::exchange::sync_dir(&candidate)?;
         fs::create_dir(&output).map_err(crate::io_failure)?;
         if let Err(error) = fs::rename(&candidate, &output) {
@@ -1491,6 +1497,7 @@ impl SyncRepository {
                 &self.root,
                 &record.relative_path()?,
                 &canonical(&record)?,
+                &self.limits.io,
             )?;
             Some(record)
         } else {

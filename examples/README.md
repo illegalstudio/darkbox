@@ -61,3 +61,7 @@ notes profile through two offline local edits, immutable exchange, retained fiel
 conflicts and a third-library bootstrap from a complete checkpoint. The executable
 and documented adapter are `sync_notes.rs` and `support/sync_notes.rs`. See the
 [SDK sync guide](../docs/sync.md) for integration and security/retention boundaries.
+
+The sync example accepts a second, unused exchange-directory path to exercise
+a mounted transport while keeping working SQLite libraries and private stores
+under the first local path. See the [filesystem requirements](../docs/sync.md#filesystem-requirements).

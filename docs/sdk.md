@@ -4,7 +4,7 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 
 ```toml
 [dependencies]
-darkbox = { version = "1.6.0", default-features = false }
+darkbox = { version = "1.6.1", default-features = false }
 ```
 
 Releases are available on [crates.io](https://crates.io/crates/darkbox).
@@ -344,3 +344,8 @@ application-enforced immutability contract,
 verification reuse shared by cloned handles. Ordinary stores retain full hashing;
 `ObjectStore::verify` always hashes all bytes and `clear_verification_cache`
 invalidates shared witnesses. See [object verification policy](sync.md#object-verification-policy).
+
+Sync publication on Unix mounts without hard links or no-replace rename is
+available in software 1.6.1 when directory locks and atomic rename are supported.
+See [filesystem requirements](sync.md#filesystem-requirements) for the local
+coordination and cloud-client boundaries.

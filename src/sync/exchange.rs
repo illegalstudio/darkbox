@@ -125,30 +125,52 @@ pub(crate) fn open_regular(root: &Path, relative: &str, maximum: u64) -> Result<
     }
     let file = File::open(path).map_err(crate::io_failure)?;
     if !same(&before, &file.metadata().map_err(crate::io_failure)?) {
-        return Err(invalid("Sync input changed while opening"));
+        return Err(super::pending_bytes("Sync input changed while opening").at(relative));
     }
     Ok((file, before))
 }
 pub(crate) fn read_regular(root: &Path, relative: &str, maximum: usize) -> Result<Vec<u8>> {
+    for attempt in 0..3 {
+        match read_regular_once(root, relative, maximum) {
+            Err(error) if error.code == "sync.pending_bytes" && attempt < 2 => {
+                // A VFS upload can settle cached file attributes immediately
+                // after close/rename. Retry a complete read with every witness
+                // check intact; never accept the bytes of an unstable attempt.
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            result => return result,
+        }
+    }
+    unreachable!("Bounded read attempts always return")
+}
+fn read_regular_once(root: &Path, relative: &str, maximum: usize) -> Result<Vec<u8>> {
     let (mut file, before) = open_regular(root, relative, maximum as u64)?;
     let mut bytes = Vec::new();
     Read::by_ref(&mut file)
         .take(maximum as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(crate::io_failure)?;
-    if bytes.len() > maximum
-        || !same(&before, &file.metadata().map_err(crate::io_failure)?)
+    if bytes.len() > maximum {
+        return Err(super::limit("Sync input bytes").at(relative));
+    }
+    if !same(&before, &file.metadata().map_err(crate::io_failure)?)
         || !same(
             &before,
             &fs::symlink_metadata(checked_path(root, relative, false)?)
                 .map_err(crate::io_failure)?,
         )
     {
-        return Err(invalid("Sync input changed during read"));
+        return Err(super::pending_bytes("Sync input changed during read").at(relative));
     }
     Ok(bytes)
 }
-pub(crate) fn publish_bytes(root: &Path, relative: &str, bytes: &[u8]) -> Result<()> {
+pub(crate) fn publish_bytes(
+    root: &Path,
+    relative: &str,
+    bytes: &[u8],
+    limits: &crate::Limits,
+) -> Result<()> {
+    let end = crate::transfer::deadline(limits)?;
     let path = safe_path(root, relative, true)?;
     let mut candidate =
         tempfile::NamedTempFile::new_in(path.parent().unwrap()).map_err(crate::io_failure)?;
@@ -156,7 +178,7 @@ pub(crate) fn publish_bytes(root: &Path, relative: &str, bytes: &[u8]) -> Result
         .write_all(bytes)
         .and_then(|()| candidate.as_file().sync_all())
         .map_err(crate::io_failure)?;
-    match candidate.persist_noclobber(&path) {
+    match super::publication::persist(candidate, &path, end) {
         Ok(_) => sync_dir(path.parent().unwrap()),
         Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
             let existing = read_regular(root, relative, bytes.len());
@@ -171,7 +193,7 @@ pub(crate) fn publish_bytes(root: &Path, relative: &str, bytes: &[u8]) -> Result
                 Err(fork("Immutable publication path contains different bytes").at(relative))
             }
         }
-        Err(e) => Err(crate::io_failure(e.error)),
+        Err(e) => Err(super::publication::error(e.error)),
     }
 }
 
@@ -325,7 +347,7 @@ impl ObjectStore {
         temp.as_file().sync_all().map_err(crate::io_failure)?;
         let relative = blob.relative_path()?;
         let target = safe_path(&self.root, &relative, true)?;
-        match temp.persist_noclobber(&target) {
+        match super::publication::persist(temp, &target, end) {
             Ok(_) => sync_dir(target.parent().unwrap())?,
             Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
                 if !self.contains(&blob)? {
@@ -339,7 +361,7 @@ impl ObjectStore {
                     .map_err(crate::io_failure)?;
                 sync_dir(target.parent().unwrap())?;
             }
-            Err(e) => return Err(crate::io_failure(e.error)),
+            Err(e) => return Err(super::publication::error(e.error)),
         }
         Ok(blob)
     }
@@ -657,12 +679,22 @@ pub struct Exchange {
 impl Exchange {
     pub fn create(path: impl AsRef<Path>, domain: Domain, limits: SyncLimits) -> Result<Self> {
         let root = directory(path.as_ref())?;
-        publish_bytes(&root, "profile/profile.md", domain.profile())?;
-        publish_bytes(&root, "profile/mapping.json", &canonical(domain.mapping())?)?;
+        publish_bytes(&root, "profile/profile.md", domain.profile(), &limits.io)?;
+        publish_bytes(
+            &root,
+            "profile/mapping.json",
+            &canonical(domain.mapping())?,
+            &limits.io,
+        )?;
         if let Some(base) = domain.baseline() {
-            publish_bytes(&root, "profile/base.json", &canonical(base)?)?;
+            publish_bytes(&root, "profile/base.json", &canonical(base)?, &limits.io)?;
         }
-        publish_bytes(&root, "library.json", &canonical(domain.root())?)?;
+        publish_bytes(
+            &root,
+            "library.json",
+            &canonical(domain.root())?,
+            &limits.io,
+        )?;
         Ok(Self {
             root,
             domain,
@@ -744,17 +776,32 @@ impl Exchange {
     pub fn publish_replica(&self, replica: &ReplicaDescriptor) -> Result<()> {
         self.check_root()?;
         replica.validate(&self.domain)?;
-        publish_bytes(&self.root, &replica.relative_path()?, &canonical(replica)?)
+        publish_bytes(
+            &self.root,
+            &replica.relative_path()?,
+            &canonical(replica)?,
+            &self.limits.io,
+        )
     }
     pub fn publish_segment(&self, segment: &Segment) -> Result<()> {
         self.check_root()?;
         segment.validate(&self.domain)?;
-        publish_bytes(&self.root, &segment.relative_path()?, &canonical(segment)?)
+        publish_bytes(
+            &self.root,
+            &segment.relative_path()?,
+            &canonical(segment)?,
+            &self.limits.io,
+        )
     }
     pub fn publish_receipt(&self, receipt: &Receipt) -> Result<()> {
         self.check_root()?;
         receipt.validate(&self.domain)?;
-        publish_bytes(&self.root, &receipt.relative_path()?, &canonical(receipt)?)
+        publish_bytes(
+            &self.root,
+            &receipt.relative_path()?,
+            &canonical(receipt)?,
+            &self.limits.io,
+        )
     }
     pub fn publish_object(&self, store: &ObjectStore, blob: &Blob) -> Result<()> {
         self.check_root()?;

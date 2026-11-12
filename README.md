@@ -113,11 +113,15 @@ It retains common specification 1.5.0 and sync protocol 1.0.0 unchanged.
 
 ### Rust SDK (crates.io)
 
+Software 1.6.1 supports sync publication on Unix mounts without hard links or
+no-replace rename when directory advisory locking and atomic rename are available.
+See [sync filesystem requirements](docs/sync.md#filesystem-requirements).
+
 Add the published [darkbox crate](https://crates.io/crates/darkbox) to your project:
 
 ```toml
 [dependencies]
-darkbox = { version = "1.6.0", default-features = false }
+darkbox = { version = "1.6.1", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable

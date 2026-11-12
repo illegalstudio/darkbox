@@ -224,14 +224,21 @@ pub fn attach_working(
         root,
         &format!("{PREFIX}/root.json"),
         &canonical(domain.root())?,
+        limits,
     )?;
     super::exchange::publish_bytes(
         root,
         &format!("{PREFIX}/mapping.json"),
         &canonical(domain.mapping())?,
+        limits,
     )?;
     if let Some(base) = domain.baseline() {
-        super::exchange::publish_bytes(root, &format!("{PREFIX}/base.json"), &canonical(base)?)?;
+        super::exchange::publish_bytes(
+            root,
+            &format!("{PREFIX}/base.json"),
+            &canonical(base)?,
+            limits,
+        )?;
     }
     if !manifest["extensions"].is_object() {
         manifest["extensions"] = serde_json::json!({});

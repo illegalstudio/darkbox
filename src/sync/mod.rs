@@ -4,6 +4,7 @@ mod baseline;
 mod exchange;
 mod journal;
 mod merge;
+mod publication;
 mod retention;
 mod snapshot;
 mod wire;

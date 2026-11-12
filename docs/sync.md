@@ -1,6 +1,6 @@
 # Synchronizing local libraries
 
-Software 1.6.0 provides the `darkbox::sync` SDK for the official
+Software 1.6.1 provides the `darkbox::sync` SDK for the official
 `studio.illegal.darkbox.sync` extension 1.0.0 and common Darkbox 1.5.0.
 Each computer uses its own local live library. An existing cloud client copies a
 separate repository containing immutable transactions, resources and independently
@@ -27,7 +27,17 @@ separate live libraries, private object stores and one exchange folder. Both
 peers edit the same title offline, exchange their transactions and retain both
 competing values. It then publishes compact generations, prunes expired data, prepares a private
 recovery package for a stale peer and rebuilds a third local library. This demonstrates folder transport locally; a cloud client can copy the
-exchange folder between actual computers.
+exchange folder between actual computers. The example includes an immutable
+attachment, so it also exercises object publication.
+
+An optional second argument selects a new exchange directory on a mounted
+filesystem while keeping the working libraries and private stores local:
+
+```sh
+cargo run --example sync_notes -- /local/new-demo /mounted/new-exchange
+```
+
+Both paths must be unused and application-controlled.
 
 The executable is [examples/sync_notes.rs](../examples/sync_notes.rs). Its
 [fictional notes adapter](../examples/support/sync_notes.rs) implements schema
@@ -61,6 +71,40 @@ Local OS locks coordinate processes on one computer; they never coordinate peers
 Create a repository with `SyncRepository::create(path, &domain, policy, limits)` and publish a verified initial checkpoint with `publish_initial`. Join with `SyncRepository::open(path, pinned_repository_hash, limits)`. Obtain an exchange with `repository.exchange(&repository.current()?)`. Standalone `Exchange::create` and `open` retain their per-domain behavior for integrations that manage generations themselves. Obtain/pin the intended
 root identity through the application's library-selection flow; a root file
 changing under the same domain is a conflict, not a migration.
+
+## Filesystem requirements
+
+Keep live SQLite libraries and private object stores on suitable local storage.
+The shared repository needs regular-file reads, directory synchronization and
+atomic rename within each destination directory. Native atomic no-clobber
+publication is preferred. Software 1.6.1 also supports Unix mounts, including
+rclone FUSE with VFS full caching, that reject no-replace rename and hard links
+but support parent-directory advisory `flock` and atomic ordinary rename.
+
+Every local SDK sync publisher first takes that directory lock where supported,
+including publishers using the native path. If native publication is unsupported,
+the SDK rechecks that the destination is absent while holding the lock and
+atomically renames the complete, flushed candidate. An existing file, directory
+or dangling symlink is never replaced by this fallback. It creates no persistent
+lock files and never copies directly into a final filename. Lock contention is
+bounded by the operation's `Limits::timeout`. Without a usable directory lock,
+the SDK retains native no-clobber publication and refuses the rename fallback.
+
+Directory locks coordinate cooperating local SDK publishers only. They are not
+distributed locks and cannot exclude another computer, a cloud client or tools
+that ignore them. Reserve protocol filenames for the SDK; older SDK versions
+without this locking protocol must not publish concurrently on the same mount.
+Cloud copies can still arrive partially or under conflict names, so all existing
+length, hash, canonical-content and fork checks remain required. Qualify the
+actual mount and cloud-client configuration used by the application; support for
+these operations cannot be inferred from the FUSE name alone.
+
+A metadata change during a guarded record read discards that attempt's bytes.
+The SDK retries a complete read up to three times to allow VFS attributes to
+settle, preserving every path, descriptor and stability check. Continued change
+returns `sync.pending_bytes` for a later retry rather than accepting unstable
+input. Arbitrary blocking filesystem calls remain subject to the cooperative
+I/O-limit contract.
 
 ## Profile integration
 

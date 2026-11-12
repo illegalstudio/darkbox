@@ -29,16 +29,28 @@ fn manifest(domain: &Domain) -> Result<serde_json::Value, darkbox::Error> {
         .build()
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let Some(path) = std::env::args_os().nth(1) else {
-        println!("Usage: cargo run --example sync_notes -- /absolute/new-demo-directory");
+    let mut arguments = std::env::args_os().skip(1);
+    let Some(path) = arguments.next() else {
+        println!(
+            "Usage: cargo run --example sync_notes -- /absolute/new-demo-directory [new-exchange-directory]"
+        );
         return Ok(());
     };
     let root = PathBuf::from(path);
+    let exchange_path = arguments
+        .next()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("exchange"));
+    if arguments.next().is_some() {
+        return Err("Too many example arguments".into());
+    }
     fs::create_dir(&root)?;
     let mut limits = SyncLimits::default();
     let staging = root.join("staging");
     fs::create_dir(&staging)?;
     limits.io.staging_directory = Some(staging);
+    let objects_a = ObjectStore::open(root.join("objects-a"), limits.clone())?;
+    let media = objects_a.put(&mut b"An immutable example attachment".as_slice())?;
     let domain = Domain::generate(notes::mapping(), notes::profile())?;
     let origin = random_id()?;
     let record = Dot {
@@ -55,6 +67,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
             Operation::Assign {
                 record: record.clone(),
+                field: "asset".into(),
+                present: true,
+                value: Some(SyncValue::Blob {
+                    sha256: media.sha256,
+                    size: media.size,
+                }),
+            },
+            Operation::Assign {
+                record: record.clone(),
                 field: "title".into(),
                 present: true,
                 value: Some(SyncValue::text("initial title")),
@@ -64,7 +85,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     initial.accept(seed)?;
     let options = VerificationOptions::default();
     let initial_path = root.join("initial.darkbox");
-    let objects_a = ObjectStore::open(root.join("objects-a"), limits.clone())?;
     SnapshotBuilder::new(
         &initial_path,
         manifest(&domain)?,
@@ -84,7 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ca.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=FULL;")?;
     cb.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=FULL;")?;
     let repository = SyncRepository::create(
-        root.join("exchange"),
+        exchange_path,
         &domain,
         RetentionPolicy::default(),
         limits.clone(),
