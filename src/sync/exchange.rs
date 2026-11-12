@@ -108,7 +108,7 @@ fn same_cached(a: &Metadata, b: &Metadata) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        if a.ctime() != b.ctime() || a.ctime_nsec() != b.ctime_nsec() {
+        if a.ctime() != b.ctime() || a.ctime_nsec() != b.ctime_nsec() || a.nlink() != b.nlink() {
             return false;
         }
     }

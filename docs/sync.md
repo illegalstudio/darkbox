@@ -192,8 +192,9 @@ let session_objects = objects.clone();
 The first access hashes the complete object. Later accesses can reuse that result
 while file identity, size and modification metadata match; Unix change metadata
 also invalidates cached witnesses. Access still refuses symlinks and checks for
-changes during the read. At most `capacity` objects are retained, with oldest
-insertions evicted first. Capacity zero keeps full hashing. Clones share witnesses;
+changes during the read. At most `capacity` verification witnesses are cached,
+with oldest insertions evicted first; no object is deleted by cache eviction.
+Capacity zero keeps full hashing. Clones share witnesses;
 independently opened handles have independent policies and caches.
 
 This is an explicit application trust policy. Matching metadata cannot prove
