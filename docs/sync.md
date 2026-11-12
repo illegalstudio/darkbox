@@ -1,6 +1,6 @@
 # Synchronizing local libraries
 
-Software 1.5.0 provides the `darkbox::sync` SDK for the official
+Software 1.6.0 provides the `darkbox::sync` SDK for the official
 `studio.illegal.darkbox.sync` extension 1.0.0 and common Darkbox 1.5.0.
 Each computer uses its own local live library. An existing cloud client copies a
 separate repository containing immutable transactions, resources and independently
@@ -144,6 +144,31 @@ restore or copied installation. A persistent device ID/label is display metadata
 not operation identity. Previously committed outgoing bytes remain publishable;
 new transactions never append to an old incarnation.
 
+Software 1.6.0 can also keep the guard inside the session, so a long-lived
+application does not need a self-referential holder:
+
+```rust,ignore
+let session = repository.open_owned_session(
+    library,
+    &mut connection,
+    objects,
+    SessionOptions::new(persisted_device_id, "My computer"),
+    &adapter,
+)?;
+// edit, publish_pending, receive_exchange, apply_ready and rebase checks work
+// exactly as with a borrowed session.
+let library = session.close();
+```
+
+`OwnedSyncSession::open` supplies the equivalent per-domain API. Both owning
+constructors return `OwnedSessionError` on failure; `into_parts()` recovers the
+error and still-guarded `DirectoryLibrary`. Successful `close()` also returns the
+guard without sealing the library or closing the application's SQLite handles.
+Close/checkpoint those handles before sealing. `OwnedSyncSession` is `Send + Sync`
+and works with `prepare_rebase` and `check_prepared_rebase` without adapters or
+additional dependencies. `Dot` and `Counter` implement `Hash` as well as equality
+and ordering.
+
 ## Local edits and immutable resources
 
 Stage resources into the private `ObjectStore` before referring to them. `put`
@@ -151,6 +176,34 @@ streams, hashes, flushes and publishes a complete object without overwriting an
 existing different file. `put_expected` also requires an exact expected digest
 and length. The caller must retain these objects unchanged. Do not edit files
 under the store directly or synchronize it as a writable cloud database.
+
+### Object verification policy
+
+Ordinary `ObjectStore::open` fully hashes each object checked by `contains` or
+`with_blob`. Applications that independently guarantee all store bytes remain
+immutable can explicitly select bounded witness reuse:
+
+```rust,ignore
+let objects = ObjectStore::open(private_path, limits)?
+    .with_trusted_immutable_cache(10_000);
+let session_objects = objects.clone();
+```
+
+The first access hashes the complete object. Later accesses can reuse that result
+while file identity, size and modification metadata match; Unix change metadata
+also invalidates cached witnesses. Access still refuses symlinks and checks for
+changes during the read. At most `capacity` objects are retained, with oldest
+insertions evicted first. Capacity zero keeps full hashing. Clones share witnesses;
+independently opened handles have independent policies and caches.
+
+This is an explicit application trust policy. Matching metadata cannot prove
+unchanged content against an external writer. Keep the store private, control
+hard-linked resources and prevent content modification by every application
+component. `clear_verification_cache()` invalidates all shared witnesses;
+`verify(&blob)` always reads and hashes the complete file regardless of policy.
+Changed or missing files invalidate their witnesses. An empty or reopened cache
+requires fresh verification. A complete checkpoint still receives full byte
+verification and makes no metadata-only integrity claim.
 
 Submit a transaction with `edit`, or use `edit_with` when new records need IDs
 within the same atomic group:
@@ -218,6 +271,22 @@ referenced resource are available. Each accepted group and its projection commit
 atomically. Independent ready chains can progress while another chain waits.
 If a transaction fails semantic validation, `apply_ready` leaves it pending and
 returns the offending replica and sequence after applying other ready chains.
+
+In software 1.6.0, receipt checks every known identity against exact durable bytes
+and retains conflict-copy evidence before skipping object imports for already
+applied transactions. Each pending object is imported at most once per scan, and
+pending transactions are revisited on later scans so media delivered after their
+transaction can still unblock it. Applications should use `receive_exchange`
+rather than reading private journal tables or filtering a plain `Exchange::scan`;
+those shortcuts can discard fork evidence or strand pending media.
+
+Normal receipt does not revalidate all media in committed history. Strict
+`ObjectStore::verify` or complete checkpoint verification can diagnose independent
+local damage. For an explicit missing-object repair pass, retain the scan returned
+by `receive_exchange` and call `session.objects().import(&exchange, &blob)` for
+its transactions' blob references. This preserves the SDK's identity/evidence
+checks. Damaged existing objects are refused rather than overwritten; quarantining
+or removing damaged local bytes requires the application's explicit repair policy.
 
 A cloud client can expose partial files and deliver them out of order despite a
 local atomic rename. The scanner verifies complete length/hash/content. Incomplete

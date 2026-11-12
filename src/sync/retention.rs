@@ -1174,6 +1174,21 @@ impl SyncRepository {
         };
         super::journal::set_meta(connection, "repository_generation", &canonical(&binding)?)
     }
+    /// Open an owning session with the same pinned-generation and recovery
+    /// checks as the borrowed session. Failures retain the library guard.
+    pub fn open_owned_session(
+        &self,
+        library: crate::DirectoryLibrary,
+        connection: &mut rusqlite::Connection,
+        objects: ObjectStore,
+        session_options: SessionOptions,
+        adapter: &dyn SyncProjection,
+    ) -> std::result::Result<OwnedSyncSession, OwnedSessionError> {
+        OwnedSyncSession::open_with(library, |library| {
+            self.open_session(library, connection, objects, session_options, adapter)
+        })
+    }
+
     pub fn open_session<'a>(
         &self,
         library: &'a mut crate::DirectoryLibrary,

@@ -329,14 +329,122 @@ impl BatchContext<'_> {
         })
     }
 }
+enum SessionLibrary<'a> {
+    Borrowed(&'a mut crate::DirectoryLibrary),
+    Owned(crate::DirectoryLibrary),
+}
+impl SessionLibrary<'_> {
+    fn path(&self) -> &Path {
+        match self {
+            Self::Borrowed(library) => library.path(),
+            Self::Owned(library) => library.path(),
+        }
+    }
+}
+
+/// A working session borrowing an exclusive library guard.
 pub struct SyncSession<'a> {
     cache: Mutex<Option<(Counter, History)>>,
-    library: &'a mut crate::DirectoryLibrary,
+    library: SessionLibrary<'a>,
     domain: Domain,
     replica: ReplicaDescriptor,
     objects: ObjectStore,
     limits: SyncLimits,
 }
+
+/// A working session that retains its library guard without self references.
+pub struct OwnedSyncSession(SyncSession<'static>);
+
+/// Opening failed while retaining the caller's exclusive library guard.
+pub struct OwnedSessionError {
+    pub error: crate::Error,
+    pub library: Box<crate::DirectoryLibrary>,
+}
+impl std::fmt::Debug for OwnedSessionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OwnedSessionError")
+            .field("error", &self.error)
+            .field("library", &self.library.path())
+            .finish()
+    }
+}
+impl std::fmt::Display for OwnedSessionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
+}
+impl std::error::Error for OwnedSessionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+impl OwnedSessionError {
+    pub fn into_parts(self) -> (crate::Error, crate::DirectoryLibrary) {
+        (self.error, *self.library)
+    }
+}
+
+impl std::ops::Deref for OwnedSyncSession {
+    type Target = SyncSession<'static>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl OwnedSyncSession {
+    pub fn open(
+        library: crate::DirectoryLibrary,
+        connection: &mut Connection,
+        domain: Domain,
+        objects: ObjectStore,
+        options: SessionOptions,
+        adapter: &dyn SyncProjection,
+    ) -> std::result::Result<Self, OwnedSessionError> {
+        Self::open_with(library, |library| {
+            SyncSession::open(library, connection, domain, objects, options, adapter)
+        })
+    }
+
+    pub(crate) fn open_with(
+        mut library: crate::DirectoryLibrary,
+        open: impl for<'a> FnOnce(&'a mut crate::DirectoryLibrary) -> Result<SyncSession<'a>>,
+    ) -> std::result::Result<Self, OwnedSessionError> {
+        let result = open(&mut library).map(|session| {
+            let SyncSession {
+                cache,
+                domain,
+                replica,
+                objects,
+                limits,
+                library: _,
+            } = session;
+            (cache, domain, replica, objects, limits)
+        });
+        match result {
+            Ok((cache, domain, replica, objects, limits)) => Ok(Self(SyncSession {
+                cache,
+                library: SessionLibrary::Owned(library),
+                domain,
+                replica,
+                objects,
+                limits,
+            })),
+            Err(error) => Err(OwnedSessionError {
+                error,
+                library: Box::new(library),
+            }),
+        }
+    }
+
+    /// Return the still-guarded library. Close the application's SQLite handles
+    /// before sealing it; this method does not checkpoint or close connections.
+    pub fn close(self) -> crate::DirectoryLibrary {
+        match self.0.library {
+            SessionLibrary::Owned(library) => library,
+            SessionLibrary::Borrowed(_) => unreachable!("Owned session invariant"),
+        }
+    }
+}
+
 impl<'a> SyncSession<'a> {
     pub fn open(
         library: &'a mut crate::DirectoryLibrary,
@@ -425,7 +533,7 @@ impl<'a> SyncSession<'a> {
         tx.commit().map_err(sql)?;
         Ok(Self {
             cache: Mutex::new(Some((revision, history))),
-            library,
+            library: SessionLibrary::Borrowed(library),
             domain,
             replica,
             objects,
@@ -765,11 +873,23 @@ impl<'a> SyncSession<'a> {
                 return Err(fork("Exchange transaction conflicts with local history"));
             }
         }
+        let mut imported = BTreeSet::new();
         for transaction in &scan.transactions {
-            for blob in transaction.blobs()? {
-                self.objects.import(exchange, &blob)?;
-            }
+            // Check exact identity bytes before skipping any previously applied
+            // work. Pending receipts still need objects delivered in later scans.
             self.receive(connection, &transaction.bytes()?)?;
+            let applied: bool = connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM _darkbox_sync_history WHERE replica=?1 AND sequence=?2)",
+                params![transaction.replica_id, transaction.sequence.0.to_string()],
+                |row| row.get(0),
+            ).map_err(sql)?;
+            if !applied {
+                for blob in transaction.blobs()? {
+                    if imported.insert(blob.clone()) {
+                        self.objects.import(exchange, &blob)?;
+                    }
+                }
+            }
         }
         Ok(scan)
     }

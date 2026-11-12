@@ -289,6 +289,196 @@ fn new_library(root: &Path, name: &str, source: &History) -> (DirectoryLibrary, 
 fn db(library: &DirectoryLibrary) -> Connection {
     Connection::open(library.path().join("data/project.sqlite")).unwrap()
 }
+
+fn publish_transactions(exchange: &Exchange, transactions: Vec<SyncTransaction>) {
+    let descriptor = ReplicaDescriptor {
+        kind: "darkbox-sync-replica".into(),
+        protocol_version: VERSION.into(),
+        sync_id: exchange.domain().root().sync_id.clone(),
+        root_sha256: exchange.domain().root_hash().into(),
+        replica_id: transactions[0].replica_id.clone(),
+        device_id: "c".repeat(32),
+        label: "test sender".into(),
+    };
+    exchange.publish_replica(&descriptor).unwrap();
+    exchange
+        .publish_segment(&Segment::new(exchange.domain(), transactions).unwrap())
+        .unwrap();
+}
+
+#[test]
+fn repeated_receipt_fetches_late_media_and_committed_history_has_explicit_repair() {
+    let root = tempfile::tempdir().unwrap();
+    let initial = history("exact-values");
+    let (mut library, objects) = new_library(root.path(), "late-media", &initial);
+    let mut connection = db(&library);
+    let session = SyncSession::open(
+        &mut library,
+        &mut connection,
+        domain(),
+        objects,
+        SessionOptions::new("d".repeat(32), "receiver"),
+        &Notes,
+    )
+    .unwrap();
+    let exchange = Exchange::create(root.path().join("cloud"), domain(), limits()).unwrap();
+    let sender = ObjectStore::open(root.path().join("sender-objects"), limits()).unwrap();
+    let media = sender
+        .put(&mut b"media delivered after its transaction".as_slice())
+        .unwrap();
+    let incoming = initial
+        .prepare(
+            &"c".repeat(32),
+            vec![Operation::Assign {
+                record: initial.state().records[0].id.clone(),
+                field: "asset".into(),
+                present: true,
+                value: Some(SyncValue::Blob {
+                    sha256: media.sha256.clone(),
+                    size: media.size,
+                }),
+            }],
+        )
+        .unwrap();
+    publish_transactions(&exchange, vec![incoming]);
+    session
+        .receive_exchange(&mut connection, &exchange)
+        .unwrap();
+    assert_eq!(session.apply_ready(&mut connection, &Notes).unwrap(), 0);
+    assert_eq!(session.pending_count(&connection).unwrap(), 1);
+    exchange.publish_object(&sender, &media).unwrap();
+    session
+        .receive_exchange(&mut connection, &exchange)
+        .unwrap();
+    assert_eq!(session.apply_ready(&mut connection, &Notes).unwrap(), 1);
+    assert_eq!(session.pending_count(&connection).unwrap(), 0);
+
+    // Receipt checks identities, not the bytes of every previously applied media
+    // file. Strict object verification still detects independent local damage.
+    let local = session
+        .objects()
+        .path()
+        .join(media.relative_path().unwrap());
+    fs::write(&local, b"damaged local media").unwrap();
+    session
+        .receive_exchange(&mut connection, &exchange)
+        .unwrap();
+    assert!(!session.objects().verify(&media).unwrap());
+    fs::remove_file(local).unwrap();
+    let scan = session
+        .receive_exchange(&mut connection, &exchange)
+        .unwrap();
+    assert!(!session.objects().contains(&media).unwrap());
+    // An explicit repair pass can reuse the evidence-checked scan, with no
+    // application access to Darkbox's private SQLite tables.
+    for transaction in scan.transactions {
+        for blob in transaction.blobs().unwrap() {
+            assert!(session.objects().import(&exchange, &blob).unwrap());
+        }
+    }
+    assert!(session.objects().verify(&media).unwrap());
+}
+
+#[test]
+fn known_canonical_receipts_still_detect_and_persist_changed_identity_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let known = transactions("concurrent-values-and-moves").remove(0);
+    let initial = History::replay(domain(), vec![known.clone()], limits()).unwrap();
+    let (mut library, objects) = new_library(root.path(), "known-receipt", &initial);
+    let mut connection = db(&library);
+    let session = SyncSession::open(
+        &mut library,
+        &mut connection,
+        domain(),
+        objects,
+        SessionOptions::new("d".repeat(32), "receiver"),
+        &Notes,
+    )
+    .unwrap();
+    let exchange = Exchange::create(root.path().join("cloud"), domain(), limits()).unwrap();
+    let mut changed = known;
+    changed.operations.push(Operation::Create {
+        collection: "items".into(),
+    });
+    publish_transactions(&exchange, vec![changed]);
+    assert_eq!(
+        session
+            .receive_exchange(&mut connection, &exchange)
+            .unwrap_err()
+            .code,
+        "sync.fork"
+    );
+    assert_eq!(session.history(&connection).unwrap_err().code, "sync.fork");
+    assert_eq!(
+        connection
+            .query_row("SELECT count(*) FROM _darkbox_sync_forks", [], |row| row
+                .get::<_, i64>(0))
+            .unwrap(),
+        2
+    );
+}
+
+#[test]
+fn owning_sessions_recover_guards_on_open_failure_and_return_them_on_close() {
+    fn send_sync<T: Send + Sync>() {}
+    send_sync::<OwnedSyncSession>();
+    let root = tempfile::tempdir().unwrap();
+    let initial = history("exact-values");
+    let (library, objects) = new_library(root.path(), "owned-session", &initial);
+    let path = library.path().to_owned();
+    let mut connection = db(&library);
+    let failure = OwnedSyncSession::open(
+        library,
+        &mut Connection::open_in_memory().unwrap(),
+        domain(),
+        objects.clone(),
+        SessionOptions::new("d".repeat(32), "invalid connection"),
+        &Notes,
+    )
+    .err()
+    .unwrap();
+    assert!(DirectoryLibrary::open(&path).is_err());
+    let (_, library) = failure.into_parts();
+    let session = OwnedSyncSession::open(
+        library,
+        &mut connection,
+        domain(),
+        objects,
+        SessionOptions::new("d".repeat(32), "owned receiver"),
+        &Notes,
+    )
+    .unwrap();
+    let added = session
+        .edit(
+            &mut connection,
+            vec![Operation::Create {
+                collection: "items".into(),
+            }],
+            &Notes,
+        )
+        .unwrap();
+    let id = Dot {
+        replica_id: added.replica_id,
+        sequence: added.sequence,
+        index: Counter(0),
+    };
+    let ids: std::collections::HashSet<Dot> = session
+        .history(&connection)
+        .unwrap()
+        .state()
+        .records
+        .into_iter()
+        .map(|record| record.id)
+        .collect();
+    assert!(ids.contains(&id));
+    assert!(DirectoryLibrary::open(&path).is_err());
+    let library = session.close();
+    assert_eq!(library.path(), path);
+    assert!(DirectoryLibrary::open(&path).is_err());
+    drop(library);
+    assert!(DirectoryLibrary::open(&path).is_ok());
+}
+
 #[test]
 fn complete_checkpoint_bootstraps_without_segments_and_retains_deleted_resource() {
     let root = tempfile::tempdir().unwrap();

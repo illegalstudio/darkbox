@@ -412,14 +412,14 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
         SyncLimits::default(),
     )
     .unwrap();
-    let mut library = DirectoryLibrary::open(&working_path).unwrap();
+    let library = DirectoryLibrary::open(&working_path).unwrap();
     let mut connection = Connection::open(working_path.join("data/project.sqlite")).unwrap();
     connection
         .execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;")
         .unwrap();
     let old = restarted
-        .open_session(
-            &mut library,
+        .open_owned_session(
+            library,
             &mut connection,
             store(root.path(), "old-objects"),
             SessionOptions::new("7".repeat(32), "restarted old peer"),
@@ -578,9 +578,8 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
     );
 
     // A second restart must retain the newer observation even if its cloud files disappear.
-    drop(old);
+    drop(old.close());
     connection.close().unwrap();
-    drop(library);
     fs::rename(
         repository.path().join(third.relative_path().unwrap()),
         root.path().join("temporarily-hidden-generation.json"),

@@ -10,7 +10,7 @@ pub const MAX_OPERATIONS: usize = 4096;
 pub const MAX_SEGMENT_TRANSACTIONS: usize = 256;
 
 /// Protocol unsigned integers always serialize as exact canonical decimal strings.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Counter(pub u64);
 impl Serialize for Counter {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
@@ -28,7 +28,7 @@ impl<'de> Deserialize<'de> for Counter {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Dot {
     pub replica_id: String,
     pub sequence: Counter,

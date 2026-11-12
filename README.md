@@ -105,6 +105,10 @@ membership-free bounded retention with application-owned projection adapters.
 Old installations preserve unpublished edits in private recovery packages before rebase. See [synchronization](docs/sync.md) for
 integration, plaintext security mode and retention limits.
 
+Software 1.6.0 adds owning sync sessions, receipt without rereading applied media,
+and explicit bounded verification reuse for private immutable object stores.
+It retains common specification 1.5.0 and sync protocol 1.0.0 unchanged.
+
 ## Install
 
 ### Rust SDK (crates.io)
@@ -113,7 +117,7 @@ Add the published [darkbox crate](https://crates.io/crates/darkbox) to your proj
 
 ```toml
 [dependencies]
-darkbox = { version = "1.5.0", default-features = false }
+darkbox = { version = "1.6.0", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable

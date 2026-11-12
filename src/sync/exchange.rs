@@ -2,10 +2,11 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fs::{self, File, Metadata},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
     time::Instant,
 };
 
@@ -102,6 +103,16 @@ fn same(a: &Metadata, b: &Metadata) -> bool {
         }
     }
     a.is_file() && b.is_file() && a.len() == b.len() && a.modified().ok() == b.modified().ok()
+}
+fn same_cached(a: &Metadata, b: &Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if a.ctime() != b.ctime() || a.ctime_nsec() != b.ctime_nsec() {
+            return false;
+        }
+    }
+    same(a, b)
 }
 pub(crate) fn open_regular(root: &Path, relative: &str, maximum: u64) -> Result<(File, Metadata)> {
     let path = checked_path(root, relative, false)?;
@@ -208,13 +219,70 @@ pub(crate) fn read_domain(root: &Path, bytes: &[u8]) -> Result<Domain> {
 pub struct ObjectStore {
     root: PathBuf,
     limits: SyncLimits,
+    trusted: Option<Arc<Mutex<VerifiedObjects>>>,
+}
+
+#[derive(Debug)]
+struct VerifiedObjects {
+    entries: BTreeMap<Blob, Metadata>,
+    order: VecDeque<Blob>,
+    capacity: usize,
+    #[cfg(test)]
+    full_checks: usize,
+}
+impl VerifiedObjects {
+    fn forget(&mut self, blob: &Blob) {
+        if self.entries.remove(blob).is_some() {
+            self.order.retain(|known| known != blob);
+        }
+    }
+    fn remember(&mut self, blob: &Blob, witness: Metadata) {
+        if !self.entries.contains_key(blob) {
+            while self.entries.len() >= self.capacity {
+                if let Some(old) = self.order.pop_front() {
+                    self.entries.remove(&old);
+                }
+            }
+            self.order.push_back(blob.clone());
+        }
+        self.entries.insert(blob.clone(), witness);
+    }
 }
 impl ObjectStore {
     pub fn open(path: impl AsRef<Path>, limits: SyncLimits) -> Result<Self> {
         Ok(Self {
             root: directory(path.as_ref())?,
             limits,
+            trusted: None,
         })
+    }
+    /// Reuse bounded verification witnesses for application-owned immutable
+    /// objects. The caller must prevent every external content mutation.
+    /// Metadata is an invalidation hint, not proof of unchanged bytes. Cloned
+    /// handles share the cache; zero capacity retains full verification.
+    pub fn with_trusted_immutable_cache(mut self, capacity: usize) -> Self {
+        self.trusted = (capacity != 0).then(|| {
+            Arc::new(Mutex::new(VerifiedObjects {
+                entries: BTreeMap::new(),
+                order: VecDeque::new(),
+                capacity,
+                #[cfg(test)]
+                full_checks: 0,
+            }))
+        });
+        self
+    }
+    /// Invalidate all trusted witnesses, including those shared with clones.
+    pub fn clear_verification_cache(&self) {
+        if let Some(cache) = &self.trusted {
+            let mut cache = cache.lock().unwrap_or_else(|error| error.into_inner());
+            cache.entries.clear();
+            cache.order.clear();
+        }
+    }
+    /// Always hash the complete object, regardless of the selected cache policy.
+    pub fn verify(&self, blob: &Blob) -> Result<bool> {
+        Ok(self.full_witness(blob)?.is_some())
     }
     pub fn path(&self) -> &Path {
         &self.root
@@ -276,34 +344,85 @@ impl ObjectStore {
         Ok(blob)
     }
     pub(crate) fn witness(&self, blob: &Blob) -> Result<Option<Metadata>> {
-        verify_blob(&self.root, blob, &self.limits)
+        blob.validate()?;
+        if blob.size.0 > self.limits.io.max_entry_bytes {
+            return Err(super::limit(
+                "Referenced object exceeds the configured entry-byte policy",
+            ));
+        }
+        let remembered = self.trusted.as_ref().and_then(|cache| {
+            cache
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .entries
+                .get(blob)
+                .cloned()
+        });
+        if let Some(witness) = remembered
+            && witness.modified().is_ok()
+            && self.matches_witness(blob, &witness, same_cached)?
+        {
+            return Ok(Some(witness));
+        }
+        self.full_witness(blob)
+    }
+    fn full_witness(&self, blob: &Blob) -> Result<Option<Metadata>> {
+        if let Some(cache) = &self.trusted {
+            let mut cache = cache.lock().unwrap_or_else(|error| error.into_inner());
+            cache.forget(blob);
+            #[cfg(test)]
+            {
+                cache.full_checks += 1;
+            }
+        }
+        let witness = verify_blob(&self.root, blob, &self.limits)?;
+        if let (Some(cache), Some(witness)) = (&self.trusted, &witness) {
+            cache
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .remember(blob, witness.clone());
+        }
+        Ok(witness)
     }
     pub(crate) fn unchanged(&self, blob: &Blob, witness: &Metadata) -> Result<bool> {
+        self.matches_witness(blob, witness, same)
+    }
+    fn matches_witness(
+        &self,
+        blob: &Blob,
+        witness: &Metadata,
+        matches: fn(&Metadata, &Metadata) -> bool,
+    ) -> Result<bool> {
         let path = safe_path(&self.root, &blob.relative_path()?, false)?;
         match fs::symlink_metadata(path) {
-            Ok(actual) => Ok(!actual.file_type().is_symlink() && same(witness, &actual)),
+            Ok(actual) => Ok(!actual.file_type().is_symlink() && matches(witness, &actual)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(e) => Err(crate::io_failure(e)),
         }
     }
     pub fn contains(&self, blob: &Blob) -> Result<bool> {
-        Ok(verify_blob(&self.root, blob, &self.limits)?.is_some())
+        Ok(self.witness(blob)?.is_some())
     }
     pub fn with_blob<T>(
         &self,
         blob: &Blob,
         read: impl FnOnce(&mut dyn Read) -> Result<T>,
     ) -> Result<T> {
-        if !self.contains(blob)? {
-            return Err(invalid("Local immutable object missing or damaged"));
-        }
+        let witness = self
+            .witness(blob)?
+            .ok_or_else(|| invalid("Local immutable object missing or damaged"))?;
         let (mut file, before) = open_regular(
             &self.root,
             &blob.relative_path()?,
             self.limits.io.max_entry_bytes,
         )?;
+        if !same(&witness, &before) {
+            return Err(invalid("Object changed after verification"));
+        }
         let result = read(&mut file)?;
-        if !same(&before, &file.metadata().map_err(crate::io_failure)?) {
+        if !same(&before, &file.metadata().map_err(crate::io_failure)?)
+            || !self.unchanged(blob, &before)?
+        {
             return Err(invalid("Object changed while reading"));
         }
         Ok(result)
@@ -645,6 +764,7 @@ impl Exchange {
         let destination = ObjectStore {
             root: self.root.clone(),
             limits: self.limits.clone(),
+            trusted: None,
         };
         store.with_blob(blob, |reader|destination.put_expected(reader,blob).map(|_|())).map_err(|error|{
             if error.code=="sync.object_conflict"{super::pending_bytes("Existing exchange object is incomplete or mismatched; retry without replacing it")}else{error}
@@ -931,4 +1051,163 @@ fn collect(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod verified_object_tests {
+    use super::*;
+
+    fn full_checks(store: &ObjectStore) -> usize {
+        store.trusted.as_ref().unwrap().lock().unwrap().full_checks
+    }
+
+    #[test]
+    fn trusted_reads_share_bounded_witnesses_and_full_verification_can_be_forced() {
+        let root = tempfile::tempdir().unwrap();
+        let store = ObjectStore::open(root.path(), SyncLimits::default())
+            .unwrap()
+            .with_trusted_immutable_cache(1);
+        let first = store
+            .put(&mut b"first immutable object".as_slice())
+            .unwrap();
+        assert!(store.contains(&first).unwrap());
+        assert_eq!(full_checks(&store), 1);
+        let clone = store.clone();
+        let bytes = clone
+            .with_blob(&first, |reader| {
+                let mut bytes = Vec::new();
+                reader.read_to_end(&mut bytes).map_err(crate::io_failure)?;
+                Ok(bytes)
+            })
+            .unwrap();
+        assert_eq!(bytes, b"first immutable object");
+        assert_eq!(
+            full_checks(&store),
+            1,
+            "cached reading must not hash the object again"
+        );
+        assert!(clone.verify(&first).unwrap());
+        assert_eq!(full_checks(&store), 2);
+        let second = store
+            .put(&mut b"second immutable object".as_slice())
+            .unwrap();
+        assert!(clone.contains(&second).unwrap());
+        assert_eq!(full_checks(&store), 3);
+        assert_eq!(
+            store
+                .trusted
+                .as_ref()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .entries
+                .len(),
+            1
+        );
+        assert!(store.contains(&first).unwrap());
+        assert_eq!(
+            full_checks(&store),
+            4,
+            "evicted witnesses require a complete check"
+        );
+        clone.clear_verification_cache();
+        assert!(store.contains(&first).unwrap());
+        assert_eq!(full_checks(&store), 5);
+        assert!(
+            store
+                .clone()
+                .with_trusted_immutable_cache(0)
+                .trusted
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn changed_missing_and_callback_modified_objects_cannot_reuse_a_witness() {
+        let root = tempfile::tempdir().unwrap();
+        let store = ObjectStore::open(root.path(), SyncLimits::default())
+            .unwrap()
+            .with_trusted_immutable_cache(4);
+        let original = b"original immutable data";
+        let blob = store.put(&mut original.as_slice()).unwrap();
+        assert!(store.contains(&blob).unwrap());
+        let path = store.path().join(blob.relative_path().unwrap());
+        let error = store
+            .with_blob(&blob, |reader| {
+                let mut bytes = Vec::new();
+                reader.read_to_end(&mut bytes).map_err(crate::io_failure)?;
+                fs::write(&path, vec![b'x'; original.len()]).map_err(crate::io_failure)?;
+                File::open(&path)
+                    .map_err(crate::io_failure)?
+                    .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1))
+                    .map_err(crate::io_failure)?;
+                Ok(bytes)
+            })
+            .unwrap_err();
+        assert_eq!(error.code, "sync.invalid");
+        assert!(!store.contains(&blob).unwrap());
+        assert!(
+            !ObjectStore::open(root.path(), SyncLimits::default())
+                .unwrap()
+                .contains(&blob)
+                .unwrap()
+        );
+        fs::remove_file(&path).unwrap();
+        assert!(!store.contains(&blob).unwrap());
+        store.put_expected(&mut original.as_slice(), &blob).unwrap();
+        assert!(store.contains(&blob).unwrap());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn creating_a_read_only_hard_link_during_access_invalidates_only_the_cache() {
+        let root = tempfile::tempdir().unwrap();
+        let store = ObjectStore::open(root.path(), SyncLimits::default())
+            .unwrap()
+            .with_trusted_immutable_cache(2);
+        let blob = store.put(&mut b"immutable media".as_slice()).unwrap();
+        assert!(store.contains(&blob).unwrap());
+        store
+            .with_blob(&blob, |reader| {
+                let mut bytes = Vec::new();
+                reader.read_to_end(&mut bytes).map_err(crate::io_failure)?;
+                fs::hard_link(
+                    store.path().join(blob.relative_path()?),
+                    root.path().join("materialized"),
+                )
+                .map_err(crate::io_failure)?;
+                assert_eq!(bytes, b"immutable media");
+                Ok(())
+            })
+            .unwrap();
+        assert!(store.contains(&blob).unwrap());
+        assert_eq!(full_checks(&store), 2);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn trusted_cache_rejects_replacement_and_symlinks_even_with_matching_size_and_mtime() {
+        let root = tempfile::tempdir().unwrap();
+        let store = ObjectStore::open(root.path(), SyncLimits::default())
+            .unwrap()
+            .with_trusted_immutable_cache(2);
+        let blob = store.put(&mut b"original".as_slice()).unwrap();
+        assert!(store.contains(&blob).unwrap());
+        let path = store.path().join(blob.relative_path().unwrap());
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        let replacement = root.path().join("replacement");
+        fs::write(&replacement, b"replaced").unwrap();
+        File::open(&replacement)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        fs::rename(&replacement, &path).unwrap();
+        assert!(!store.contains(&blob).unwrap());
+        fs::remove_file(&path).unwrap();
+        store.put(&mut b"original".as_slice()).unwrap();
+        assert!(store.contains(&blob).unwrap());
+        fs::rename(&path, &replacement).unwrap();
+        std::os::unix::fs::symlink(&replacement, &path).unwrap();
+        assert!(store.contains(&blob).is_err());
+    }
 }

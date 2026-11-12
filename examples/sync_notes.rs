@@ -77,8 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     .finish()?;
     let checkpoint = SyncSnapshot::open(&initial_path, limits.clone(), &options)?;
     let objects_b = ObjectStore::open(root.join("objects-b"), limits.clone())?;
-    let mut a = checkpoint.bootstrap(root.join("library-a"), &objects_a, &Notes)?;
-    let mut b = checkpoint.bootstrap(root.join("library-b"), &objects_b, &Notes)?;
+    let a = checkpoint.bootstrap(root.join("library-a"), &objects_a, &Notes)?;
+    let b = checkpoint.bootstrap(root.join("library-b"), &objects_b, &Notes)?;
     let mut ca = Connection::open(a.path().join("data/project.sqlite"))?;
     let mut cb = Connection::open(b.path().join("data/project.sqlite"))?;
     ca.execute_batch("PRAGMA journal_mode=WAL;PRAGMA synchronous=FULL;")?;
@@ -98,9 +98,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     };
     let sa =
-        repository.open_session(&mut a, &mut ca, objects_a, session_options("PC A")?, &Notes)?;
+        repository.open_owned_session(a, &mut ca, objects_a, session_options("PC A")?, &Notes)?;
     let sb =
-        repository.open_session(&mut b, &mut cb, objects_b, session_options("PC B")?, &Notes)?;
+        repository.open_owned_session(b, &mut cb, objects_b, session_options("PC B")?, &Notes)?;
     let change = |title: &str| Operation::Assign {
         record: record.clone(),
         field: "title".into(),

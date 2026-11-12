@@ -4,7 +4,7 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 
 ```toml
 [dependencies]
-darkbox = { version = "1.5.0", default-features = false }
+darkbox = { version = "1.6.0", default-features = false }
 ```
 
 Releases are available on [crates.io](https://crates.io/crates/darkbox).
@@ -86,6 +86,10 @@ intentionally remains beside an existing-file replacement destination; it is not
 package content or disposable staging. Keeping its inode prevents a lock race
 across atomic replacements. Directory-library locks retain their separate
 whole-session protocol. Existing lock files are not automatically deleted. Integrating applications coordinate tools that bypass this advisory lock. Package symlinks are refused and parent directories must be application-controlled. Locks cannot prevent unrelated tools from writing files.
+
+Software 1.6.0 explicitly releases replacement locks when the owning writer ends,
+including when a concurrently spawned child temporarily inherits a descriptor.
+The stable lock inode remains in place.
 
 Publication streams a complete candidate, rebuilds inventory/signature, validates common/canonical/SQLite/extension/profile rules, checks encrypted contexts, rechecks destination bytes and commits atomically. The editor prepares its new frozen snapshot before replacement; post-commit reopening cannot turn a published save into an error. Every editor save error precedes publication and preserves an existing destination. Success may carry `create.durability` if final Unix directory synchronization failed after publication.
 
@@ -324,3 +328,19 @@ plaintext, fixed profiles and retained history without automatic deletion. It
 refuses protected libraries without downgrading their protection.
 
 Repository synchronization supports compact checkpoint generations, bounded retention without device membership, and private stale-base recovery. Use `SyncRepository::open_session` and its guarded exchanges, and preserve local columns with `SyncProjection::copy_local`. See [the synchronization guide](sync.md#compaction-and-bounded-retention).
+
+Software 1.6.0 also provides `OwnedSyncSession` and
+`SyncRepository::open_owned_session` for long-lived application state. They expose
+the same operations and rebase checks as borrowed sessions; `close` returns the
+still-guarded library. Failed opening returns `OwnedSessionError`, whose
+`into_parts` recovers both the error and library. `Dot` and `Counter` implement
+`Hash` for application maps and sets.
+
+`receive_exchange` compares exact transaction identities and retains fork evidence
+before skipping objects of already applied transactions. Pending transactions
+continue importing objects that arrive later. For private stores with an
+application-enforced immutability contract,
+`ObjectStore::with_trusted_immutable_cache(capacity)` explicitly enables bounded
+verification reuse shared by cloned handles. Ordinary stores retain full hashing;
+`ObjectStore::verify` always hashes all bytes and `clear_verification_cache`
+invalidates shared witnesses. See [object verification policy](sync.md#object-verification-policy).
