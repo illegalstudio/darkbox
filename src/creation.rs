@@ -179,7 +179,7 @@ pub(crate) fn specification(manifest: &Value) -> Result<&'static VersionSpec, Er
 /// Existing replacements are locked; new outputs publish without clobbering.
 /// Callers coordinate coherent input snapshots.
 pub struct PackageWriter<'a> {
-    _destination_lock: Option<File>,
+    _destination_lock: Option<crate::package::DestinationLock>,
     // Close ZIP output before removing its owning temporary path on drop.
     zip: Option<ZipWriter<BoundedFile>>,
     candidate: Option<NamedTempFile>,
@@ -228,7 +228,7 @@ impl<'a> PackageWriter<'a> {
         limits: Limits,
         options: &'a VerificationOptions<'a>,
         signer: Option<&'a dyn ManifestSigner>,
-        lock: Option<File>,
+        lock: Option<crate::package::DestinationLock>,
     ) -> Result<Self, Error> {
         if limits.max_entries == 0
             || limits.max_entry_bytes == 0

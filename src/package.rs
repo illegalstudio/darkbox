@@ -1443,8 +1443,17 @@ pub(crate) fn database_snapshot(
     })
 }
 
+pub(crate) struct DestinationLock(File);
+impl Drop for DestinationLock {
+    fn drop(&mut self) {
+        // Child processes can retain the open-file description between fork and
+        // exec. Release this owner's lock before closing its descriptor.
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
+}
+
 /// New ZIPs publish without clobbering; only replacements need a stable lock.
-pub(crate) fn lock_zip_destination(path: &Path) -> Result<Option<File>, Error> {
+pub(crate) fn lock_zip_destination(path: &Path) -> Result<Option<DestinationLock>, Error> {
     match std::fs::symlink_metadata(path) {
         Ok(_) => lock_destination(path).map(Some),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -1452,7 +1461,7 @@ pub(crate) fn lock_zip_destination(path: &Path) -> Result<Option<File>, Error> {
     }
 }
 
-pub(crate) fn lock_destination(path: &Path) -> Result<File, Error> {
+pub(crate) fn lock_destination(path: &Path) -> Result<DestinationLock, Error> {
     // Stable sidecar locks survive atomic replacement. Never unlink an active
     // lock inode: concurrent processes must continue locking the same object.
     // Case-fold lock names on every platform so spelling aliases cannot bypass
@@ -1483,5 +1492,26 @@ pub(crate) fn lock_destination(path: &Path) -> Result<File, Error> {
             "Another SDK writer holds the destination lock",
         )
     })?;
-    Ok(file)
+    Ok(DestinationLock(file))
+}
+
+#[cfg(test)]
+mod destination_lock_tests {
+    use super::*;
+
+    #[test]
+    fn zip_guard_releases_a_lock_even_when_a_child_retains_a_duplicate() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("project.zip");
+        let guard = lock_destination(&destination).unwrap();
+        // A duplicated open-file description models inheritance during spawn.
+        let inherited = guard.0.try_clone().unwrap();
+        assert!(lock_destination(&destination).is_err());
+        drop(guard);
+        let replacement = lock_destination(&destination).unwrap();
+        drop(inherited);
+        assert!(lock_destination(&destination).is_err());
+        drop(replacement);
+        assert!(lock_destination(&destination).is_ok());
+    }
 }
