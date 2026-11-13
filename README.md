@@ -49,7 +49,6 @@ Preserving data also means preserving how to decode it. Every archive carries th
 - [Rust SDK: reading, editing, SQLite, protection and atomic saving](docs/sdk.md)
 - [Low-level library: verification, extension registration and progressive creation](docs/library.md)
 - [Offline causal synchronization](docs/sync.md)
-- [Building and publishing releases](docs/releases.md)
 - [Specification](docs/specification.md)
 - [Canonical Darkbox 1.5.0 README](archive/1.5.0/README.md), copied byte-for-byte to the archive root as `README.md`
 - [Selective protection extension 1.0.0](archive/1.1.0/docs/darkbox/protection/1.0.0.md), with its schema and interoperable test vectors
@@ -121,7 +120,7 @@ Add the published [darkbox crate](https://crates.io/crates/darkbox) to your proj
 
 ```toml
 [dependencies]
-darkbox = { version = "1.6.1", default-features = false }
+darkbox = { version = "1.6.2", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable
@@ -186,15 +185,6 @@ With Rust 1.88 or later and a C compiler:
 ```bash
 cargo install --path . --locked
 ```
-
-## Releases
-
-Run `make release` from a clean `main` checkout. It proposes the next software version, includes every unpublished specification automatically, prepares release metadata, runs the checks, then confirms a release commit, annotated tag and atomic push. GitHub Actions tests and packages all three platforms, signs and notarizes macOS, builds native Arch packages for both Linux architectures, publishes the Rust crate on crates.io and then the complete GitHub release, updates the Illegal Studio Homebrew tap and notifies its pacman repository. See [release setup and recovery](docs/releases.md) for credentials and the independent software/specification version policy.
-
-Documentation changes shipped in the crate or binary packages also require a
-software release, including documentation-only corrections. The common
-specification version changes only when its versioned rules or canonical bundle
-change.
 
 ## Versioned archive documentation
 
