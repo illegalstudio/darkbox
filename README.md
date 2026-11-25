@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.5.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.5.0"></a>
+  <a href="docs/specification.md"><img src="https://img.shields.io/badge/specification-1.6.0-303A46?style=flat-square&amp;color=303A46" alt="Specification 1.6.0"></a>
   <a href="schema/manifest.schema.json"><img src="https://img.shields.io/static/v1?label=JSON%20Schema&amp;message=2020-12&amp;color=303A46&amp;style=flat-square" alt="JSON Schema 2020-12"></a>
 </p>
 
@@ -45,18 +45,65 @@ Preserving data also means preserving how to decode it. Every archive carries th
 
 ## Documents
 
+- [Specification](docs/specification.md): the current common version, 1.6.0. Every version is retained in [`specification/`](specification/).
+- [Canonical Darkbox 1.6.0 README](archive/1.6.0/README.md), copied byte-for-byte to the archive root as `README.md`
 - [Rust CLI: installation, commands and reports](docs/cli.md)
 - [Rust SDK: reading, editing, SQLite, protection and atomic saving](docs/sdk.md)
 - [Low-level library: verification, extension registration and progressive creation](docs/library.md)
 - [Offline causal synchronization](docs/sync.md)
-- [Specification](docs/specification.md)
-- [Canonical Darkbox 1.5.0 README](archive/1.5.0/README.md), copied byte-for-byte to the archive root as `README.md`
-- [Selective protection extension 1.0.0](archive/1.1.0/docs/darkbox/protection/1.0.0.md), with its schema and interoperable test vectors
-- [Original SQLite file-format reference](archive/1.0.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.0.0/docs/sqlite/SOURCE.md)
-- [Manifest JSON Schema](schema/manifest.schema.json), using JSON Schema Draft 2020-12
-- [Canonical bundle catalog schema](schema/bundle.schema.json)
-- [Example manifests](examples/README.md) for two fictional application profiles
 - [Application profile guidance](docs/profiles.md)
+- [Example manifests](examples/README.md) for two fictional application profiles
+- [Conformance corpus](conformance/README.md): valid, invalid and unsupported packages with their expected outcome, for any implementation
+- [Manifest JSON Schema](schema/manifest.schema.json) and [canonical bundle catalog schema](schema/bundle.schema.json), using JSON Schema Draft 2020-12
+- [Original SQLite file-format reference](archive/1.6.0/docs/sqlite/fileformat2.html), included with its [source and distribution notes](archive/1.6.0/docs/sqlite/SOURCE.md)
+- [Changelog](CHANGELOG.md) and [security policy](SECURITY.md)
+
+## What Darkbox defines
+
+The common specification is deliberately small: a ZIP container (or a directory with exactly the same contents), a JSON manifest, self-contained SQLite snapshots, declared resource folders and the documentation needed to read all of it without the original application. Around that core it defines:
+
+| Capability | Since | Summary |
+| --- | --- | --- |
+| Directory packages and incremental transfers | 1.2.0 | The same tree as a quiescent directory, an optional unsigned inventory and delta transfers between complete editions |
+| Coordinated live directories | 1.3.0 | An interoperable lock for working storage, a distinct not-quiescent outcome, sealing and application-trusted digests |
+| Retained hot captures | 1.4.0 | A coherent snapshot under a short write barrier while the application keeps working |
+| Separate extension bundles | 1.6.0 | Documentation of an official extension travels in its own canonical bundle, only in packages that declare it |
+
+Official extensions are optional and versioned on their own:
+
+| Extension | Versions | Summary |
+| --- | --- | --- |
+| [Protection](extensions/studio.illegal.darkbox.protection/1.0.0/docs/darkbox/protection/1.0.0.md) | 1.0.0 | Selective AES-256-GCM encryption of attachments and SQLite values, an Ed25519 manifest signature and a signed SHA-256 inventory of every payload file |
+| [Synchronization](docs/sync.md) | 1.0.0 (common 1.5.0), 1.1.0 (common 1.6.0 and later) | Offline causal replication through a shared folder, with explicit merge rules, complete checkpoints and bounded retention |
+
+A reader supports exact specification versions. Published versions and their canonical bundles are immutable, and this implementation keeps reading all of them.
+
+## Version numbers
+
+Darkbox has several independent version numbers, because a file format must outlive the software that writes it. A number always belongs to one of these subjects:
+
+| Subject | Where it appears | What it tells you |
+| --- | --- | --- |
+| Specification | `darkbox.version` in a manifest | The exact common rules a package follows |
+| Extension | `extensions.<namespace>.version` in a manifest | The rules of one optional official extension |
+| Software | `darkbox --version`, the crate version | The command-line tool and Rust API in use |
+| Application data format | `application.formatVersion` in a manifest | The application's own schema, defined by its profile |
+
+They never imply one another: software 1.6.0 and specification 1.6.0 are unrelated. Each software release reads every specification version published before it:
+
+| Software | Specification versions | Protection extension | Sync extension |
+| --- | --- | --- | --- |
+| 1.0.0 | 1.0.0 | | |
+| 1.1.0 | 1.0.0 to 1.1.0 | 1.0.0 | |
+| 1.2.0 | 1.0.0 to 1.2.0 | 1.0.0 | |
+| 1.3.0, 1.3.1 | 1.0.0 to 1.3.0 | 1.0.0 | |
+| 1.4.0 to 1.4.2 | 1.0.0 to 1.4.0 | 1.0.0 | |
+| 1.5.0 to 1.6.2 | 1.0.0 to 1.5.0 | 1.0.0 | 1.0.0 |
+| 2.0.0 | 1.0.0 to 1.6.0 | 1.0.0 | 1.0.0 and 1.1.0 |
+
+Protection 1.0.0 can be declared with specification 1.1.0 and later. Sync 1.0.0 requires specification 1.5.0 exactly; sync 1.1.0 requires specification 1.6.0 or later. `darkbox versions` prints what an installed binary supports.
+
+Two smaller numbers are internal to one artifact each: the delta transfer envelope (`darkboxDelta`, currently 1.0.0) and the JSON report of the command-line tool (`report_version`, currently 2).
 
 ## Command-line tool
 
@@ -69,58 +116,17 @@ darkbox verify example.project --json
 darkbox versions
 ```
 
-Verification checks common container rules, the exact canonical documentation and SQLite snapshots offline. It reports application-profile semantics as unchecked; passing these common checks does not certify full application conformance. Inspection reports metadata without certifying conformance. See the [CLI documentation](docs/cli.md) for reports, exit codes, resource limits and binary packages.
-
-Darkbox 1.1.0 supports selective AES-256-GCM encryption of individual attachments and BLOB values in ordinary SQLite databases. Its official required protection extension signs the exact manifest with Ed25519 and inventories every payload file with SHA-256. Public information remains readable. Applications supply trusted signer keys and decryption keys; missing decryption keys leave protected content locked without marking it corrupt. Earlier published versions remain supported with their unchanged canonical bundles.
-
-Darkbox 1.2.0 also supports quiescent directory libraries and incremental backup
-transfers. `pack` and `unpack` preserve every file byte; `delta`, `verify --base`
-and `merge` bind exact base and target editions. Optional unsigned inventories,
-`--limits large`, explicit staging storage and seekable STORE media access support
-large libraries. See the [CLI workflows](docs/cli.md#live-library-snapshots-and-incremental-backups)
-and [Rust APIs](docs/sdk.md#directory-libraries-and-incremental-editions-120).
-
-Darkbox 1.3.0 defines an interoperable live-directory lock and a distinct
-`not_quiescent` outcome. The Rust SDK initializes and seals libraries directly,
-backs up active SQLite connections, and creates deltas without a complete target
-ZIP. Application-trusted immutable-resource digests are explicit in reports.
-See [live storage](docs/sdk.md#live-directory-storage-130).
-
-Darkbox 1.4.0 adds `HotCapture`: snapshot databases, metadata and the resource
-listing under a short application write barrier, then stream a backup or delta
-while the application resumes work. Captured resources remain retained and
-immutable until completion. See [short capture barriers](docs/sdk.md#short-capture-barriers-140).
-
-Software 1.4.2 creates new ZIP exports without persistent sibling lock files.
-Existing ZIP replacements and live directory libraries retain writer coordination;
-see [SDK publication and locks](docs/sdk.md#read-edit-and-save).
-
-Darkbox 1.5.0 adds the required-when-present synchronization extension 1.0.0.
-Applications keep local live libraries and exchange immutable causal transactions,
-resources and complete checkpoints through a separate cloud folder. Concurrent
-field alternatives, set changes, deletions and ordering have explicit merge rules.
-The SDK supplies transactional queues, replay, scanning, compact checkpoints and
-membership-free bounded retention with application-owned projection adapters.
-Old installations preserve unpublished edits in private recovery packages before rebase. See [synchronization](docs/sync.md) for
-integration, plaintext security mode and retention limits.
-
-Software 1.6.0 adds owning sync sessions, receipt without rereading applied media,
-and explicit bounded verification reuse for private immutable object stores.
-It retains common specification 1.5.0 and sync protocol 1.0.0 unchanged.
+Verification checks common container rules, the exact canonical documentation and SQLite snapshots offline. It reports application-profile semantics as unchecked; passing these common checks does not certify full application conformance. Inspection reports metadata without certifying conformance. `pack`, `unpack`, `delta` and `merge` convert between ZIP and directory packages and build or apply incremental transfers. See the [CLI documentation](docs/cli.md) for reports, exit codes, resource limits and binary packages.
 
 ## Install
 
 ### Rust SDK (crates.io)
 
-Software 1.6.1 supports sync publication on Unix mounts without hard links or
-no-replace rename when directory advisory locking and atomic rename are available.
-See [sync filesystem requirements](docs/sync.md#filesystem-requirements).
-
 Add the published [darkbox crate](https://crates.io/crates/darkbox) to your project:
 
 ```toml
 [dependencies]
-darkbox = { version = "1.6.2", default-features = false }
+darkbox = { version = "2.0.0", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable
@@ -128,7 +134,7 @@ This selects the SDK without the CLI or extended JSON precision. Enable
 otherwise unsupported precision is reported instead of silently rounding values.
 See [embedding the SDK](docs/sdk.md) for features, SQLite and integration examples.
 
-To compile and install the CLI through Cargo, with Rust 1.88 or later and a C compiler:
+To compile and install the CLI through Cargo, with Rust 1.89 or later and a C compiler:
 
 ```sh
 cargo install darkbox --locked
@@ -164,7 +170,7 @@ The repository serves x86-64 and ARM64 packages. Packages follow its existing un
 mise use -g github:illegalstudio/darkbox
 ```
 
-To pin a software version, use `mise use -g github:illegalstudio/darkbox@1.0.0`.
+To pin a software version, append it: `mise use -g github:illegalstudio/darkbox@<version>`.
 
 ### GitHub Releases
 
@@ -180,7 +186,7 @@ Check the download with `sha256sum -c <package>.sha256` on Linux or `shasum -a 2
 
 ### From source
 
-With Rust 1.88 or later and a C compiler:
+With Rust 1.89 or later and a C compiler:
 
 ```bash
 cargo install --path . --locked
@@ -190,11 +196,13 @@ cargo install --path . --locked
 
 The entire `archive/<darkbox.version>/` directory is the canonical documentation bundle for that version. Copy all its contents into the ZIP root, preserving every relative path and file's bytes. Do not add an enclosing `archive/` or version directory inside the ZIP. Then add the manifest, application profile documentation, databases and resources at their declared paths.
 
-For version `1.0.0`, the [bundle](archive/1.0.0/) contains the canonical README, its [SHA-256 catalog](archive/1.0.0/docs/darkbox/bundle.json), and the captured SQLite documentation under `docs/sqlite/`, including its local presentation assets and upstream public-domain notice. Select the directory matching the declared version, rather than automatically using the newest bundle or fetching current SQLite pages while saving a project.
+For version `1.6.0`, the [bundle](archive/1.6.0/) contains the canonical README, its [SHA-256 catalog](archive/1.6.0/docs/darkbox/bundle.json), the directory and delta rules, and the captured SQLite documentation under `docs/sqlite/`, including its local presentation assets and upstream public-domain notice. Select the directory matching the declared version, rather than automatically using the newest bundle or fetching current SQLite pages while saving a project.
+
+From 1.6.0, documentation of official extensions is separate. Each extension version has its own canonical bundle in `extensions/<namespace>/<version>/`, with its own catalog, copied into the ZIP root in the same way only when the manifest declares that extension. A package that declares no official extension carries only the common bundle. Versions 1.1.0 through 1.5.0 carried the extension documentation inside the common bundle.
 
 Published version directories are retained unchanged. Each release provides the matching specification and manifest schema together with its complete canonical bundle. Darkbox-authored text uses LF; `.gitattributes` protects both its line endings and the exact captured upstream bytes from checkout conversion.
 
-Versioned specifications are retained in `specification/<version>.md` and manifest schemas in `schema/<version>/`. The main documentation links show the current version; the CLI selects references by the exact declared version.
+Versioned specifications are retained in `specification/<version>.md` and manifest schemas in `schema/<version>/`. [`versions.json`](versions.json) registers every supported version, its capabilities and the extension bundles. The main documentation links show the current version; the CLI selects references by the exact declared version.
 
 ## Minimal archive
 
@@ -204,7 +212,7 @@ example.project
 ├── README.md
 ├── docs/
 │   ├── profile.md
-│   ├── darkbox/bundle.json
+│   ├── darkbox/          # canonical catalog and common Darkbox documents
 │   └── sqlite/           # complete canonical SQLite reference bundle
 └── data/
     └── project.sqlite
@@ -212,8 +220,8 @@ example.project
 
 Darkbox fixes its root metadata names and canonical bundle paths. Other database and folder paths are declared in the manifest. Required `application.profilePath` locates the included application data-format documentation; `docs/profile.md` is a recommended path. Attachments may remain database BLOBs or become separate files, as defined by a profile.
 
-The specification version, application data-format version and optional creator-software version are independent. The current specification is identified by `darkbox.version = "1.5.0"`. Application profiles define their own data-format versions.
+The current specification is identified by `darkbox.version = "1.6.0"`. It is independent of the application data-format version and of the optional creator-software version, as described under [version numbers](#version-numbers).
 
 ## License
 
-The Rust implementation, specification, schema, Darkbox-authored documentation, examples and Darkbox logo assets are licensed under the [MIT License](LICENSE). The original SQLite materials retain their upstream terms, recorded in the included [SQLite copyright notice](archive/1.0.0/docs/sqlite/copyright.html) and [source notes](archive/1.0.0/docs/sqlite/SOURCE.md). The license does not change ownership or licensing of project data packaged by applications. The canonical README includes the full MIT notice so it travels with distributed files. Permission to modify Darkbox materials does not alter conformance requirements, including the exact canonical bundle.
+The Rust implementation, specification, schema, Darkbox-authored documentation, examples and Darkbox logo assets are licensed under the [MIT License](LICENSE). The original SQLite materials retain their upstream terms, recorded in the included [SQLite copyright notice](archive/1.6.0/docs/sqlite/copyright.html) and [source notes](archive/1.6.0/docs/sqlite/SOURCE.md). The license does not change ownership or licensing of project data packaged by applications. The canonical README includes the full MIT notice so it travels with distributed files. Permission to modify Darkbox materials does not alter conformance requirements, including the exact canonical bundle.

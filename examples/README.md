@@ -27,7 +27,9 @@ The different numbers deliberately show that a common specification version, app
 
 The [profile guidance](../docs/profiles.md) explains how to document an application format. Each example includes a self-contained profile document: [Notebook](profiles/notebook.md) or [Canvas](profiles/canvas.md).
 
-To build an archive, copy all contents of the [canonical Darkbox 1.1.0 bundle](../archive/1.1.0/) into the ZIP root, preserving relative paths and every file's bytes. Do not include an enclosing `archive/` or version directory. Then add `manifest.json`, copy the matching application profile document to `application.profilePath`, which is `docs/profile.md` in both examples, and provide the declared SQLite databases and resource folders. The manifests declare all canonical documentation directories as well as their application directories. Perform container and profile validation in addition to JSON Schema validation.
+To build an archive, copy all contents of the canonical Darkbox bundle for the manifest's `darkbox.version` into the ZIP root, preserving relative paths and every file's bytes: both examples use the [canonical 1.6.0 bundle](../archive/1.6.0/). Do not include an enclosing `archive/` or version directory. Then add `manifest.json`, copy the matching application profile document to `application.profilePath`, which is `docs/profile.md` in both examples, and provide the declared SQLite databases and resource folders. The manifests declare all canonical documentation directories of their common version as well as their application directories. Perform container and profile validation in addition to JSON Schema validation.
+
+Both manifests declare common 1.6.0, whose common bundle has exactly four canonical folders: `docs`, `docs/darkbox`, `docs/sqlite` and `docs/sqlite/images`. From 1.6.0 the documentation of official extensions is no longer part of the common bundle. A manifest that declares an official extension version adds that extension's canonical bundle, copied from `extensions/<namespace>/<version>/` into the ZIP root in the same way, and declares its folder. For example, declaring protection 1.0.0 adds the contents of [extensions/studio.illegal.darkbox.protection/1.0.0/](../extensions/studio.illegal.darkbox.protection/1.0.0/) and the folder `docs/darkbox/protection`. Neither manifest declares an official extension, so they have neither. The protected and streaming examples below start from the Notebook manifest, declare protection 1.0.0 and therefore add that bundle and its folder. Earlier common versions, 1.1.0 through 1.5.0, carried the extension documentation inside the common bundle itself.
 
 The Canvas presentation extension is metadata-only. Its accent color can be preserved after ordinary project edits, so it is safe to mark it optional. It does not imply a directory or database of its own.
 
@@ -61,6 +63,10 @@ notes profile through two offline local edits, immutable exchange, retained fiel
 conflicts and a third-library bootstrap from a complete checkpoint. The executable
 and documented adapter are `sync_notes.rs` and `support/sync_notes.rs`. See the
 [SDK sync guide](../docs/sync.md) for integration and security/retention boundaries.
+
+By default it uses sync protocol 1.1.0 with common 1.6.0 packages, which carry
+the sync extension bundle under `docs/darkbox/sync/`. Set
+`DARKBOX_SYNC_PROTOCOL=1.0.0` to run it on protocol 1.0.0 with common 1.5.0.
 
 The sync example accepts a second, unused exchange-directory path to exercise
 a mounted transport while keeping working SQLite libraries and private stores

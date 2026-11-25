@@ -2,6 +2,8 @@
 
 Software tags use `vMAJOR.MINOR.PATCH` and match the Rust package version in both `Cargo.toml` and `Cargo.lock`. Specification versions are registered separately in `versions.json`. A software patch can fix the validator without changing any specification or canonical document. Publishing a new specification requires its own completed versioned references, rules and tests.
 
+Each `versions` entry also lists its `capabilities`, the optional structures that common version defines: `protection`, `directory`, `liveDirectory`, `hotCapture` and `extensionBundles`. The `extensions` array registers every separately bundled official extension version with `namespace`, `version`, `released` and `minCommon`, the lowest common version that carries the bundle. Its canonical files live in `extensions/<namespace>/<version>/`, and every such directory needs a registry entry. An extension version is published independently: a new one needs its own completed bundle but no new common version, provided its `minCommon` version is published.
+
 Changes to documentation shipped in the crate or binary packages always require
 a new software release, even when no runtime code changes. This includes the
 repository README and packaged SDK/CLI guides. A documentation-only correction
@@ -12,7 +14,7 @@ versioned specifications and canonical bundles remain immutable.
 
 ## Prepare a release
 
-Commit the intended changes first. From a clean `main` checkout with Python 3.11 or later, Make, Rust 1.88 or later, a C compiler and authenticated Git access to `origin`:
+Commit the intended changes first. From a clean `main` checkout with Python 3.11 or later, Make, Rust 1.89 or later, a C compiler and authenticated Git access to `origin`:
 
 ```sh
 make release
@@ -20,9 +22,9 @@ make release
 
 The command fetches `origin/main` and tags, checks that the local branch contains the remote branch, and proposes the current Cargo version when it is newer than existing release tags. Otherwise it proposes the next patch version. For the first release it proposes `1.0.0`. Stable versions only are supported.
 
-Select the proposed software version, or enter a different one. Every release automatically includes all registered specification versions whose `released` flag is false, including later releases. There is no separate specification-selection prompt. The release summary lists every version being published, and preparation sets `released: true` without rewriting its canonical files. Those references become immutable when the release is published. Previously published versions retain their exact bytes and support.
+Select the proposed software version, or enter a different one. Every release automatically includes all registered specification versions whose `released` flag is false, including later releases. There is no separate specification-selection prompt. The release summary lists every version being published, and preparation sets `released: true` without rewriting its canonical files. The same release freezes every pending extension bundle whose `minCommon` version is published by then, in that release or an earlier one; the summary lists them as extension bundles to freeze. Those references become immutable when the release is published. Previously published versions and extension bundles retain their exact bytes and support.
 
-The command updates only `Cargo.toml`, the Darkbox entry in `Cargo.lock`, and `versions.json`, then runs `make check` and the published-reference guard. Review its diff summary and confirm the final commit, tag and push. It commits changed preparation files, creates an annotated tag, and pushes the branch and tag together with `git push --atomic`. Cancelling or failing checks restores the preparation files. A failed push retains the local release commit and tag and prints the retry command.
+The command updates only `Cargo.toml`, the Darkbox entry in `Cargo.lock`, and `versions.json`, then runs the published-reference guard and `make check`. The guard, `scripts/check_releases.py`, refuses changes to the references of published common versions and to published `extensions/<namespace>/<version>/` directories, and refuses a published extension losing support or changing its `minCommon`. Review its diff summary and confirm the final commit, tag and push. It commits changed preparation files, creates an annotated tag, and pushes the branch and tag together with `git push --atomic`. Cancelling or failing checks restores the preparation files. A failed push retains the local release commit and tag and prints the retry command.
 
 Preview the proposed release without changing files, Git refs or the remote:
 
@@ -36,13 +38,13 @@ Normally `make release` needs no arguments. To override the software version or 
 make release ARGS="--version 1.1.0 --publish-spec 1.1.0"
 ```
 
-Repeat `--publish-spec` to select multiple versions. For an intentional software-only release while specifications are still unpublished, use `make release ARGS="--no-publish-spec"`. This option and `--publish-spec` are mutually exclusive. A first public release must still publish at least one specification. Dry-run previews use the same automatic selection and overrides as real releases.
+Repeat `--publish-spec` to select multiple versions. Pending extension bundles whose `minCommon` version is published by the selection are still frozen. For an intentional software-only release while specifications are still unpublished, use `make release ARGS="--no-publish-spec"`; it freezes no specification and no extension bundle. This option and `--publish-spec` are mutually exclusive. A first public release must still publish at least one specification. Dry-run previews use the same automatic selection and overrides as real releases.
 
 The command does not bypass branch protections. If `main` requires a pull request, prepare and review the release metadata through that process, then create an annotated matching tag on the merged commit and push that tag. Tagged CI requires the release commit to belong to `origin/main`.
 
 ## GitHub Actions
 
-`ci.yml` calls the reusable `build.yml` workflow for branch pushes, pull requests and manual runs. It runs canonical catalog checks, Python release tests, Rust formatting, clippy and tests on each native platform, then builds and packages the executable. A separate Linux x86-64 job compiles the crate's binary and test targets with Rust 1.88 to check the declared minimum Rust version.
+`ci.yml` calls the reusable `build.yml` workflow for branch pushes, pull requests and manual runs. It runs canonical catalog checks, Python release tests, Rust formatting, clippy and tests on each native platform, then builds and packages the executable. These are the `make check` steps: `scripts/bundle_catalog.py --check` covers the common catalogs and the extension bundle catalogs, and `make test` runs the sync tests on the newest protocol, then repeats `tests/sync.rs` and `tests/sync_retention.rs` with `DARKBOX_SYNC_PROTOCOL=1.0.0` for the protocol bound to common 1.5.0. A separate Linux x86-64 job compiles the crate's binary and test targets with Rust 1.89 to check the declared minimum Rust version.
 
 | Runner | Rust target | Package |
 | --- | --- | --- |
@@ -106,7 +108,7 @@ secret exists alongside the binary-distribution credentials.
 Ordinary CI runs `crate.yml` without credentials or uploads. It packages the
 crate, verifies compilation from the extracted distributable sources, and checks
 library-only compilation from that package. The crate includes every supported
-canonical bundle, schema and version registry needed by build.rs, plus Rust tests,
+canonical bundle, extension bundle, schema and version registry needed by build.rs, plus Rust tests,
 fixtures, examples, documentation and license materials.
 
 The release calls that same workflow at the exact checked release commit after
@@ -127,9 +129,21 @@ difference instead of bypassing it. A failed crates.io upload prevents GitHub
 publication. Registry versions themselves may become public before a later GitHub
 release failure, which can be recovered independently using the same tag.
 
-Sync protocol references are independently versioned under the new common 1.5.0
-bundle. Before publishing changed unpublished references, reproduce their schema
-and independent vectors with `python3 scripts/sync_schema.py --check` and
+## Extension bundles and sync references
+
+`python3 scripts/bundle_catalog.py --write` without `--version` generates the
+catalog `docs/darkbox/<name>/<version>.bundle.json` of every registered
+unpublished extension bundle, as well as the common catalogs; `--check` compares
+all of them with their sources. A published extension catalog is never rewritten,
+and an `extensions/<namespace>/<version>/` directory without a registry entry is
+an error. With `--version`, the script handles that one common version only.
+
+Sync protocol references are generated for both protocol versions. Sync 1.0.0
+lives in the published common 1.5.0 bundle, under `archive/1.5.0/docs/darkbox/sync/`.
+Sync 1.1.0 is its own extension bundle, under
+`extensions/studio.illegal.darkbox.sync/1.1.0/docs/darkbox/sync/`. Before
+publishing changed unpublished references, reproduce their schema and
+independent vectors with `python3 scripts/sync_schema.py --check` and
 `python3 scripts/sync_vectors.py --check`, then check the canonical catalogs.
-The generators refuse to rewrite a released bundle. Real cloud-client deployment
+The generators refuse to rewrite a released reference. Real cloud-client deployment
 qualification remains distinct from deterministic replay and local fault tests.

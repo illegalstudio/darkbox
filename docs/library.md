@@ -22,16 +22,16 @@ impl DecryptionKeys for Keys {
 }
 
 let keys = Keys;
-let mut options = VerificationOptions::default();
-options.decryption_keys = Some(&keys);
-options.require_protection = true;
-// Add public signer keys from application policy, never from the package.
-// options.trusted_signers.insert(signer_id, public_key);
+let options = VerificationOptions::default()
+    .with_decryption_keys(&keys)
+    .with_require_protection(true);
+// Add public signer keys from application policy, never from the package:
+// .with_trusted_signer(signer_id, public_key)
 let report = darkbox::analyze_with("project.darkbox", Mode::Verify,
     Limits::default(), &options);
 ```
 
-`VerificationOptions::default()` registers the official protection extension version 1.0.0. Use `ExtensionRegistry::empty()` for an application with no recognized extensions. `register` adds an application-controlled `ExtensionVerifier` with a namespace, exact supported version test and `verify` method. Verification receives an `ExtensionContext` containing the parsed manifest, exact manifest bytes, actual file digests, limits, deadline and a bounded resource-read method over private CRC-checked staging. Required unknown or unimplemented versions return unsupported. Optional unknown extensions are explicitly unchecked.
+`VerificationOptions::default()` registers the official protection extension version 1.0.0 and the official sync verifier. `VerificationOptions` is `#[non_exhaustive]`: start from `default()` and chain `with_extensions`, `with_trusted_digests`, `with_profiles`, `with_require_profile`, `with_decryption_keys`, `with_trusted_signers`, `with_trusted_signer` and `with_require_protection`, or assign its public fields. Use `with_extensions(ExtensionRegistry::empty())` for an application with no recognized extensions. `register` adds an application-controlled `ExtensionVerifier` with a namespace, exact supported version test and `verify` method. Verification receives an `ExtensionContext` containing the parsed manifest, exact manifest bytes, actual file digests, limits, deadline and a bounded resource-read method over private CRC-checked staging. Required unknown or unimplemented versions return unsupported. Optional unknown extensions are explicitly unchecked.
 
 Custom verifiers can record independent errors and informative diagnoses through `Report::record` and `Report::note`. They must enforce their own version's semantics and honor limits/deadlines; they run trusted application code. Resource-read capability is not permission to execute archive content. `prepare_save` defaults to refusing saves. An extension with writer support implements that callback to synchronize its descriptor and resources. Registration alone does not authorize writing.
 
@@ -47,19 +47,21 @@ Implement `NonceSequence::next_nonce` with a durable nonce allocator belonging t
 
 ## Saving
 
-`save(source, destination, PackageUpdate, limits, options, signer)` verifies the source before editing. `PackageUpdate::manifest` optionally provides candidate metadata. `PackageUpdate::files` maps paths to `Some(already_prepared_bytes)` for replacement/addition or `None` for removal. Manifest and detached signature bytes are writer-owned. Databases must already be coherent, closed SQLite snapshots. Secret updates must already have been encrypted before SQLite insertion or attachment preparation.
+`save(source, destination, PackageUpdate, limits, options, signer)` verifies the source before editing. Build the update with `PackageUpdate::default().with_manifest(value).with_file(path, bytes).without_file(path)`. `PackageUpdate::manifest` optionally provides candidate metadata. `PackageUpdate::files` maps paths to `Some(already_prepared_bytes)` for replacement/addition or `None` for removal. Manifest and detached signature bytes are writer-owned. Databases must already be coherent, closed SQLite snapshots. Secret updates must already have been encrypted before SQLite insertion or attachment preparation.
 
 Applications supply `ManifestSigner` with signer identifier, public key and a signature callback for exact bytes. The public key must match the externally trusted key under that identifier. A protected save requires the callback even for public-only edits. The writer retains required extension presence/version, invokes recognized extension writer callbacks, preserves unknown optional descriptors/resources, rebuilds the full inventory, serializes final manifest bytes and signs them. It validates the completed ZIP before publication. An unchanged encrypted block may be preserved without keys only in its exact original context. New encrypted bytes require successful authentication with a supplied key. Authentication establishes bytes/context, not application semantics.
 
 The in-memory `save` API preserves the source common version, package identity and protected file/column declarations. Context changes to row identifiers are accepted only with newly encrypted, successfully authenticated blocks. An unchanged block moved to a different row is refused even when keys are absent. Changed blocks cannot reuse a nonce observed under the same key in the source revision, even if that old block is removed. Historical uniqueness across other packages and older revisions remains the nonce allocator's responsibility. Use `PackageWriter` below for complete new editions with resource additions/removals. A newly added required extension must have a registered verifier and writer capability.
 
+For common 1.6.0, `save` keeps official extension documentation aligned with the saved manifest: it adds the canonical bundle and folder declarations of every declared official extension version and removes the bundles and folder declarations of extensions that are no longer declared. Those files are writer-owned, like the common canonical bundle.
+
 The SDK holds a stable advisory destination lock when replacing an existing ZIP. New ZIP destinations use atomic no-clobber publication without a persistent output lock. The caller MUST coordinate source snapshots and external writers that bypass that lock. Source hashes detect observed changes but cannot close a race with an uncoordinated external writer. Existing source paths can be replaced atomically; a separate destination must be absent and is published without overwriting any file. Symlinks are refused. The writer syncs the candidate, validates it, rechecks the source and publishes atomically, then syncs the parent directory on Unix. Ordinary preparation/verification/conflict failures leave source and any existing destination intact and clean up task staging. A `save.durability` warning in a successful report means publication occurred but final directory sync failed, so crash durability is uncertain. All returned save errors precede publication.
 
-See [the complete executable example](../examples/protected.rs) and the [normative extension](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) for descriptor, binary format, AAD, trust, failure rules and independent test vectors.
+See [the complete executable example](../examples/protected.rs) and the [normative extension](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) for descriptor, binary format, AAD, trust, failure rules and independent test vectors. Common 1.1.0 to 1.5.0 carry that reference inside their common canonical bundle. For common 1.6.0 and later it is the separate [protection 1.0.0 extension bundle](../extensions/studio.illegal.darkbox.protection/1.0.0/docs/darkbox/protection/1.0.0.md), included exactly when the manifest declares the extension.
 
 ## Progressive package creation
 
-`PackageWriter::new(destination, manifest, limits, options, signer)` begins a new package or a complete replacement edition. It automatically streams the exact embedded canonical bundle for the manifest's supported common version. The manifest still declares every required canonical directory and the application folders, databases and public profile document. Supply only dynamic resources, never the canonical files, manifest or signature. Prepared common versions remain usable before publication; published bundles are never edited.
+`PackageWriter::new(destination, manifest, limits, options, signer)` begins a new package or a complete replacement edition. It automatically streams the exact embedded canonical bundle for the manifest's supported common version and, for common 1.6.0, the canonical bundle of every official extension version the manifest declares. The manifest still declares every required canonical directory, including each declared extension bundle's folders such as `docs/darkbox/protection`, and the application folders, databases and public profile document. `ManifestBuilder::extension` and `ManifestBuilder::protection` add those folder declarations for a 1.6.0 manifest. Supply only dynamic resources, never the canonical files, manifest or signature. Prepared common versions remain usable before publication; published bundles are never edited.
 
 ```rust
 use darkbox::{Limits, PackageWriter, VerificationOptions};
@@ -112,7 +114,7 @@ See [live directory storage](sdk.md#live-directory-storage-130) for the 1.3.0
 `DirectoryLibrary` lifecycle, hot backup, direct deltas and `TrustedDigests`
 policy. Ordinary verification remains a full byte pass.
 
-For common 1.4.0 or 1.5.0, [short capture barriers](sdk.md#short-capture-barriers-140)
+For common 1.4.0 or later, [short capture barriers](sdk.md#short-capture-barriers-140)
 use owned `HotCapture` handles to stream retained snapshots on a worker while
 application writes resume. The [SDK dependency and feature guidance](sdk.md)
 shows the published crate and the explicit `exact-numbers` precision option.
@@ -120,7 +122,10 @@ shows the published crate and the explicit `exact-numbers` precision option.
 ## Synchronization extension
 
 Common 1.5.0 includes the official sync 1.0.0 reference, schema and independent
-replay vectors. The default extension registry recognizes `SyncVerifier`; ordinary
+replay vectors in its canonical bundle. For common 1.6.0 and later, sync 1.1.0
+carries them in its own extension bundle, included when a manifest declares it.
+Sync 1.0.0 stays bound to common 1.5.0 exactly, and `darkbox::sync::SyncProtocol`
+selects the version when a domain is created. The default extension registry recognizes `SyncVerifier`; ordinary
 writers preserve required extension presence and refuse checkpoint mutation.
 Applications use the [sync SDK](sync.md) to create fresh complete checkpoints,
 coordinate atomic projection/outbox commits and bootstrap local libraries.

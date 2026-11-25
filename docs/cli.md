@@ -1,6 +1,6 @@
 # Darkbox command-line tool
 
-The Rust binary inspects, verifies and converts project ZIPs and quiescent directory packages offline. It includes the manifest schemas, canonical catalogs and exact canonical file bytes for every specification version it supports. SQLite is bundled; no SQLite installation, network connection or original application is needed to run it.
+The Rust binary inspects, verifies and converts project ZIPs and quiescent directory packages offline. It includes the manifest schemas, canonical catalogs and exact canonical file bytes for every specification version it supports, and the canonical bundle of every separately bundled official extension version it supports. SQLite is bundled; no SQLite installation, network connection or original application is needed to run it.
 
 ## Installation and builds
 
@@ -16,7 +16,7 @@ On Arch Linux, enable the [Illegal Studio pacman repository](https://github.com/
 
 The [repository installation guide](https://github.com/illegalstudio/darkbox#install) covers version pinning and direct GitHub downloads. Published binaries support Linux x86-64 and ARM64 with glibc 2.35 or later, and macOS ARM64 with macOS 11 or later. Software release numbers are independent of the embedded common specification versions. Packages preserve dependency notices and bundle SQLite.
 
-Build from this repository with Rust 1.88 or later and a C compiler:
+Build from this repository with Rust 1.89 or later and a C compiler:
 
 ```sh
 cargo install --path . --locked
@@ -57,7 +57,9 @@ The input filename extension is irrelevant. Both analysis commands leave the ori
 
 `verify` checks the exact supported common version, strict JSON, its schema, path and inventory rules, canonical documentation, profile-document presence and UTF-8 encoding, SQLite snapshot independence, logical table inventory, declared `userVersion`, `integrity_check` and `foreign_key_check`. The archive catalog is compared with the embedded official catalog; its hashes cannot authorize changed documentation. Unknown required extensions and unavailable SQLite capabilities are reported as unsupported.
 
-For Darkbox 1.1.0, 1.2.0, 1.3.0, 1.4.0 and 1.5.0 it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
+For Darkbox 1.1.0 and later it also recognizes the official `studio.illegal.darkbox.protection` extension version 1.0.0. It checks the complete SHA-256 inventory, detached Ed25519 signature against supplied trusted keys, protected file/BLOB structure, stable record identifiers and observed nonce uniqueness. Decryption keys additionally enable AES-256-GCM authentication against the package/file or database/table/column/record context. Plaintext semantics remain unchecked. See the complete [extension specification](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) and [Rust API](library.md).
+
+Darkbox 1.6.0 keeps the documentation of official extensions out of the common canonical bundle. Each official extension version, in a namespace of the form `studio.illegal.darkbox.<name>`, has its own canonical extension bundle inside `docs/darkbox/<name>/`, with a catalog at `docs/darkbox/<name>/<version>.bundle.json`. A package contains that bundle exactly when its manifest declares that extension version, and the manifest declares the bundle's folders, for example `docs/darkbox/protection`. `verify` compares every bundle file and its catalog with the embedded reference: a declared extension without its complete bundle returns `bundle.missing`, changed bytes return `bundle.file`, and a `docs/darkbox/<name>/` directory for an undeclared official extension returns `bundle.extra`. This binary embeds the bundles of protection 1.0.0 and sync 1.1.0, both for common 1.6.0 and later 1.x versions. For a declared official extension version without an embedded reference, the report adds the informational diagnostic `extension.bundle_unverified`; the extension is unsupported when required and unchecked when optional, and its documentation is never reported as verified or as corruption. Packages of earlier common versions keep their published bundle layout.
 
 `--trust-store PATH` reads a JSON object mapping signer identifiers to 64 hexadecimal characters representing raw 32-byte Ed25519 public keys. `--decryption-keys PATH` reads an application-supplied private JSON object mapping key identifiers to 64 hexadecimal characters representing raw 32-byte AES keys. These files stay outside the package. No command accepts secret keys directly as command-line values, and reports never include supplied key bytes or decrypted plaintext. Key files are limited to 4 MiB. Malformed key configuration returns a usage error without echoing its contents. Inspect does not authenticate protection, even when these options are supplied.
 
@@ -67,7 +69,7 @@ Application profiles are not implemented by this binary. A successful result is 
 
 `inspect` reports the available manifest, ZIP entries and declared SQLite metadata. It does not certify conformance, enforce a version-specific manifest schema, compare canonical documentation or run SQLite integrity and foreign-key checks. Unknown common versions may still be inspected; unsafe paths, malformed JSON, broken ZIP data and applicable resource limits still prevent a successful inspection. Metadata can be partial when an error occurs.
 
-`versions` lists the exact embedded specification versions and whether each has been published. A prepared version can be supported before publication. The CLI software version, specification versions, application data versions and optional creator-software version are independent, even when their numbers happen to match.
+`versions` lists the exact embedded specification versions and whether each has been published. It also lists every separately bundled official extension version: text lines starting with `extension` give the namespace, version, minimum common version and publication state, and `--json` adds an `extensions` array with `namespace`, `version`, `released` and `minimum_common` beside `versions` and `cli_version`. Extensions of common versions before 1.6.0 travel inside the common bundle and are not listed separately. A prepared version can be supported before publication. The CLI software version, specification versions, application data versions and optional creator-software version are independent, even when their numbers happen to match.
 
 ## Reports and exit codes
 
@@ -106,9 +108,9 @@ ZIP counts are bounded before constructing the ZIP library's index. Advertised s
 
 ## Maintaining version support
 
-`versions.json` registers each supported specification version, its publication state and implemented rule set. `archive/<version>/` holds its exact canonical bundle; `specification/<version>.md`, the schemas in `schema/<version>/` and `tests/fixtures/<version>/` retain its rules, schemas and example projects. `docs/specification.md` and the root schemas are convenience copies for the current version. Build-time checks refuse omitted archive versions, inconsistent catalogs and unimplemented rule sets.
+`versions.json` registers each supported specification version, its publication state, implemented rule set and `capabilities`, the optional structures that version defines. Its `extensions` array registers each separately bundled official extension version with `namespace`, `version`, `released` and `minCommon`, the lowest common version that carries the bundle. `archive/<version>/` holds the exact common canonical bundle; `specification/<version>.md`, the schemas in `schema/<version>/` and `tests/fixtures/<version>/` retain its rules, schemas and example projects. `extensions/<namespace>/<version>/` holds the exact canonical bundle of one official extension version. `docs/specification.md` and the root schemas are convenience copies for the current version. Build-time checks refuse omitted archive versions, inconsistent catalogs and unimplemented rule sets.
 
-Every binary release must retain support for all specification versions published by that release date. Exact-version dispatch is mandatory; sharing a major number is not evidence of support. Future or unimplemented versions return unsupported. References are embedded at compile time and are never downloaded from an archive-provided URL.
+Every binary release must retain support for all specification versions and official extension bundles published by that release date. Exact-version dispatch is mandatory; sharing a major number is not evidence of support. Future or unimplemented versions return unsupported. References are embedded at compile time and are never downloaded from an archive-provided URL.
 
 For a new specification version, add its bundle, schema, fixtures and registry entry, implement any new rules, then regenerate its catalog while `released` is false:
 
@@ -121,7 +123,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --locked -- -D warnings
 ```
 
-The version in the regeneration command is an example; select the version being prepared. Publication sets its registry entry to `released: true` and freezes its canonical bundle, versioned schema, specification and fixtures. The release guard compares those files and retained support with a chosen Git baseline:
+The version in the regeneration command is an example; select the version being prepared. A new official extension version needs no new common version: add its bundle under `extensions/<namespace>/<version>/` and its `extensions` registry entry, then run `python3 scripts/bundle_catalog.py --write` without `--version` to generate its catalog while `released` is false. Publication sets a registry entry to `released: true` and freezes the canonical bundle, versioned schema, specification and fixtures of a common version, or the bundle directory of an extension version. The release guard compares those files and retained support with a chosen Git baseline:
 
 ```sh
 python3 scripts/check_releases.py --base HEAD
@@ -131,7 +133,7 @@ CI checks the pull request base or the preceding pushed revision. Release prepar
 
 ## Live library snapshots and incremental backups
 
-Darkbox 1.2.0, 1.3.0, 1.4.0 and 1.5.0 support both ZIP and quiescent directory representations. The
+Darkbox 1.2.0 and later support both ZIP and quiescent directory representations. The
 1.0.0 and 1.1.0 specifications and their canonical bundles remain unchanged;
 conversion does not upgrade them. All destinations below must be absent.
 
@@ -160,8 +162,8 @@ on validation failure; new output is validated before publication. The SDK and
 these tools require application-controlled parent directories and external
 coordination with writers that bypass SDK locks.
 
-Delta participants declare the same stable root manifest `packageId` and common
-version 1.2.0, 1.3.0, 1.4.0 or 1.5.0. A transfer contains a `delta.json` descriptor and only changed or
+Delta participants declare the same stable root manifest `packageId` and a common
+version of 1.2.0 or later. A transfer contains a `delta.json` descriptor and only changed or
 added whole files, including an entire changed SQLite database. It records removed
 paths and binds both the exact base manifest and its complete logical file
 inventory with SHA-256. The reconstructed target must pass full verification and
@@ -179,9 +181,9 @@ require a private signing key or the decryption keys for unchanged locked conten
 
 ## Unsigned inventory inspection
 
-A 1.2.0 producer can include `resourceInventory` in its manifest. SDK writers
+A producer of common 1.2.0 or later can include `resourceInventory` in its manifest. SDK writers
 rebuild it automatically. It hashes every dynamic file, excluding the manifest,
-canonical bundle and detached protection signature; the protection extension
+canonical bundles and detached protection signature; the protection extension
 retains its own separate signed inventory. Full `verify` recomputes these hashes.
 
 ```sh
@@ -243,15 +245,17 @@ policy and reports list `trusted_resources`; the CLI does not infer trust from a
 manifest inventory. Hot backup and sealing require application coordination and
 SQLite connections, so their entry points are in the [SDK](sdk.md#live-directory-storage-130).
 
-For common 1.4.0 or 1.5.0, applications can use the SDK's [short capture barriers](sdk.md#short-capture-barriers-140)
+For common 1.4.0 or later, applications can use the SDK's [short capture barriers](sdk.md#short-capture-barriers-140)
 to resume additions and database writes after capture, while retaining captured
 resources through streaming. CLI directory commands continue to require a
 quiescent source and shared lock for their whole operation.
 
-## Synchronization checkpoints (1.5.0)
+## Synchronization checkpoints (1.5.0 and later)
 
 `darkbox verify checkpoint.project` recognizes the official required
-`studio.illegal.darkbox.sync` extension 1.0.0. It independently replays the complete
+`studio.illegal.darkbox.sync` extension: version 1.1.0 in packages of common 1.6.0
+and later, and version 1.0.0 in packages of common 1.5.0 exactly. A 1.6.0 manifest
+must not declare sync 1.0.0. Both versions use the same protocol rules. It independently replays the complete
 causal history, compares the exact logical state/frontier and checks every
 historically referenced resource against the actual package inventory. Application
 database materialization remains unchecked without its registered profile. The

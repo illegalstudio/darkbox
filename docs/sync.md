@@ -1,15 +1,24 @@
 # Synchronizing local libraries
 
-Software 1.6.1 provides the `darkbox::sync` SDK for the official
-`studio.illegal.darkbox.sync` extension 1.0.0 and common Darkbox 1.5.0.
-Each computer uses its own local live library. An existing cloud client copies a
+Software 2.0.0 provides the `darkbox::sync` SDK for two versions of the official
+`studio.illegal.darkbox.sync` extension. Extension and protocol 1.1.0 is for common
+Darkbox 1.6.0 and later 1.x versions. Extension and protocol 1.0.0 stays bound to
+common Darkbox 1.5.0 exactly. Protocol 1.1.0 is otherwise identical to 1.0.0:
+record members, canonical encoding, merge rules, retention and recovery are
+unchanged. Existing 1.0.0 domains and repositories keep working unchanged and
+never change protocol. Each computer uses its own local live library. An existing cloud client copies a
 separate repository containing immutable transactions, resources and independently
 complete checkpoint generations. Retention is independent of device membership. Darkbox requires no additional sync executable, server or CRDT runtime.
 
-The [normative reference](../archive/1.5.0/docs/darkbox/sync/1.0.0.md),
+For protocol 1.1.0, the [normative reference](../extensions/studio.illegal.darkbox.sync/1.1.0/docs/darkbox/sync/1.1.0.md),
+[JSON Schema](../extensions/studio.illegal.darkbox.sync/1.1.0/docs/darkbox/sync/1.1.0.schema.json) and
+[independent vectors](../extensions/studio.illegal.darkbox.sync/1.1.0/docs/darkbox/sync/1.1.0.vectors.json)
+form the extension's own canonical bundle, included in a package under
+`docs/darkbox/sync/` exactly when its manifest declares sync 1.1.0. For existing
+protocol 1.0.0 domains, the [normative reference](../archive/1.5.0/docs/darkbox/sync/1.0.0.md),
 [JSON Schema](../archive/1.5.0/docs/darkbox/sync/1.0.0.schema.json) and
 [independent vectors](../archive/1.5.0/docs/darkbox/sync/1.0.0.vectors.json)
-are included in the canonical bundle. Protocol replay and package verification
+are part of the common 1.5.0 canonical bundle. Protocol replay and package verification
 operate offline. Complete checkpoint creation/opening requires full byte verification;
 application-trusted digest reuse does not certify a complete sync checkpoint. The application supplies its exact data mapping and projection;
 Darkbox does not infer merge intent from arbitrary SQLite writes.
@@ -30,6 +39,14 @@ recovery package for a stale peer and rebuilds a third local library. This demon
 exchange folder between actual computers. The example includes an immutable
 attachment, so it also exercises object publication.
 
+The example uses protocol 1.1.0 with common 1.6.0 packages by default. Set
+`DARKBOX_SYNC_PROTOCOL=1.0.0` to run the same flow on protocol 1.0.0 with common
+1.5.0 packages:
+
+```sh
+DARKBOX_SYNC_PROTOCOL=1.0.0 cargo run --example sync_notes -- /absolute/path/to/another-new-directory
+```
+
 An optional second argument selects a new exchange directory on a mounted
 filesystem while keeping the working libraries and private stores local:
 
@@ -47,13 +64,27 @@ those responsibilities to their own independently versioned profile.
 
 ## Domain and storage
 
-A `Domain` binds a random `syncId`, a stable common `packageId`, exact application
-profile/data-format version, the complete human-readable profile, an immutable
-`SyncMapping`, and a projection identifier/version. `Domain::generate` allocates
+A `Domain` binds its permanent `SyncProtocol`, a random `syncId`, a stable common
+`packageId`, exact application profile/data-format version, the complete
+human-readable profile, an immutable `SyncMapping`, and a projection
+identifier/version. `Domain::generate(protocol, mapping, profile_bytes)` allocates
 new identities. When importing the same logical existing library, use
-`Domain::new(random_id()?, existing_package_id, mapping, profile_bytes)` to retain
+`Domain::new(protocol, random_id()?, existing_package_id, mapping, profile_bytes)` to retain
 its package identity. The format/profile change needed to integrate sync belongs
 to the application; attaching sync never silently migrates an older library.
+
+Choose the protocol when creating the domain. `SyncProtocol::V1_1`, also
+available as `SyncProtocol::LATEST`, requires manifests built for common 1.6.0.
+`SyncProtocol::V1_0` requires manifests built for common 1.5.0, and a 1.6.0
+manifest must not declare sync 1.0.0. `minimum_common()` returns the common
+version to build for, `for_common(version)` the protocol a common version uses,
+`version()` and `parse()` convert the `protocolVersion` string, and
+`Domain::protocol()` reports the choice of an existing domain. The protocol is
+permanent: every record, generation and domain of one repository carries it, and
+compaction, rebase and recovery never change it. In protocol 1.1.0 the root's
+`commonVersion` is the lowest common version of the domain's packages rather than
+one exact version; an installation that does not support the common version of
+a checkpoint reports it as unsupported until updated.
 
 Use three distinct locations. For bounded retention, open the shared location through `SyncRepository` and obtain its current generation `Exchange`:
 
@@ -80,6 +111,7 @@ atomic rename within each destination directory. Native atomic no-clobber
 publication is preferred. Software 1.6.1 also supports Unix mounts, including
 rclone FUSE with VFS full caching, that reject no-replace rename and hard links
 but support parent-directory advisory `flock` and atomic ordinary rename.
+The SDK takes these locks through the Rust standard library.
 
 Every local SDK sync publisher first takes that directory lock where supported,
 including publishers using the native path. If native publication is unsupported,
@@ -147,9 +179,12 @@ independent copy of the original database.
 
 `SnapshotBuilder` creates a new closed application projection from verified
 history using the registered adapter. It adds the common canonical bundle,
-profile, exact root/mapping, a pinned compact baseline when present, subsequent transaction history, logical
+the sync extension bundle on common 1.6.0, the profile, exact root/mapping, a pinned compact baseline when present, subsequent transaction history, logical
 state and every object referenced by that retained baseline/history. Additional declared profile files or cache
-databases can be supplied with `add_path`/`add_reader`. The output must be absent;
+databases can be supplied with `add_path`/`add_reader`. `SnapshotBuilder::from_local`
+additionally takes `LocalProjection::new(adapter, source)` and carries the
+installation-local columns of the application's own connection through the
+adapter's `copy_local` hook. The output must be absent;
 checkpoints are never edited or replaced.
 
 Open a checkpoint with `SyncSnapshot::open`. Call `verify_projection` with the
@@ -159,9 +194,12 @@ working-library directory. It does not adopt archive-supplied SQL as an executab
 projection. Existing local libraries merge checkpoint history through
 `SyncSession::receive_history`, preserving local unpublished operations.
 
-For a new compatible common 1.5.0 working library, `attach_working` installs the
-domain's exact metadata while the application owns its directory guard and write
-barrier. It refuses protected libraries and inconsistent existing sync metadata.
+For a new compatible working library whose common version matches the domain's
+protocol (1.6.0 for protocol 1.1.0, 1.5.0 for protocol 1.0.0), `attach_working`
+installs the domain's exact metadata while the application owns its directory
+guard and write barrier. On common 1.6.0 it also copies the sync extension bundle
+into `docs/darkbox/sync/` and declares that folder. It refuses protected
+libraries and inconsistent existing sync metadata.
 It does not translate existing rows into sync operations. The built-in working
 session, attachment and bootstrap adapters support sync as the only required
 extension; they refuse additional required namespaces without modifying the
@@ -181,7 +219,8 @@ let session = repository.open_session(
 )?;
 ```
 
-The repository persists the newest observed generation as a high-water witness in the journal. Returning sessions reopen their locally pinned domain, even when its cloud generation has expired, so private recovery remains available. Their old-generation exchanges still refuse publication. Open the local session before using a freshly opened repository handle for maintenance; `open` alone has no access to an existing local journal. The main database must be exactly the domain's declared database inside that
+`SessionOptions::new(device_id, label)` uses default `SyncLimits`; assign its
+public `limits` field afterwards to change them. The repository persists the newest observed generation as a high-water witness in the journal. Returning sessions reopen their locally pinned domain, even when its cloud generation has expired, so private recovery remains available. Their old-generation exchanges still refuse publication. Open the local session before using a freshly opened repository handle for maintenance; `open` alone has no access to an existing local journal. The main database must be exactly the domain's declared database inside that
 working library. `SyncSession` borrows the library guard exclusively. It creates
 a fresh replica incarnation on every opening, including after crash, backup
 restore or copied installation. A persistent device ID/label is display metadata,
@@ -390,7 +429,7 @@ into a new domain. It never chooses a branch using filenames or timestamps.
 
 ## Version 1 bounds and security
 
-The mode is explicitly **trusted-folder plaintext**. The operator trusts all
+Both protocol versions use the same explicit mode: **trusted-folder plaintext**. The operator trusts all
 writers and the cloud provider with those bytes. SHA-256 is integrity checking,
 not author authentication. Sync v1 refuses protected libraries and never removes
 protection to make attachment succeed. Authenticated/encrypted sync requires a
@@ -423,7 +462,7 @@ Pruning touches only expired reserved domain namespaces and their control record
 
 A repository exchange returns `sync.generation_changed` when its base is superseded. Old offline edits remain local or in their old ordinal namespace. `base_status(domain, now)` distinguishes current, superseded-with-grace and expired bases. Retention does not enumerate or retire devices.
 
-Use the repository's `open_session` for local durable high-water tracking. On a base change, call `prepare_rebase` with a `RebaseTarget` containing an absent private working-library path, a private object store and an optional absent recovery-package path. A fresh private store lets the application discard obsolete local media when adoption is complete. If the exact captured source boundary cannot be certified, or outgoing/pending rows exist, omitting recovery_path returns `sync.recovery_required` before building the replacement. This conservative recovery rule also applies to concurrent edits on a recently superseded base.
+Use the repository's `open_session` for local durable high-water tracking. On a base change, call `prepare_rebase` with `RebaseTarget::new(destination, objects)`, naming an absent private working-library path and a private object store, optionally followed by `.with_recovery_path(path)` for an absent recovery-package path. A fresh private store lets the application discard obsolete local media when adoption is complete. If the exact captured source boundary cannot be certified, or outgoing/pending rows exist, omitting the recovery path returns `sync.recovery_required` before building the replacement. This conservative recovery rule also applies to concurrent edits on a recently superseded base.
 
 The complete private recovery `.darkbox` package includes the old seed/history, objects and deterministic projection. `extensions/studio.illegal.darkbox.sync/recovery/journal.json` preserves exact outgoing and incoming transaction records and identifies missing pending media. Available pending-only media is included as well. `RecoveryJournal` exposes the source revision and captured frontier. Application-local columns are preserved by the adapter's `copy_local(source, destination_transaction, domain)` hook, in both the recovery archive and fresh local library. The default refuses this operation when the mapping declares local columns and the adapter has no implementation.
 
@@ -435,4 +474,4 @@ No old operation is automatically converted into a new-generation write. The app
 
 Distinct complete records at the greatest ordinal produce `sync.generation_conflict`. Unreconciled retained branches also stop pruning. The SDK retains their bytes. Inspect `generations()` and the retained checkpoints, then construct the desired reconciled source checkpoint through the application's conflict UI.
 
-`resolve_with_checkpoint` requires an explicitly selected branch and `ResolutionTarget` with a private recovery directory. It exports complete recovery packages for every observed branch, including ready exchange history and resources, before publishing the selected compact state. Missing or invalid branch input blocks resolution. A changed observed branch set requires retry and leaves the exported archives available. The resolution record names its parent and replaced branches. Their cloud data still follows grace and retirement proofs. This operation requires an application decision and never picks a branch by wall-clock time.
+`resolve_with_checkpoint` requires an explicitly selected branch and `ResolutionTarget::new(objects, recovery_directory, now)` with a private recovery directory. It exports complete recovery packages for every observed branch, including ready exchange history and resources, before publishing the selected compact state. Missing or invalid branch input blocks resolution. A changed observed branch set requires retry and leaves the exported archives available. The resolution record names its parent and replaced branches. Their cloud data still follows grace and retirement proofs. This operation requires an application decision and never picks a branch by wall-clock time.

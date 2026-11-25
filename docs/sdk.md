@@ -4,7 +4,7 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 
 ```toml
 [dependencies]
-darkbox = { version = "1.6.2", default-features = false }
+darkbox = { version = "2.0.0", default-features = false }
 ```
 
 Releases are available on [crates.io](https://crates.io/crates/darkbox).
@@ -20,7 +20,7 @@ It never silently rounds unknown extension data. Choose extended precision
 explicitly only if the host accepts Cargo feature unification and the associated
 Serde enum/flatten implications. Other dependencies may still enable that feature.
 
-The optional default `cli` feature enables the binary and its argument parser. Library integrations can omit both. The crate re-exports `rusqlite`, `serde_json` and `zeroize` for matching SQLite, JSON and secret-buffer types. Rust 1.88 and a C compiler are required for bundled SQLite.
+The optional default `cli` feature enables the binary and its argument parser. Library integrations can omit both. The crate re-exports `rusqlite`, `serde_json` and `zeroize` for matching SQLite, JSON and secret-buffer types. Rust 1.89 and a C compiler are required for bundled SQLite.
 
 | Operation | API |
 | --- | --- |
@@ -43,6 +43,33 @@ The optional default `cli` feature enables the binary and its argument parser. L
 | Cancel staged work | `discard_changes`, or drop the editor |
 | Stream a prepared edition directly to ZIP | `PackageWriter` |
 | Validate application rules/extensions | `ApplicationProfile`, `ProfileRegistry`, `ExtensionVerifier` |
+| List embedded specification/extension versions | `supported_versions`, `supported_extensions` |
+
+Starting with software 2.0.0, public structs and enums that can gain members are
+`#[non_exhaustive]`. Struct literals and `..Default::default()` no longer compile
+outside the crate. Start from `default()`, a preset such as `Limits::large()` or a
+`new` constructor, then chain the `with_*` builders shown in this guide. Fields
+remain public, so a value can also be assigned after construction, and a `match`
+on such an enum needs a wildcard arm. Protocol record types (sync wire records,
+protection data and `EntryDigest`) remain exhaustive.
+
+Report vocabularies are typed enums: `Mode`, `Status`, `Scope`,
+`ApplicationValidation`, `Severity`, `EntryKind` and `Compression`, plus
+`SignatureStatus`, `AuthenticationStatus` and `PlaintextValidation` in
+`darkbox::protection`. Each serializes to the same documented string as before,
+has `as_str()` and compares directly with `&str`, so
+`report.scope == "inventory_claims"` and `report.scope == Scope::InventoryClaims`
+are equivalent. The library `Report` keeps `report_version` 2 and has no
+`cli_version` field; the CLI adds its own version to its JSON output.
+`Report::from_failure(mode, file, limits, error)` converts the `Error` of a
+failed operation into a report: the report attached to that error when present,
+otherwise a report with scope `transfer` whose only diagnostic is the error.
+
+`supported_versions()` yields `SpecificationVersion { version, released }` for
+every embedded common version, oldest first. `supported_extensions()` yields
+`ExtensionVersion { namespace, version, released, minimum_common }` for every
+separately bundled official extension version. Extensions of common versions
+before 1.6.0 travel inside the common bundle and are not listed there.
 
 ## Read, edit and save
 
@@ -103,9 +130,11 @@ Publication streams a complete candidate, rebuilds inventory/signature, validate
 
 ## Construct and protect projects
 
-`ManifestBuilder::new(common_version, profile_id, data_version)` declares exact-version canonical directories and defaults the public profile path to `docs/profile.md`. Add folders, typed `DatabaseDeclaration`/`TableDeclaration`, optional creator metadata and namespaced extensions. `protection(ProtectionData)` adds the official required descriptor and its folders. `build` validates the metadata schema; publication checks actual files/databases. Metadata and documentation alone do not guarantee application conformance.
+`ManifestBuilder::new(common_version, profile_id, data_version)` declares exact-version canonical directories and defaults the public profile path to `docs/profile.md`. Add folders, typed declarations built with `DatabaseDeclaration::new(path, description, tables).with_user_version(n)` and `TableDeclaration::new(name, description)`, optional creator metadata and namespaced extensions. `protection(ProtectionData)` adds the official required descriptor and its folders. `build` validates the metadata schema; publication checks actual files/databases. Metadata and documentation alone do not guarantee application conformance.
 
-`KeyRing` is a zeroizing in-memory `DecryptionKeys` provider with insert/remove/contains methods. `Ed25519Signer::from_seed` accepts a zeroizing seed and implements pure Ed25519 `ManifestSigner`. Replace either with application secure key storage/external signing when appropriate. Trust is supplied separately through `VerificationOptions::trusted_signers`; secrets are never serialized or automatically distributed. `NonceSequence` remains an application-owned durable allocator.
+Common 1.6.0 moves the documentation of each official extension out of the common canonical bundle into that extension version's own canonical bundle, located under `docs/darkbox/<name>/` and included exactly when the manifest declares that extension version. For a 1.6.0 manifest, `extension(namespace, version, required, data)` and `protection(..)` also declare the bundle's folders, for example `docs/darkbox/protection`. A manifest assembled as raw JSON must declare them itself. `PackageWriter`, `PackageEditor`, `DirectoryLibrary::initialize` and the sync `attach_working`/`SnapshotBuilder` writers include the bundles of the declared official extensions automatically. Legacy `save` also adds or removes extension bundles and their folder declarations to match the saved manifest. Never supply those files as resources. A reader without a trusted reference for a declared official extension version reports the extension as unsupported when it is required and adds the informational diagnostic `extension.bundle_unverified`; this is never reported as corruption. Earlier common versions keep their published bundle layout.
+
+`KeyRing` is a zeroizing in-memory `DecryptionKeys` provider with insert/remove/contains methods. `Ed25519Signer::from_seed` accepts a zeroizing seed and implements pure Ed25519 `ManifestSigner`. Replace either with application secure key storage/external signing when appropriate. Trust is supplied separately through `VerificationOptions::with_trusted_signer(id, public_key)`, `with_trusted_signers(map)` or the `trusted_signers` field; secrets are never serialized or automatically distributed. `NonceSequence` remains an application-owned durable allocator.
 
 `put_encrypted` encrypts before staging and updates the file declaration using current package identity/path/key ID. `encrypt_value(ValueAddress, ...)` creates ciphertext for a declared column/record ID before insertion. `put_encrypted_value` encrypts and transactionally replaces exactly one existing value. Missing/nonunique IDs fail. `decrypt_value` returns `None` for SQL NULL and authenticated zeroizing bytes for a BLOB; absent keys and missing records are distinct errors. `decrypt_resource` authenticates a declared attachment. Each operation bounds one block in memory.
 
@@ -115,9 +144,9 @@ Unknown optional extensions retain exact descriptors, namespace folders and byte
 
 ## Application profile hooks
 
-Register trusted `ApplicationProfile` implementations in `VerificationOptions::profiles`. Each declares an ID, supported data-format versions and `validate(ProfileContext)`. Validation runs only after common, SQLite and required-extension checks pass. Context provides manifest, digests, limits/deadline, resource streams, read-only database access and explicit decryption. Code comes from the application, never the archive. Callbacks honor deadlines and define their policy for missing keys.
+Register trusted `ApplicationProfile` implementations in `VerificationOptions::profiles`, or replace the whole registry with `with_profiles`. Each declares an ID, supported data-format versions and `validate(ProfileContext)`. Validation runs only after common, SQLite and required-extension checks pass. Context provides manifest, digests, limits/deadline, resource streams, read-only database access and explicit decryption. Code comes from the application, never the archive. Callbacks honor deadlines and define their policy for missing keys.
 
-Success sets `application_validation = "passed"` and adds `profile.application`. Callback errors block opening/publication and set `failed`. With `require_profile = true`, an unregistered exact profile version yields `profile.unsupported` and `application_validation = "unsupported"`; otherwise no validator leaves `not_performed`. Built-in AEAD checks retain `plaintext_validation = "not_performed"` for each block; application certification belongs to the profile callback. The CLI has no built-in application validators.
+Success sets `application_validation = "passed"` and adds `profile.application`. Callback errors block opening/publication and set `failed`. With `with_require_profile(true)`, an unregistered exact profile version yields `profile.unsupported` and `application_validation = "unsupported"`; otherwise no validator leaves `not_performed`. Built-in AEAD checks retain `plaintext_validation = "not_performed"` for each block; application certification belongs to the profile callback. The CLI has no built-in application validators.
 
 The SDK covers container mechanics for supported common versions. Application meaning, reference repair, licensing, passwords, migrations, distributed key management and historical nonce uniqueness remain application capabilities. Future common versions/unknown required extensions permit diagnostic access and cannot be saved as if supported.
 
@@ -134,12 +163,12 @@ All example keys and deterministic nonces are public test data, unsuitable for p
 
 Packages/editors/writers never accumulate the entire archive in memory. Resource I/O uses 64 KiB buffers. AEAD can buffer one encrypted attachment/BLOB and its plaintext under `max_entry_bytes`; JSON/reports retain bounded metadata. Compressed snapshots, uncompressed staging, replacements and candidate validation need disk space. Retained old handles can keep several editions alive. Dropping the final resource/database/package/editor owner removes private storage. Normal failures clean owned candidates/journal directories. Abrupt termination can leave operating-system temporary files.
 
-Configure `Limits` for compressed/entry/total bytes, entry counts, metadata and cooperative deadlines. Set `Limits::staging_directory` to an existing private directory on suitable storage for large projects; `None` uses the operating-system temporary directory. Output candidates remain beside the destination for atomic publication. `Limits::large()` provides a bounded media-library preset, with individual fields still controlled by the application. Application SQL, readers, validators and signers must return promptly; the SDK cannot preempt arbitrary blocking callbacks. Application profile validation can intentionally reject an otherwise valid common-format package.
+Configure `Limits` for compressed/entry/total bytes, entry counts, metadata and cooperative deadlines with `with_max_archive_bytes`, `with_max_entry_bytes`, `with_max_total_bytes`, `with_max_entries`, `with_max_metadata_bytes` and `with_timeout_seconds`. Use `with_staging_directory(path)` to select an existing private directory on suitable storage for large projects; a `staging_directory` of `None` uses the operating-system temporary directory. Output candidates remain beside the destination for atomic publication. `Limits::large()` provides a bounded media-library preset, with individual fields still controlled by the application. Application SQL, readers, validators and signers must return promptly; the SDK cannot preempt arbitrary blocking callbacks. Application profile validation can intentionally reject an otherwise valid common-format package. Resource-limit errors from the library use code `limits.exceeded` and describe the reached bound without naming command-line options; the CLI appends its own hint about `--limits large` and the `--max-*` options.
 
 ## Directory libraries and incremental editions (1.2.0)
 
 Use `ManifestBuilder::package_id(id).resource_inventory()` to opt into stable
-library identity and an unsigned resource inventory under common version 1.2.0.
+library identity and an unsigned resource inventory under common version 1.2.0 or later.
 The builder's `build` validates structure; `PackageWriter` and editor publication
 recompute actual inventory digests before signing the final manifest. Root
 `packageId` must match the protection extension's package ID when both are used.
@@ -158,10 +187,7 @@ The lossless APIs accept `Limits` and `VerificationOptions` and return `Report`:
 
 ```rust
 use darkbox::{Limits, VerificationOptions};
-let limits = Limits {
-    staging_directory: Some("/disk/private-staging".into()),
-    ..Limits::large()
-};
+let limits = Limits::large().with_staging_directory("/disk/private-staging");
 let options = VerificationOptions::default();
 darkbox::unpack("snapshot.project", "library", limits.clone(), &options)?;
 darkbox::pack("library", "backup.project", limits.clone(), &options)?;
@@ -181,7 +207,7 @@ publication. Signed copies need external public trust, without signing keys.
 SQLite changes transfer whole database files. Complete editions are still read
 for verification; unchanged ordinary media is streamed without private copies.
 
-`Package::open` also accepts quiescent directories for common versions 1.2.0, 1.3.0, 1.4.0 and 1.5.0. It packs and freezes a
+`Package::open` also accepts quiescent directories for common versions 1.2.0 and later. It packs and freezes a
 private ZIP, then retains its verified resource snapshot. That immutable handle
 has `path() = None`; edits require `save_as` to a new ZIP. It does not write staged
 edits back into a live directory. Applications own live SQL/media operations and
@@ -218,8 +244,9 @@ access to all resources. Staging limits and cleanup apply to every path.
 
 `DirectoryLibrary` owns the exclusive interoperable sibling lock for a whole
 working session. `initialize(path, manifest, profile, limits)` creates absent
-storage directly with the canonical bundle and declared folders. Supply a 1.3.0, 1.4.0 or 1.5.0
-manifest with a stable `packageId`, then create its databases and resources while
+storage directly with the canonical bundle, the bundles of declared official
+extensions on common 1.6.0, and declared folders. Supply a manifest for common
+1.3.0 or later with a stable `packageId`, then create its databases and resources while
 holding the returned handle. Initialization alone is not snapshot validation.
 `open(path)` also opens interrupted working storage so the owning application can
 recover it. It takes the lock without automatically modifying or validating data.
@@ -231,6 +258,11 @@ atomically updates the manifest. It releases the lock on return. Failed validati
 preserves the previous manifest; reopen the handle to continue recovery. Update
 `application.formatVersion` and the corresponding profile document together.
 The stable lock file is never deleted and remains outside package inventory.
+The SDK takes its file locks through the Rust standard library: whole-file
+`flock(2)` on Unix-like systems and `LockFileEx` over the whole file on Windows.
+Common 1.6.0 specifies the Windows form of the interoperable lock as well.
+
+Windows is tested in CI but is not yet a release target. Two behaviors differ there. A directory cannot be flushed to disk, so after an atomic publication the SDK skips the parent-directory synchronization that it performs on Unix; the published file itself is synchronized before the rename. Sync publication on mounts without no-replace rename has no fallback on Windows and reports the error instead.
 
 ```rust,no_run
 use darkbox::{DirectoryLibrary, Limits, VerificationOptions};
@@ -255,9 +287,9 @@ It verifies the base and an overlaid target view, then writes changed files only
 it never materializes an entire target ZIP or stages ordinary media.
 
 `TrustedDigests::sha256(path, size)` can provide a cached hash for resources whose
-unchanged bytes the application independently guarantees. Set
-`VerificationOptions::trusted_digests` explicitly. Return `None` for full reads.
-Common 1.3.0, 1.4.0 and 1.5.0 directories support this optimization. Metadata, canonical documentation,
+unchanged bytes the application independently guarantees. Supply it explicitly
+with `VerificationOptions::with_trusted_digests(&cache)`. Return `None` for full reads.
+Directories of common 1.3.0 and later support this optimization. Metadata, canonical documentation,
 profile text, databases and protected or callback-staged resources remain fully
 read. A small signature prefix is still checked for uninventoried databases.
 Caches may never come from untrusted manifests or timestamp comparisons alone.
@@ -307,7 +339,7 @@ remain hash-checked. A violated retention contract fails without publishing.
 The timeout covers capture and streaming, including time between API calls.
 Capture guards release their private snapshots on drop. Existing one-call APIs
 retain their whole-call coordination contract for common 1.3.0; the new split
-contract requires common 1.4.0 or 1.5.0. Protected live metadata rewriting retains its
+contract requires common 1.4.0 or later. Protected live metadata rewriting retains its
 existing capability restriction.
 
 ## Offline causal synchronization (1.5.0)
@@ -319,13 +351,26 @@ bootstrap. Applications implement the pinned `SyncProjection` adapter and commit
 synchronized edits through `SyncSession`. See [the complete integration guide](sync.md)
 and [runnable example](../examples/sync_notes.rs).
 
+Software 2.0.0 supports two versions of the sync extension, selected with the
+`SyncProtocol` enum when a domain is created. `SyncProtocol::V1_1`, also
+`SyncProtocol::LATEST`, is extension and protocol 1.1.0 for common 1.6.0 and
+later. `SyncProtocol::V1_0` is extension 1.0.0, bound to common 1.5.0 exactly.
+`Domain::generate(protocol, mapping, profile)` and
+`Domain::new(protocol, sync_id, package_id, mapping, profile)` take the protocol
+first and `Domain::protocol()` returns it. The choice is permanent for a domain and its repository. Build the
+manifest for `protocol.minimum_common()`: `"1.6.0"` with `V1_1`, `"1.5.0"` with
+`V1_0`. `version()`, `parse()` and `for_common()` convert between the enum, the
+`protocolVersion` string and a common version. The former
+`darkbox::sync::VERSION` constant no longer exists. Existing 1.0.0 domains and
+repositories keep working unchanged.
+
 `VerificationOptions::default` registers `SyncVerifier`. Generic sealed-checkpoint
 verification checks causal replay, logical state and every historical resource
 digest, with application materialization explicitly unchecked without a profile
 adapter. Working sync metadata returns NotQuiescent to ordinary readers; use
-`SnapshotBuilder` for complete portable editions. Protocol 1.0.0 uses trusted-folder
-plaintext, fixed profiles and retained history without automatic deletion. It
-refuses protected libraries without downgrading their protection.
+`SnapshotBuilder` for complete portable editions. Protocols 1.0.0 and 1.1.0 use trusted-folder
+plaintext, fixed profiles and retained history without automatic deletion. They
+refuse protected libraries without downgrading their protection.
 
 Repository synchronization supports compact checkpoint generations, bounded retention without device membership, and private stale-base recovery. Use `SyncRepository::open_session` and its guarded exchanges, and preserve local columns with `SyncProjection::copy_local`. See [the synchronization guide](sync.md#compaction-and-bounded-retention).
 
