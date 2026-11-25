@@ -57,6 +57,9 @@ pub struct SpecificationVersion {
     pub version: &'static str,
     /// Whether the version is published. Unpublished references may still change.
     pub released: bool,
+    /// Whether this software creates new packages in the version. A read-only
+    /// version is still read, verified and saved for existing packages.
+    pub writable: bool,
 }
 
 /// The canonical bundle of one official extension version known to this build.
@@ -78,6 +81,7 @@ pub fn supported_versions() -> impl Iterator<Item = SpecificationVersion> {
     versions::VERSIONS.iter().map(|spec| SpecificationVersion {
         version: spec.version,
         released: spec.released,
+        writable: spec.writable,
     })
 }
 

@@ -149,8 +149,10 @@ impl Fixture {
     }
     fn options(&self, keyed: bool) -> VerificationOptions<'_> {
         {
-            let mut value =
-                VerificationOptions::default().with_trusted_signers(BTreeMap::from([(
+            let mut value = VerificationOptions::default()
+                // This suite also creates packages in read-only versions.
+                .with_retired_versions(true)
+                .with_trusted_signers(BTreeMap::from([(
                     "test-signer".into(),
                     self.signing.public_key(),
                 )]));

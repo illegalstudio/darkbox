@@ -313,9 +313,10 @@ fn run() -> io::Result<u8> {
                     "not yet released"
                 }
             };
+            let access = |writable: bool| if writable { "" } else { ", read-only" };
             if json {
                 let versions: Vec<_> = darkbox::supported_versions()
-                    .map(|v| serde_json::json!({"version": v.version, "released": v.released}))
+                    .map(|v| serde_json::json!({"version": v.version, "released": v.released, "writable": v.writable}))
                     .collect();
                 let extensions: Vec<_> = darkbox::supported_extensions()
                     .map(|e| serde_json::json!({"namespace": e.namespace, "version": e.version, "released": e.released, "minimum_common": e.minimum_common}))
@@ -327,7 +328,13 @@ fn run() -> io::Result<u8> {
                 )?;
             } else {
                 for version in darkbox::supported_versions() {
-                    writeln!(output, "{} ({})", version.version, state(version.released))?;
+                    writeln!(
+                        output,
+                        "{} ({}{})",
+                        version.version,
+                        state(version.released),
+                        access(version.writable)
+                    )?;
                 }
                 for extension in darkbox::supported_extensions() {
                     writeln!(

@@ -65,8 +65,13 @@ are equivalent. The library `Report` keeps `report_version` 2 and has no
 failed operation into a report: the report attached to that error when present,
 otherwise a report with scope `transfer` whose only diagnostic is the error.
 
-`supported_versions()` yields `SpecificationVersion { version, released }` for
-every embedded common version, oldest first. `supported_extensions()` yields
+`supported_versions()` yields `SpecificationVersion { version, released, writable }`
+for every embedded common version, oldest first. A version with `writable = false`
+is read-only for new packages: the SDK still reads, verifies and saves existing
+packages of that version, but `PackageWriter`, `PackageEditor` and
+`DirectoryLibrary::initialize` refuse to start a new one with the unsupported
+error `version.retired`. Migration tools can lift the refusal for package writers
+with `VerificationOptions::with_retired_versions(true)`. `supported_extensions()` yields
 `ExtensionVersion { namespace, version, released, minimum_common }` for every
 separately bundled official extension version. Extensions of common versions
 before 1.6.0 travel inside the common bundle and are not listed there.

@@ -53,6 +53,14 @@ class SpecificationText(unittest.TestCase):
         for row in registry.get("extensions", []):
             self.assertIn(row["version"], section, row["namespace"])
 
+    def test_newest_version_is_writable_and_readme_names_current_versions(self):
+        rows = json.loads((ROOT / "versions.json").read_text())["versions"]
+        self.assertTrue(rows[-1]["writable"])
+        section = (ROOT / "README.md").read_text().split("## Version numbers", 1)[1].split("\n## ", 1)[0]
+        for row in rows:
+            if row["writable"]:
+                self.assertIn(f"**{row['version']}**", section)
+
     def test_authored_text_has_no_em_dash(self):
         paths = [ROOT / "README.md", ROOT / "CHANGELOG.md", ROOT / "SECURITY.md", ROOT / "conformance/README.md"]
         for version in guarded_versions():

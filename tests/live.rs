@@ -14,7 +14,7 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let manifest = ManifestBuilder::new("1.3.0", "org.example.live", "1")
+        let manifest = ManifestBuilder::new("1.5.0", "org.example.live", "1")
             .unwrap()
             .package_id("00112233445566778899aabbccddeeff")
             .resource_inventory()
@@ -445,8 +445,7 @@ fn delta_base_directory_is_fully_read_even_when_target_cache_is_enabled() {
 
 #[test]
 fn split_capture_ignores_later_additions_and_keeps_database_and_profile_revision() {
-    let mut f = Fixture::new();
-    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    let f = Fixture::new();
     let (library, db) = f.initialize();
     db.execute_batch("PRAGMA journal_mode=WAL").unwrap();
     let capture = library
@@ -498,8 +497,7 @@ fn split_capture_ignores_later_additions_and_keeps_database_and_profile_revision
 
 #[test]
 fn split_capture_writes_a_delta_and_rejects_retention_violations() {
-    let mut f = Fixture::new();
-    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    let f = Fixture::new();
     f.sealed();
     let options = VerificationOptions::default();
     darkbox::pack(
@@ -545,8 +543,7 @@ fn split_capture_writes_a_delta_and_rejects_retention_violations() {
 #[cfg(unix)]
 #[test]
 fn capture_rejects_same_size_same_bytes_replaced_inode() {
-    let mut f = Fixture::new();
-    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    let f = Fixture::new();
     let (library, db) = f.initialize();
     let capture = library
         .prepare_hot_capture(
@@ -607,8 +604,7 @@ fn host_json_tagged_untagged_and_flatten_numbers_work_without_feature_unificatio
 fn capture_is_send_and_owns_its_library_guard() {
     fn assert_send<T: Send>() {}
     assert_send::<darkbox::HotCapture>();
-    let mut f = Fixture::new();
-    f.manifest["darkbox"]["version"] = json!("1.4.0");
+    let f = Fixture::new();
     let (library, db) = f.initialize();
     let capture = library
         .prepare_hot_capture(

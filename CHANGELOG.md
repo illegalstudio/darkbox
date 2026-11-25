@@ -2,7 +2,14 @@
 
 Software versions (the `darkbox` crate and command-line tool) and specification versions are independent. Each entry names the specification versions it publishes. Published specification versions are never changed afterwards.
 
-## Unreleased: software 2.0.0
+## Unreleased
+
+### Changed
+
+- Specification versions 1.0.0 to 1.4.0 are read-only for new packages. Every version is still read and verified, and existing packages of those versions are still saved in place or as a copy. `PackageWriter`, `PackageEditor` and `DirectoryLibrary::initialize` refuse to start a new package in them with the unsupported error `version.retired`. New packages use 1.6.0, or 1.5.0 for existing sync 1.0.0 domains. This changes behavior for callers that created packages in the retired versions; `VerificationOptions::with_retired_versions(true)` restores it for package writers.
+- `versions.json` has a `writable` flag per version, `SpecificationVersion` exposes it, and `darkbox versions` marks read-only versions.
+
+## Software 2.0.0 (2026-11-25)
 
 Publishes common specification **1.6.0**, the separate extension bundles **protection 1.0.0** and **sync 1.1.0**. Earlier specification versions and their canonical bundles are unchanged and remain supported.
 

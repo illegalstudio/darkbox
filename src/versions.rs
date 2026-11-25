@@ -32,6 +32,9 @@ pub(crate) struct Capabilities {
 pub(crate) struct VersionSpec {
     pub version: &'static str,
     pub released: bool,
+    /// Whether new packages may be created in this version. Retired versions
+    /// remain readable, and their existing packages can still be saved.
+    pub writable: bool,
     pub rules: RuleSet,
     pub capabilities: Capabilities,
     pub catalog: &'static [u8],
@@ -66,6 +69,32 @@ pub(crate) fn find_in<'a>(versions: &'a [VersionSpec], version: &str) -> Option<
 
 pub(crate) fn find(version: &str) -> Option<&'static VersionSpec> {
     find_in(VERSIONS, version)
+}
+
+/// Refuse to start a new package in a version retired for writing, unless
+/// application policy allows it or the package continues an existing edition
+/// of that same version.
+pub(crate) fn check_writable<'a>(
+    spec: &VersionSpec,
+    allow_retired: bool,
+    previous: impl IntoIterator<Item = &'a serde_json::Value>,
+) -> Result<(), crate::Error> {
+    if spec.writable
+        || allow_retired
+        || previous
+            .into_iter()
+            .any(|manifest| manifest["darkbox"]["version"] == spec.version)
+    {
+        return Ok(());
+    }
+    Err(crate::Error::new(
+        crate::Status::Unsupported,
+        "version.retired",
+        format!(
+            "Specification version {} is read-only in this software: existing packages remain readable and can be saved, but a new package must use a current version",
+            spec.version
+        ),
+    ))
 }
 
 /// Capabilities of the common version a manifest declares; none when unsupported.
@@ -247,6 +276,7 @@ mod tests {
             VersionSpec {
                 version: "1.0.0",
                 released: false,
+                writable: true,
                 rules: RuleSet::V1,
                 capabilities: Capabilities::default(),
                 catalog: b"first",
@@ -256,6 +286,7 @@ mod tests {
             VersionSpec {
                 version: "1.1.0",
                 released: false,
+                writable: true,
                 rules: RuleSet::V1,
                 capabilities: Capabilities::default(),
                 catalog: b"second",
