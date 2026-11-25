@@ -59,7 +59,8 @@ impl Fixture {
         self.directory.path().join(name)
     }
     fn options(&self, keyed: bool) -> VerificationOptions<'_> {
-        let mut options = VerificationOptions::default();
+        // This suite also creates packages in versions that are read-only by default.
+        let mut options = VerificationOptions::default().with_retired_versions(true);
         options
             .trusted_signers
             .insert("test-signer".into(), self.signer.public_key());
@@ -1131,4 +1132,77 @@ fn extension_bundles_follow_declarations_on_bundle_capable_versions() {
     );
     assert_eq!(report.status, darkbox::Status::Passed);
     assert!(report.checks.contains(&"bundle.canonical"));
+}
+
+#[test]
+fn retired_versions_are_read_only_for_new_packages_by_default() {
+    let fixture = Fixture::new();
+    let default_policy = VerificationOptions::default();
+    let writable: Vec<_> = darkbox::supported_versions()
+        .filter(|version| version.writable)
+        .map(|version| version.version)
+        .collect();
+    assert_eq!(writable, ["1.5.0", "1.6.0"]);
+
+    // A new package cannot start in a retired version.
+    let error = fixture
+        .editor(false, "1.1.0")
+        .save_as(fixture.path("new.project"), &default_policy, None)
+        .err()
+        .unwrap();
+    assert_eq!(error.status, darkbox::Status::Unsupported);
+    assert_eq!(error.code, "version.retired");
+    assert!(!fixture.path("new.project").exists());
+
+    // Current versions are unaffected.
+    for version in writable {
+        fixture
+            .editor(false, version)
+            .save_as(
+                fixture.path(&format!("current-{version}.project")),
+                &default_policy,
+                None,
+            )
+            .unwrap();
+    }
+
+    // Existing packages of a retired version stay readable, and both an
+    // in-place save and a copy continue them under the default policy.
+    let path = fixture.path("existing.project");
+    fixture
+        .editor(false, "1.1.0")
+        .save_as(&path, &fixture.options(false), None)
+        .unwrap();
+    assert_eq!(darkbox::verify(&path).status, darkbox::Status::Passed);
+    let package = Package::open(&path, Limits::default(), &default_policy).unwrap();
+    let mut editor = package.edit();
+    editor
+        .put_reader("assets/later.bin", Cursor::new(b"Later"))
+        .unwrap();
+    let saved = editor.save(&default_policy, None).unwrap();
+    assert_eq!(saved.manifest()["darkbox"]["version"], "1.1.0");
+    let mut copy = saved.edit();
+    copy.put_reader("assets/copy.bin", Cursor::new(b"Copy"))
+        .unwrap();
+    copy.save_as(fixture.path("copy.project"), &default_policy, None)
+        .unwrap();
+
+    // A new live library cannot start in a retired version either.
+    let manifest = ManifestBuilder::new("1.3.0", "org.example.sdk", "1")
+        .unwrap()
+        .package_id("00112233445566778899aabbccddeeff")
+        .folder("data", "SQLite snapshots")
+        .database(declaration())
+        .build()
+        .unwrap();
+    let error = darkbox::DirectoryLibrary::initialize(
+        fixture.path("library"),
+        manifest,
+        "# org.example.sdk, format 1\n",
+        Limits::default(),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(error.code, "version.retired");
+    assert!(!fixture.path("library").exists());
 }

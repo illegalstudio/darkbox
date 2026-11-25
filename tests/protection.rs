@@ -218,7 +218,9 @@ impl Fixture {
                     "test-signer".into(),
                     Signing::new().public_key(),
                 )]))
-                .with_require_protection(true);
+                .with_require_protection(true)
+                // This suite also creates packages in read-only versions.
+                .with_retired_versions(true);
             value.decryption_keys = keys;
             value
         }

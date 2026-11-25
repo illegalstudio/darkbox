@@ -179,6 +179,8 @@ impl DirectoryLibrary {
         let guard = lock(&root, true)?;
         require_live(&manifest)?;
         let spec = crate::creation::specification(&manifest)?;
+        // A new library always starts in a version that is current for writing.
+        crate::versions::check_writable(spec, false, None)?;
         let end = crate::transfer::deadline(&limits)?;
         let candidate = tempfile::Builder::new()
             .prefix(".darkbox-library-")

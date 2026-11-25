@@ -167,6 +167,7 @@ fn main() {
         serde_json::from_slice(&fs::read(root.join("versions.json")).unwrap()).unwrap();
     let mut output = String::from("pub static VERSIONS: &[VersionSpec] = &[\n");
     let mut versions = BTreeSet::new();
+    let mut newest_writable = false;
     for row in registry["versions"]
         .as_array()
         .expect("Version registry array")
@@ -188,6 +189,9 @@ fn main() {
             "Register an implemented rule set before adding a version"
         );
         let released = row["released"].as_bool().expect("Release status");
+        // Versions retired for writing stay readable forever.
+        let writable = row["writable"].as_bool().expect("Writable status");
+        newest_writable = writable;
         let base = root.join("archive").join(version);
         let mut files = BTreeMap::new();
         let mut folders = BTreeSet::new();
@@ -243,8 +247,12 @@ fn main() {
             version
         );
         let capabilities = capabilities(row);
-        output.push_str(&format!("VersionSpec {{ version: {version:?}, released: {released}, rules: RuleSet::V1, capabilities: {capabilities}, catalog: include_bytes!({catalog_path:?}), schema: include_str!({schema:?}), files: &[{generated_files}] }},\n"));
+        output.push_str(&format!("VersionSpec {{ version: {version:?}, released: {released}, writable: {writable}, rules: RuleSet::V1, capabilities: {capabilities}, catalog: include_bytes!({catalog_path:?}), schema: include_str!({schema:?}), files: &[{generated_files}] }},\n"));
     }
+    assert!(
+        newest_writable,
+        "The newest registered version must remain writable"
+    );
     let disk_versions: BTreeSet<_> = fs::read_dir(root.join("archive"))
         .unwrap()
         .map(|e| e.unwrap())

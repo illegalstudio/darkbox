@@ -59,7 +59,8 @@ impl Fixture {
         self.dir.path().join(name)
     }
     fn options(&self, keyed: bool) -> VerificationOptions<'_> {
-        let mut options = VerificationOptions::default();
+        // This suite also creates packages in versions that are read-only by default.
+        let mut options = VerificationOptions::default().with_retired_versions(true);
         options
             .trusted_signers
             .insert("signer".into(), self.signer.public_key());

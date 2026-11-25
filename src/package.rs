@@ -1345,6 +1345,7 @@ impl PackageEditor {
             options,
             signer,
             lock,
+            self.base.as_ref().map(|base| base.manifest()),
         )?;
         if let Some(base) = &self.base {
             writer.previous_snapshot(&base.report, base.snapshot.archive.path());

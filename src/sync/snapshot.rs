@@ -621,8 +621,15 @@ impl<'a> SnapshotBuilder<'a> {
                 .map(str::to_owned),
         );
         ensure_folders(&mut manifest, &paths)?;
-        let mut writer =
-            crate::PackageWriter::new_locked(destination, manifest, limits, options, None, None)?;
+        let mut writer = crate::PackageWriter::new_locked(
+            destination,
+            manifest,
+            limits,
+            options,
+            None,
+            None,
+            None,
+        )?;
         writer.add_path(&domain.mapping().storage.database_path, &database)?;
         for (path, bytes) in files.drain(..) {
             writer.add_reader(&path, bytes.as_slice())?;

@@ -159,6 +159,9 @@ pub struct VerificationOptions<'a> {
     pub trusted_signers: BTreeMap<String, [u8; 32]>,
     /// Applications can require protection even if an attacker removes its descriptor.
     pub require_protection: bool,
+    /// Permit creating new packages in specification versions that this
+    /// software has retired for writing. Meant for migration tools and tests.
+    pub allow_retired_versions: bool,
 }
 
 impl<'a> VerificationOptions<'a> {
@@ -195,6 +198,11 @@ impl<'a> VerificationOptions<'a> {
     /// Trust one signer public key.
     pub fn with_trusted_signer(mut self, id: impl Into<String>, public_key: [u8; 32]) -> Self {
         self.trusted_signers.insert(id.into(), public_key);
+        self
+    }
+    /// Permit creating new packages in specification versions retired for writing.
+    pub fn with_retired_versions(mut self, allowed: bool) -> Self {
+        self.allow_retired_versions = allowed;
         self
     }
     /// Reject packages that do not declare the protection extension.

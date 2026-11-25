@@ -219,7 +219,7 @@ impl<'a> PackageWriter<'a> {
     ) -> Result<Self, Error> {
         let destination = crate::package::destination(destination.as_ref())?;
         let lock = crate::package::lock_zip_destination(&destination)?;
-        Self::new_locked(destination, manifest, limits, options, signer, lock)
+        Self::new_locked(destination, manifest, limits, options, signer, lock, None)
     }
 
     pub(crate) fn new_locked(
@@ -229,6 +229,8 @@ impl<'a> PackageWriter<'a> {
         options: &'a VerificationOptions<'a>,
         signer: Option<&'a dyn ManifestSigner>,
         lock: Option<crate::package::DestinationLock>,
+        // The manifest of the edition an editor was opened from, if any.
+        base: Option<&Value>,
     ) -> Result<Self, Error> {
         if limits.max_entries == 0
             || limits.max_entry_bytes == 0
@@ -298,6 +300,15 @@ impl<'a> PackageWriter<'a> {
             Err(error) if error.kind() == io::ErrorKind::NotFound => (None, None),
             Err(error) => return Err(crate::io_failure(error)),
         };
+        versions::check_writable(
+            spec,
+            options.allow_retired_versions,
+            previous
+                .as_ref()
+                .and_then(|report| report.manifest.as_ref())
+                .into_iter()
+                .chain(base),
+        )?;
         let parent = destination
             .parent()
             .filter(|path| !path.as_os_str().is_empty())
