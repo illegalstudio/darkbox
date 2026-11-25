@@ -19,7 +19,7 @@ Software versions (the `darkbox` crate and command-line tool) and specification 
 ### Fixed
 
 - A delta payload or copied resource longer than its verified size is reported as invalid (`transfer.changed`), like a shorter one. It was reported as a resource-limit failure, which wrongly suggested that higher limits would accept it.
-- The sync concurrency test that failed intermittently on Windows was a test defect, not a library defect. Its background publisher waited at most five seconds for the database write lock while the main thread edited in a tight loop; SQLite polls for a busy lock instead of queueing, so on slow storage the wait could expire. The test now waits long enough, and the [sync guide](docs/sync.md) explains which busy timeout a background publisher needs.
+- The sync concurrency test that failed intermittently on Windows was a test defect, not a library defect. Its background publisher waited at most five seconds for the database write lock while the main thread edited in a tight loop; SQLite polls for a busy lock instead of queueing, so on slow storage the wait could expire. The test now waits long enough, and the [sync guide](docs/sync.md) explains which busy timeout a background publisher needs. The Windows job in CI now blocks; Windows is still not a release target.
 
 ### Documentation
 

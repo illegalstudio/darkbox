@@ -33,11 +33,9 @@ jobs:
           arguments: --all-features
 
   windows:
-    # Windows is tested on every push but is not a release target. The job does
-    # not block the workflow until its first runs have confirmed the suite there;
-    # remove continue-on-error once it is reliably green.
+    # Windows is tested on every push and blocks the workflow. It is not a
+    # release target: no Windows binaries are built or published.
     runs-on: windows-2025
-    continue-on-error: true
     defaults:
       run:
         shell: bash
