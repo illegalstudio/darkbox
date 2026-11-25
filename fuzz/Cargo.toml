@@ -1,0 +1,36 @@
+[package]
+name = "darkbox-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+darkbox = { path = "..", default-features = false }
+
+# Keep this crate out of the parent package: it needs a nightly toolchain.
+[workspace]
+
+[[bin]]
+name = "package"
+path = "fuzz_targets/package.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sync_records"
+path = "fuzz_targets/sync_records.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "protection_block"
+path = "fuzz_targets/protection_block.rs"
+test = false
+doc = false
+bench = false
