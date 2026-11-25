@@ -19,3 +19,39 @@ jobs:
 
   crate:
     uses: ./.github/workflows/crate.yml
+
+  dependencies:
+    # Advisories, licenses and sources of the complete dependency graph.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+
+  windows:
+    # Windows is tested on every push but is not a release target. The job does
+    # not block the workflow until its first runs have confirmed the suite there;
+    # remove continue-on-error once it is reliably green.
+    runs-on: windows-2025
+    continue-on-error: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Test the library and command-line tool
+        run: |
+          # Report every failing suite of a run, not only the first one.
+          cargo test --all-targets --locked --no-fail-fast
+          cargo test --all-targets --no-default-features --locked --no-fail-fast
+          DARKBOX_SYNC_PROTOCOL=1.0.0 cargo test --test sync --test sync_retention --locked --no-fail-fast

@@ -27,15 +27,15 @@ impl NonceSequence for Nonces {
     }
 }
 fn declaration() -> DatabaseDeclaration {
-    DatabaseDeclaration {
-        path: DATABASE.into(),
-        description: "Application database".into(),
-        user_version: Some(1),
-        tables: vec![TableDeclaration {
-            name: "notes".into(),
-            description: "Public labels and optional protected values".into(),
-        }],
-    }
+    DatabaseDeclaration::new(
+        DATABASE,
+        "Application database",
+        vec![TableDeclaration::new(
+            "notes",
+            "Public labels and optional protected values",
+        )],
+    )
+    .with_user_version(1)
 }
 struct Fixture {
     directory: tempfile::TempDir,
@@ -151,7 +151,7 @@ fn label(package: &Package) -> String {
 
 #[test]
 fn complete_public_lifecycle_supports_both_common_versions_and_reader_inputs() {
-    for version in ["1.0.0", "1.1.0"] {
+    for version in ["1.0.0", "1.1.0", "1.6.0"] {
         let fixture = Fixture::new();
         let mut editor = fixture.editor(false, version);
         let original = editor
@@ -781,7 +781,7 @@ fn rewrite_manifest(source: &Path, target: &Path, change: impl FnOnce(&mut Value
     let mut change = Some(change);
     for i in 0..input.len() {
         let mut entry = input.by_index(i).unwrap();
-        let name = entry.name().to_owned();
+        let name = entry.name().unwrap().into_owned();
         if entry.is_dir() {
             writer
                 .add_directory(name, SimpleFileOptions::default())
@@ -913,10 +913,7 @@ fn unknown_optional_data_and_required_protection_cannot_be_silently_changed() {
 fn sdk_limits_and_key_lifecycle_are_enforced() {
     let fixture = Fixture::new();
     let package = fixture.package(false);
-    let limits = Limits {
-        max_archive_bytes: 10,
-        ..Default::default()
-    };
+    let limits = Limits::default().with_max_archive_bytes(10);
     assert!(
         Package::from_reader(
             Cursor::new(fs::read(fixture.path("original.project")).unwrap()),
@@ -925,10 +922,7 @@ fn sdk_limits_and_key_lifecycle_are_enforced() {
         )
         .is_err()
     );
-    let limits = Limits {
-        max_entry_bytes: 8,
-        ..Default::default()
-    };
+    let limits = Limits::default().with_max_entry_bytes(8);
     let mut editor = PackageEditor::new(package.manifest().clone(), limits).unwrap();
     assert!(
         editor
@@ -1071,4 +1065,70 @@ fn save_as_and_legacy_copy_do_not_leave_output_lock_files() {
             .to_string_lossy()
             .ends_with(".lock"))
     );
+}
+
+#[test]
+fn extension_bundles_follow_declarations_on_bundle_capable_versions() {
+    let fixture = Fixture::new();
+    let bundled = |package: &Package| {
+        package
+            .resources()
+            .filter(|resource| resource.path.starts_with("docs/darkbox/protection/"))
+            .count()
+    };
+    let declared = |package: &Package| {
+        package.manifest()["folders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|folder| folder["path"] == "docs/darkbox/protection")
+    };
+    // A public 1.6.0 package carries only the common bundle.
+    let public = fixture
+        .editor(false, "1.6.0")
+        .save_as(
+            fixture.path("public.project"),
+            &fixture.options(false),
+            None,
+        )
+        .unwrap();
+    assert_eq!(bundled(&public), 0);
+    assert!(!declared(&public));
+    assert_eq!(public.report().status, darkbox::Status::Passed);
+
+    // Declaring protection brings its specification, schema, vectors and catalog.
+    let protected = fixture
+        .editor(true, "1.6.0")
+        .save_as(
+            fixture.path("protected.project"),
+            &fixture.options(true),
+            Some(&fixture.signer),
+        )
+        .unwrap();
+    assert_eq!(bundled(&protected), 4);
+    assert!(declared(&protected));
+    assert!(
+        protected
+            .resource("docs/darkbox/protection/1.0.0.bundle.json")
+            .is_ok()
+    );
+    assert_eq!(protected.report().status, darkbox::Status::Passed);
+
+    // Later editions keep the bundle, and it never enters the unsigned inventory.
+    let mut editor = protected.edit();
+    editor
+        .put_reader("assets/extra.bin", Cursor::new(b"More"))
+        .unwrap();
+    let again = editor
+        .save(&fixture.options(true), Some(&fixture.signer))
+        .unwrap();
+    assert_eq!(bundled(&again), 4);
+    let report = darkbox::analyze_with(
+        fixture.path("protected.project"),
+        darkbox::Mode::Verify,
+        Limits::default(),
+        &fixture.options(true),
+    );
+    assert_eq!(report.status, darkbox::Status::Passed);
+    assert!(report.checks.contains(&"bundle.canonical"));
 }

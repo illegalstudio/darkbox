@@ -149,18 +149,48 @@ pub struct DatabaseReader {
     connection: rusqlite::Connection,
     _source: ResourceSource,
     limits: Limits,
+    /// Read by the connection's progress handler, so that a shared reference
+    /// can renew the deadline for each operation.
+    deadline: Arc<std::sync::Mutex<Instant>>,
+}
+
+fn database_reader(source: ResourceSource, limits: &Limits) -> Result<DatabaseReader, Error> {
+    let end = deadline(limits)?;
+    let mut connection = crate::sqlite::open(source.path(), limits, end)?;
+    let shared = Arc::new(std::sync::Mutex::new(end));
+    let observed = shared.clone();
+    connection
+        .progress_handler(
+            1000,
+            Some(move || {
+                Instant::now() >= *observed.lock().unwrap_or_else(|poison| poison.into_inner())
+            }),
+        )
+        .map_err(crate::sqlite::classify)?;
+    Ok(DatabaseReader {
+        connection,
+        _source: source,
+        limits: limits.clone(),
+        deadline: shared,
+    })
 }
 
 /// Exact, stable application address of a protected SQLite value.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct ValueAddress<'a> {
+    /// Package-relative path of the database.
     pub database: &'a str,
+    /// The table name.
     pub table: &'a str,
+    /// The protected column.
     pub column: &'a str,
+    /// The record identifier, as stored in the declared identifier column.
     pub record_id: &'a str,
 }
 
 impl<'a> ValueAddress<'a> {
+    /// Address one value by database path, table, column and record identifier.
     pub const fn new(
         database: &'a str,
         table: &'a str,
@@ -181,14 +211,16 @@ impl DatabaseReader {
     pub fn connection(&self) -> &rusqlite::Connection {
         &self.connection
     }
+    /// Run a read under the deadline of the limits this reader was opened with.
     pub fn with_connection<T>(
         &self,
         read: impl FnOnce(&rusqlite::Connection) -> Result<T, Error>,
     ) -> Result<T, Error> {
         let end = deadline(&self.limits)?;
-        self.connection
-            .progress_handler(1000, Some(move || Instant::now() >= end))
-            .map_err(crate::sqlite::classify)?;
+        *self
+            .deadline
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner()) = end;
         let result = read(&self.connection)?;
         crate::container::check_deadline(end)?;
         Ok(result)
@@ -216,6 +248,7 @@ pub struct DiagnosticPackage {
 }
 
 impl DiagnosticPackage {
+    /// Read a package from a stream for diagnosis, even when it fails verification.
     pub fn from_reader(
         reader: impl Read,
         limits: Limits,
@@ -235,6 +268,7 @@ impl DiagnosticPackage {
         });
         Ok(Self { report, snapshot })
     }
+    /// Open a package for diagnosis, even when it fails verification.
     pub fn open(
         path: impl AsRef<Path>,
         limits: Limits,
@@ -277,9 +311,11 @@ impl DiagnosticPackage {
         });
         Ok(Self { report, snapshot })
     }
+    /// The complete verification report.
     pub fn report(&self) -> &Report {
         &self.report
     }
+    /// Read one resource of the diagnosed package.
     pub fn resource(&self, path: &str) -> Result<ResourceReader, Error> {
         let snapshot = self.snapshot.as_ref().ok_or_else(|| {
             Error::invalid(
@@ -331,6 +367,7 @@ impl Package {
             origin: None,
         })
     }
+    /// Open and fully verify a package. Fails unless every required check passes.
     pub fn open(
         path: impl AsRef<Path>,
         limits: Limits,
@@ -375,12 +412,15 @@ impl Package {
             origin: (!directory_form).then_some(origin),
         })
     }
+    /// The verification report of this edition.
     pub fn report(&self) -> &Report {
         &self.report
     }
+    /// The parsed manifest.
     pub fn manifest(&self) -> &Value {
         self.report.manifest.as_ref().unwrap()
     }
+    /// The file this package was opened from, when it was not read from a stream.
     pub fn path(&self) -> Option<&Path> {
         self.origin.as_deref()
     }
@@ -404,25 +444,19 @@ impl Package {
         }
         Ok(total)
     }
+    /// Every file of the package with its size and digest.
     pub fn resources(&self) -> impl Iterator<Item = &EntryDigest> {
         self.snapshot.staging.digests.values()
     }
+    /// Read one resource's raw bytes. Protected resources yield ciphertext.
     pub fn resource(&self, path: &str) -> Result<ResourceReader, Error> {
         snapshot_resource(&self.snapshot, path)?.source.open()
     }
+    /// Open a declared database read-only.
     pub fn database(&self, path: &str) -> Result<DatabaseReader, Error> {
         declared_database(self.manifest(), path)?;
         let source = snapshot_resource(&self.snapshot, path)?.source;
-        let connection = crate::sqlite::open(
-            source.path(),
-            &self.report.limits,
-            deadline(&self.report.limits)?,
-        )?;
-        Ok(DatabaseReader {
-            connection,
-            _source: source,
-            limits: self.report.limits.clone(),
-        })
+        database_reader(source, &self.report.limits)
     }
     /// Export raw bytes atomically to a new file. Never implicitly decrypts resources.
     pub fn export_resource(&self, path: &str, output: impl AsRef<Path>) -> Result<(), Error> {
@@ -451,6 +485,7 @@ impl Package {
             .map_err(|error| crate::io_failure(error.error))?;
         Ok(())
     }
+    /// Decrypt and authenticate one protected resource.
     pub fn decrypt_resource(
         &self,
         path: &str,
@@ -464,6 +499,7 @@ impl Package {
             .map_err(crate::io_failure)?;
         protection::decrypt_block(&block, &key, &context)
     }
+    /// Decrypt and authenticate one protected database value; `None` when the value is NULL.
     pub fn decrypt_value(
         &self,
         database: &str,
@@ -477,6 +513,7 @@ impl Package {
         let reader = self.database(database)?;
         decrypt_value(reader.connection(), &context, &id_column, keys)
     }
+    /// Start an editor staged on this edition.
     pub fn edit(&self) -> PackageEditor {
         PackageEditor {
             manifest: self.manifest().clone(),
@@ -633,6 +670,7 @@ pub struct PackageEditor {
 }
 
 impl PackageEditor {
+    /// Start a new, empty package from a manifest.
     pub fn new(manifest: Value, limits: Limits) -> Result<Self, Error> {
         deadline(&limits)?;
         crate::creation::serialized_manifest(&manifest, limits.max_metadata_bytes)?;
@@ -646,15 +684,19 @@ impl PackageEditor {
             dirty: false,
         })
     }
+    /// The staged manifest.
     pub fn manifest(&self) -> &Value {
         &self.manifest
     }
+    /// Whether there are staged changes not yet saved.
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
+    /// Every staged file with its size and digest.
     pub fn resources(&self) -> impl Iterator<Item = &EntryDigest> {
         self.resources.values().map(|r| &r.digest)
     }
+    /// Read one staged resource's raw bytes.
     pub fn resource(&self, path: &str) -> Result<ResourceReader, Error> {
         self.resources
             .get(path)
@@ -664,6 +706,7 @@ impl PackageEditor {
             .source
             .open()
     }
+    /// Open a staged database read-only.
     pub fn database(&self, path: &str) -> Result<DatabaseReader, Error> {
         declared_database(&self.manifest, path)?;
         let source = self
@@ -674,12 +717,7 @@ impl PackageEditor {
             })?
             .source
             .clone();
-        let connection = crate::sqlite::open(source.path(), &self.limits, deadline(&self.limits)?)?;
-        Ok(DatabaseReader {
-            connection,
-            _source: source,
-            limits: self.limits.clone(),
-        })
+        database_reader(source, &self.limits)
     }
     /// Work on a copy, validating its metadata before committing the change.
     pub fn update_manifest(
@@ -694,6 +732,7 @@ impl PackageEditor {
         self.dirty = true;
         Ok(())
     }
+    /// Declare a folder.
     pub fn add_folder(&mut self, path: &str, description: &str) -> Result<(), Error> {
         crate::paths::validate(path)?;
         self.update_manifest(|manifest| {
@@ -709,6 +748,7 @@ impl PackageEditor {
             Ok(())
         })
     }
+    /// Remove an empty declared folder.
     pub fn remove_folder(&mut self, path: &str) -> Result<(), Error> {
         let prefix = format!("{path}/");
         if self.resources.keys().any(|p| p.starts_with(&prefix))
@@ -823,6 +863,7 @@ impl PackageEditor {
         self.dirty = true;
         Ok(digest)
     }
+    /// Add or replace a resource from a regular file.
     pub fn put_path(&mut self, path: &str, source: impl AsRef<Path>) -> Result<EntryDigest, Error> {
         let file = File::open(source).map_err(crate::io_failure)?;
         if !file.metadata().map_err(crate::io_failure)?.is_file() {
@@ -958,6 +999,7 @@ impl PackageEditor {
         self.dirty = true;
         Ok(digest)
     }
+    /// Decrypt and authenticate one staged protected resource.
     pub fn decrypt_resource(
         &self,
         path: &str,
@@ -971,6 +1013,7 @@ impl PackageEditor {
             .map_err(crate::io_failure)?;
         protection::decrypt_block(&block, &key, &context)
     }
+    /// Decrypt and authenticate one staged protected database value.
     pub fn decrypt_value(
         &self,
         database: &str,
@@ -1107,7 +1150,7 @@ impl PackageEditor {
         }
         drop(output);
         let mut db = rusqlite::Connection::open(&candidate).map_err(crate::sqlite::classify)?;
-        configure_edit(&db, &self.limits, end)?;
+        configure_edit(&mut db, &self.limits, end)?;
         db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE;")
             .map_err(crate::sqlite::classify)?;
         let transaction = db.transaction().map_err(crate::sqlite::classify)?;
@@ -1218,6 +1261,7 @@ impl PackageEditor {
         *self = candidate;
         Ok(())
     }
+    /// Drop every staged change and return to the opened edition.
     pub fn discard_changes(&mut self) {
         if let Some(base) = &self.base {
             *self = base.edit();
@@ -1227,6 +1271,7 @@ impl PackageEditor {
             self.dirty = false;
         }
     }
+    /// Replace the opened package atomically with the staged edition.
     pub fn save(
         &mut self,
         options: &VerificationOptions<'_>,
@@ -1320,7 +1365,11 @@ impl PackageEditor {
     }
 }
 
-fn configure_edit(db: &rusqlite::Connection, limits: &Limits, end: Instant) -> Result<(), Error> {
+fn configure_edit(
+    db: &mut rusqlite::Connection,
+    limits: &Limits,
+    end: Instant,
+) -> Result<(), Error> {
     use rusqlite::{config::DbConfig, limits::Limit};
     db.busy_timeout(Duration::ZERO)
         .map_err(crate::sqlite::classify)?;
@@ -1402,7 +1451,7 @@ pub(crate) fn database_snapshot(
     let directory = limits.tempdir("darkbox-db-snapshot-")?;
     let path = directory.path().join("database.sqlite");
     let mut destination = rusqlite::Connection::open(&path).map_err(crate::sqlite::classify)?;
-    configure_edit(&destination, limits, end)?;
+    configure_edit(&mut destination, limits, end)?;
     {
         let backup = Backup::new(source, &mut destination).map_err(crate::sqlite::classify)?;
         loop {
@@ -1448,7 +1497,7 @@ impl Drop for DestinationLock {
     fn drop(&mut self) {
         // Child processes can retain the open-file description between fork and
         // exec. Release this owner's lock before closing its descriptor.
-        let _ = fs2::FileExt::unlock(&self.0);
+        crate::locks::unlock(&self.0);
     }
 }
 
@@ -1485,7 +1534,7 @@ pub(crate) fn lock_destination(path: &Path) -> Result<DestinationLock, Error> {
         .truncate(false)
         .open(lock_path)
         .map_err(crate::io_failure)?;
-    fs2::FileExt::try_lock_exclusive(&file).map_err(|_| {
+    crate::locks::try_exclusive(&file).map_err(|_| {
         Error::new(
             Status::OperationalError,
             "package.busy",

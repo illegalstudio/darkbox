@@ -57,6 +57,34 @@ class PublishedReferences(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "publication status"):
             GUARD.check("HEAD")
 
+    def test_published_extension_bundles_are_immutable_and_retained(self):
+        bundle = "extensions/studio.illegal.darkbox.sample/1.0.0/docs/darkbox/sample/1.0.0.md"
+        self.registry["extensions"] = [{"namespace": "studio.illegal.darkbox.sample", "version": "1.0.0", "released": False, "minCommon": "1.0.0"}]
+        self.write("versions.json", json.dumps(self.registry))
+        self.write(bundle, "Draft extension\n")
+        self.git("add", ".")
+        self.git("-c", "user.name=Darkbox Tests", "-c", "user.email=tests@example.invalid", "commit", "-qm", "Draft extension")
+        # An unpublished bundle may still be revised.
+        self.write(bundle, "Revised extension\n")
+        GUARD.check("HEAD")
+        self.registry["extensions"][0]["released"] = True
+        self.write("versions.json", json.dumps(self.registry))
+        self.git("add", ".")
+        self.git("-c", "user.name=Darkbox Tests", "-c", "user.email=tests@example.invalid", "commit", "-qm", "Publish extension")
+        GUARD.check("HEAD")
+        self.write(bundle, "Changed after publication\n")
+        with self.assertRaisesRegex(ValueError, "extension bundle .* changed"):
+            GUARD.check("HEAD")
+        self.write(bundle, "Revised extension\n")
+        self.registry["extensions"][0]["released"] = False
+        self.write("versions.json", json.dumps(self.registry))
+        with self.assertRaisesRegex(ValueError, "cannot lose support"):
+            GUARD.check("HEAD")
+        self.registry["extensions"] = []
+        self.write("versions.json", json.dumps(self.registry))
+        with self.assertRaisesRegex(ValueError, "cannot lose support"):
+            GUARD.check("HEAD")
+
     def test_every_published_reference_category_is_immutable(self):
         for path in ("archive/1.0.0/README.md", "schema/1.0.0/manifest.schema.json", "specification/1.0.0.md", "tests/fixtures/1.0.0/example.json"):
             original = (self.root / path).read_text()

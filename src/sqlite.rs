@@ -41,7 +41,7 @@ pub(crate) fn classify(error: Error) -> Failure {
 }
 
 pub(crate) fn open(path: &Path, limits: &Limits, deadline: Instant) -> Result<Connection> {
-    let db = Connection::open_with_flags(
+    let mut db = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )

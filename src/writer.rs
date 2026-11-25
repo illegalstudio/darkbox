@@ -11,11 +11,32 @@ use std::time::{Duration, Instant};
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 #[derive(Default)]
+#[non_exhaustive]
+/// Changes to apply while saving a new edition of an existing package.
 pub struct PackageUpdate {
+    /// A replacement manifest; `None` keeps the current one.
     pub manifest: Option<Value>,
     /// Some bytes replaces/adds a file; None removes it. Directory declarations
     /// come from the candidate manifest. Payload must already contain encryption.
     pub files: BTreeMap<String, Option<Vec<u8>>>,
+}
+
+impl PackageUpdate {
+    /// Replace the manifest of the saved edition.
+    pub fn with_manifest(mut self, manifest: Value) -> Self {
+        self.manifest = Some(manifest);
+        self
+    }
+    /// Add or replace one file with already final bytes.
+    pub fn with_file(mut self, path: impl Into<String>, bytes: impl Into<Vec<u8>>) -> Self {
+        self.files.insert(path.into(), Some(bytes.into()));
+        self
+    }
+    /// Remove one file.
+    pub fn without_file(mut self, path: impl Into<String>) -> Self {
+        self.files.insert(path.into(), None);
+        self
+    }
 }
 
 /// Ordinary opening requires supported common and required extension checks.
@@ -131,7 +152,7 @@ pub fn save(
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_owned();
+        let name = entry.name().map_err(crate::zip_failure)?.into_owned();
         let mut bytes = Vec::new();
         entry
             .by_ref()
@@ -220,7 +241,8 @@ pub fn save(
         for index in 0..archive.len() {
             crate::container::check_deadline(deadline)?;
             let mut entry = archive.by_index(index).map_err(crate::zip_failure)?;
-            if entry.is_dir() || !entry.name().starts_with(&prefix) {
+            let name = entry.name().map_err(crate::zip_failure)?.into_owned();
+            if entry.is_dir() || !name.starts_with(&prefix) {
                 continue;
             }
             let mut bytes = Vec::new();
@@ -229,7 +251,7 @@ pub fn save(
                 .take(limits.max_entry_bytes.saturating_add(1))
                 .read_to_end(&mut bytes)
                 .map_err(crate::read_failure)?;
-            if files.get(entry.name()) != Some(&bytes) {
+            if files.get(&name) != Some(&bytes) {
                 return Err(refused(
                     "Unknown optional extension resources must be preserved",
                 ));
@@ -254,6 +276,8 @@ pub fn save(
             }
         }
     }
+    // Official extension documentation follows the declared extensions.
+    crate::versions::align_extension_bundles(&mut manifest, &mut files);
     let protected = manifest["extensions"].get(protection::NAMESPACE).is_some();
     let inventory = files
         .iter()
@@ -381,6 +405,8 @@ pub fn save(
     let parent_handle = File::open(parent).map_err(crate::io_failure)?;
     #[cfg(unix)]
     parent_handle.sync_all().map_err(crate::io_failure)?;
+    // Windows cannot replace a file that this process still holds open.
+    drop(archive);
     if replace_source {
         candidate
             .persist(destination)
@@ -394,10 +420,10 @@ pub fn save(
     report.file = destination.display().to_string();
     #[cfg(unix)]
     if parent_handle.sync_all().is_err() {
-        report.diagnostics.push(crate::Diagnostic {
-            severity: "warning", code: "save.durability".into(), path: None,
-            message: "Candidate was published but directory synchronization failed; crash durability is uncertain".into(),
-        });
+        report.warn(
+            "save.durability",
+            "Candidate was published but directory synchronization failed; crash durability is uncertain",
+        );
     }
     Ok(report)
 }

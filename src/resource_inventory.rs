@@ -6,12 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub(crate) fn dynamic(manifest: &Value, path: &str) -> bool {
     path != "manifest.json"
         && path != crate::protection::SIGNATURE_PATH
-        && manifest["darkbox"]["version"]
-            .as_str()
-            .and_then(|v| versions::find_in(versions::VERSIONS, v))
-            .is_none_or(|spec| {
-                path != versions::CATALOG_PATH && !spec.files.iter().any(|f| f.path == path)
-            })
+        && !versions::is_canonical(manifest, path)
 }
 
 pub(crate) fn update(manifest: &mut Value, inventory: &BTreeMap<String, EntryDigest>) {

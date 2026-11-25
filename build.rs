@@ -36,10 +36,131 @@ fn collect(
     }
 }
 
+const CAPABILITIES: [(&str, &str); 5] = [
+    ("protection", "protection"),
+    ("directory", "directory"),
+    ("liveDirectory", "live_directory"),
+    ("hotCapture", "hot_capture"),
+    ("extensionBundles", "extension_bundles"),
+];
+const OFFICIAL_NAMESPACE: &str = "studio.illegal.darkbox.";
+
+fn assert_version(version: &str) {
+    assert!(
+        version.split('.').count() == 3
+            && version.split('.').all(|part| !part.is_empty()
+                && (part == "0" || !part.starts_with('0'))
+                && part.bytes().all(|b| b.is_ascii_digit())),
+        "Invalid registered version"
+    );
+}
+
+fn capabilities(row: &Value) -> String {
+    let declared: BTreeSet<_> = row["capabilities"]
+        .as_array()
+        .expect("Every registered version declares its capabilities")
+        .iter()
+        .map(|value| value.as_str().expect("Capability name"))
+        .collect();
+    for name in &declared {
+        assert!(
+            CAPABILITIES.iter().any(|(known, _)| known == name),
+            "Unknown capability: {name}"
+        );
+    }
+    let fields: Vec<_> = CAPABILITIES
+        .iter()
+        .map(|(name, field)| format!("{field}: {}", declared.contains(name)))
+        .collect();
+    format!("Capabilities {{ {} }}", fields.join(", "))
+}
+
+/// Embed one independently versioned official extension bundle. Its files are
+/// copied to the package root only when the manifest declares that extension.
+fn extension_bundle(root: &Path, row: &Value) -> String {
+    let namespace = row["namespace"].as_str().expect("Extension namespace");
+    let version = row["version"].as_str().expect("Extension version");
+    let minimum = row["minCommon"].as_str().expect("Minimum common version");
+    let released = row["released"].as_bool().expect("Extension release status");
+    assert_version(version);
+    assert_version(minimum);
+    let name = namespace
+        .strip_prefix(OFFICIAL_NAMESPACE)
+        .filter(|name| !name.is_empty() && !name.contains('.'))
+        .expect("Only official single-segment extension names own a reserved directory");
+    let directory = format!("docs/darkbox/{name}");
+    let catalog_path = format!("{directory}/{version}.bundle.json");
+    let base = root.join("extensions").join(namespace).join(version);
+    let mut files = BTreeMap::new();
+    let mut folders = BTreeSet::new();
+    collect(&base, &base, &mut files, &mut folders);
+    for shared in ["docs", "docs/darkbox"] {
+        folders.remove(shared);
+    }
+    assert!(
+        files
+            .keys()
+            .all(|path| path.starts_with(&format!("{directory}/")))
+            && folders
+                .iter()
+                .all(|path| *path == directory || path.starts_with(&format!("{directory}/"))),
+        "Extension bundle files must stay inside {directory}"
+    );
+    let catalog_source = files
+        .get(&catalog_path)
+        .expect("Generate the extension catalog before compiling")
+        .clone();
+    let catalog: Value = serde_json::from_slice(&fs::read(&catalog_source).unwrap()).unwrap();
+    assert_eq!(catalog["extension"]["namespace"], namespace);
+    assert_eq!(catalog["extension"]["version"], version);
+    let declared_folders: BTreeSet<_> = catalog["folders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        folders, declared_folders,
+        "Extension folder inventory changed"
+    );
+    let entries = catalog["files"]
+        .as_array()
+        .expect("Extension file inventory");
+    assert_eq!(
+        entries.len() + 1,
+        files.len(),
+        "Extension file inventory changed"
+    );
+    let mut generated = String::new();
+    for entry in entries {
+        let path = entry["path"].as_str().unwrap();
+        assert_ne!(path, catalog_path, "The catalog excludes itself");
+        let source = files.get(path).expect("Unknown extension catalog path");
+        let bytes = fs::read(source).unwrap();
+        let digest = format!("{:x}", Sha256::digest(&bytes));
+        assert_eq!(entry["size"].as_u64(), Some(bytes.len() as u64));
+        assert_eq!(
+            entry["sha256"], digest,
+            "Regenerate the extension catalog: {path}"
+        );
+        generated.push_str(&format!("CanonicalFile {{ path: {path:?}, bytes: include_bytes!({source:?}), sha256: {digest:?} }},\n"));
+    }
+    // The catalog is compared with the embedded reference like any other file.
+    let bytes = fs::read(&catalog_source).unwrap();
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    generated.push_str(&format!("CanonicalFile {{ path: {catalog_path:?}, bytes: include_bytes!({catalog_source:?}), sha256: {digest:?} }},\n"));
+    let folders: Vec<_> = folders.iter().map(|folder| format!("{folder:?}")).collect();
+    format!(
+        "ExtensionBundle {{ namespace: {namespace:?}, version: {version:?}, released: {released}, min_common: {minimum:?}, folders: &[{}], files: &[{generated}] }},\n",
+        folders.join(", ")
+    )
+}
+
 fn main() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     println!("cargo:rerun-if-changed=versions.json");
     println!("cargo:rerun-if-changed=archive");
+    println!("cargo:rerun-if-changed=extensions");
     println!("cargo:rerun-if-changed=schema");
     println!("cargo:rerun-if-changed=specification");
     let registry: Value =
@@ -51,13 +172,7 @@ fn main() {
         .expect("Version registry array")
     {
         let version = row["version"].as_str().expect("Version string");
-        assert!(
-            version.split('.').count() == 3
-                && version.split('.').all(|part| !part.is_empty()
-                    && (part == "0" || !part.starts_with('0'))
-                    && part.bytes().all(|b| b.is_ascii_digit())),
-            "Invalid registered version"
-        );
+        assert_version(version);
         assert!(
             root.join("specification")
                 .join(format!("{version}.md"))
@@ -127,7 +242,8 @@ fn main() {
             schema_value["properties"]["darkbox"]["properties"]["version"]["const"],
             version
         );
-        output.push_str(&format!("VersionSpec {{ version: {version:?}, released: {released}, rules: RuleSet::V1, catalog: include_bytes!({catalog_path:?}), schema: include_str!({schema:?}), files: &[{generated_files}] }},\n"));
+        let capabilities = capabilities(row);
+        output.push_str(&format!("VersionSpec {{ version: {version:?}, released: {released}, rules: RuleSet::V1, capabilities: {capabilities}, catalog: include_bytes!({catalog_path:?}), schema: include_str!({schema:?}), files: &[{generated_files}] }},\n"));
     }
     let disk_versions: BTreeSet<_> = fs::read_dir(root.join("archive"))
         .unwrap()
@@ -138,6 +254,36 @@ fn main() {
     assert_eq!(
         versions, disk_versions,
         "Every canonical version needs a supported registry entry"
+    );
+    output.push_str("];\n");
+    output.push_str("pub static EXTENSION_BUNDLES: &[ExtensionBundle] = &[\n");
+    let mut bundles = BTreeSet::new();
+    for row in registry["extensions"].as_array().into_iter().flatten() {
+        let key = (
+            row["namespace"].as_str().unwrap().to_string(),
+            row["version"].as_str().unwrap().to_string(),
+        );
+        assert!(
+            versions.contains(row["minCommon"].as_str().unwrap()),
+            "An extension bundle needs a registered minimum common version"
+        );
+        output.push_str(&extension_bundle(&root, row));
+        assert!(bundles.insert(key), "Duplicate registered extension bundle");
+    }
+    let mut disk_bundles = BTreeSet::new();
+    if let Ok(namespaces) = fs::read_dir(root.join("extensions")) {
+        for namespace in namespaces.map(|e| e.unwrap()) {
+            for version in fs::read_dir(namespace.path()).unwrap().map(|e| e.unwrap()) {
+                disk_bundles.insert((
+                    namespace.file_name().into_string().unwrap(),
+                    version.file_name().into_string().unwrap(),
+                ));
+            }
+        }
+    }
+    assert_eq!(
+        bundles, disk_bundles,
+        "Every extension bundle needs a registry entry"
     );
     output.push_str("];\n");
     let destination = PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("versions.rs");

@@ -8,10 +8,7 @@ use serde_json::{Value, json};
 use std::{fs, path::Path};
 
 fn vectors() -> Value {
-    serde_json::from_str(include_str!(
-        "../archive/1.5.0/docs/darkbox/sync/1.0.0.vectors.json"
-    ))
-    .unwrap()
+    serde_json::from_str(notes::vectors_json()).unwrap()
 }
 fn domain() -> Domain {
     let data = vectors();
@@ -64,10 +61,7 @@ fn bad(message: &str) -> Error {
 #[test]
 fn independent_schema_and_python_replay_vectors() {
     let v = vectors();
-    let schema: Value = serde_json::from_str(include_str!(
-        "../archive/1.5.0/docs/darkbox/sync/1.0.0.schema.json"
-    ))
-    .unwrap();
+    let schema: Value = serde_json::from_str(notes::schema_json()).unwrap();
     let validator = jsonschema::draft202012::options().build(&schema).unwrap();
     for data in [&v["root"], &v["mapping"]] {
         assert!(
@@ -242,22 +236,17 @@ mod notes;
 use notes::Notes;
 
 fn manifest() -> Value {
-    ManifestBuilder::new("1.5.0", "org.example.sync-notes", "1")
+    ManifestBuilder::new(notes::common_version(), "org.example.sync-notes", "1")
         .unwrap()
         .package_id(&domain().root().package_id)
         .folder("data", "Authoritative state")
-        .database(DatabaseDeclaration {
-            path: "data/project.sqlite".into(),
-            description: "Synchronized notes".into(),
-            user_version: None,
-            tables: ["items", "item_conflicts"]
+        .database(DatabaseDeclaration::new(
+            "data/project.sqlite",
+            "Synchronized notes",
+            ["items", "item_conflicts"]
                 .into_iter()
-                .map(|name| TableDeclaration {
-                    name: name.into(),
-                    description: "Profile state".into(),
-                })
-                .collect(),
-        })
+                .map(|name| TableDeclaration::new(name, "Profile state")),
+        ))
         .build()
         .unwrap()
 }
@@ -293,7 +282,7 @@ fn db(library: &DirectoryLibrary) -> Connection {
 fn publish_transactions(exchange: &Exchange, transactions: Vec<SyncTransaction>) {
     let descriptor = ReplicaDescriptor {
         kind: "darkbox-sync-replica".into(),
-        protocol_version: VERSION.into(),
+        protocol_version: notes::protocol().version().into(),
         sync_id: exchange.domain().root().sync_id.clone(),
         root_sha256: exchange.domain().root_hash().into(),
         replica_id: transactions[0].replica_id.clone(),
@@ -836,7 +825,7 @@ fn scanner_waits_for_complete_bytes_and_distinguishes_duplicates_from_forks() {
     let tx = transactions("concurrent-values-and-moves")[0].clone();
     let descriptor = ReplicaDescriptor {
         kind: "darkbox-sync-replica".into(),
-        protocol_version: VERSION.into(),
+        protocol_version: notes::protocol().version().into(),
         sync_id: domain().root().sync_id.clone(),
         root_sha256: domain().root_hash().into(),
         replica_id: tx.replica_id.clone(),
@@ -883,7 +872,7 @@ fn scanner_waits_for_complete_bytes_and_distinguishes_duplicates_from_forks() {
 
     let receipt = Receipt {
         kind: "darkbox-sync-receipt".into(),
-        protocol_version: VERSION.into(),
+        protocol_version: notes::protocol().version().into(),
         sync_id: descriptor.sync_id.clone(),
         root_sha256: descriptor.root_sha256.clone(),
         replica_id: descriptor.replica_id.clone(),
@@ -953,7 +942,7 @@ fn received_conflict_copy_preserves_both_transactions_after_cloud_files_disappea
         let exchange = Exchange::create(root.path().join("cloud"), domain(), limits()).unwrap();
         let replica = ReplicaDescriptor {
             kind: "darkbox-sync-replica".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: notes::protocol().version().into(),
             sync_id: domain().root().sync_id.clone(),
             root_sha256: domain().root_hash().into(),
             replica_id: known.replica_id.clone(),
@@ -1374,7 +1363,7 @@ fn sealed_checkpoint_rejects_a_forged_state_even_with_updated_resource_digest() 
     let mut directories = Vec::new();
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).unwrap();
-        let name = entry.name().to_owned();
+        let name = entry.name().unwrap().into_owned();
         if entry.is_dir() {
             directories.push(name);
         } else {
@@ -1489,10 +1478,7 @@ fn complete_checkpoint_does_not_certify_objects_from_trusted_digests() {
         &directory,
         darkbox::Mode::Verify,
         limits().io,
-        &VerificationOptions {
-            trusted_digests: Some(&cache),
-            ..Default::default()
-        },
+        &VerificationOptions::default().with_trusted_digests(&cache),
     );
     assert_eq!(
         conditional.status,
@@ -1578,8 +1564,11 @@ fn background_publication_and_local_edits_share_a_coherent_outbox_snapshot() {
 
 #[test]
 fn future_required_sync_version_is_unsupported_instead_of_corrupt() {
-    let schema: Value =
-        serde_json::from_str(include_str!("../schema/1.5.0/manifest.schema.json")).unwrap();
+    let schema: Value = serde_json::from_str(match notes::protocol() {
+        SyncProtocol::V1_0 => include_str!("../schema/1.5.0/manifest.schema.json"),
+        _ => include_str!("../schema/1.6.0/manifest.schema.json"),
+    })
+    .unwrap();
     let validator = jsonschema::draft202012::options().build(&schema).unwrap();
     let mut metadata = manifest();
     metadata["extensions"] = json!({NAMESPACE:{"version":"2.0.0","required":true,"data":{}}});
@@ -1598,7 +1587,7 @@ fn future_required_sync_version_is_unsupported_instead_of_corrupt() {
     use std::io::{Read, Write};
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).unwrap();
-        let path = entry.name().to_owned();
+        let path = entry.name().unwrap().into_owned();
         if entry.is_dir() {
             writer.add_directory(path, entry_options).unwrap();
             continue;
@@ -1704,4 +1693,62 @@ fn working_mutators_refuse_unowned_required_extensions_without_changes() {
             .unwrap(),
         0
     );
+}
+
+#[test]
+fn protocol_versions_are_permanent_and_bound_to_their_common_versions() {
+    // Each protocol creates domains at the lowest common version it admits.
+    for (protocol, common) in [(SyncProtocol::V1_0, "1.5.0"), (SyncProtocol::V1_1, "1.6.0")] {
+        let created = Domain::generate(protocol, notes::mapping(), notes::profile()).unwrap();
+        assert_eq!(created.protocol(), protocol);
+        assert_eq!(created.root().protocol_version, protocol.version());
+        assert_eq!(created.root().common_version, common);
+        assert_eq!(SyncProtocol::for_common(common), Some(protocol));
+        assert_eq!(SyncProtocol::parse(protocol.version()), Some(protocol));
+    }
+    assert_eq!(SyncProtocol::for_common("1.4.0"), None);
+    assert_eq!(SyncProtocol::parse("2.0.0"), None);
+
+    let domain = domain();
+    let older = domain.protocol() == SyncProtocol::V1_0;
+    let (other_protocol, other_common) = if older {
+        ("1.1.0", "1.6.0")
+    } else {
+        ("1.0.0", "1.5.0")
+    };
+
+    // A record of the other protocol version never enters this domain.
+    let mut tx = transactions("exact-values")[0].clone();
+    tx.protocol_version = other_protocol.into();
+    let error = History::new(domain.clone(), limits())
+        .accept(tx)
+        .unwrap_err();
+    assert!(error.message.contains("protocol version"), "{error}");
+
+    // The root cannot name a common version outside its protocol.
+    let rebuilt = |common: &str| {
+        let mut root = serde_json::to_value(domain.root()).unwrap();
+        root["commonVersion"] = json!(common);
+        Domain::from_parts(
+            &canonical(&root).unwrap(),
+            &canonical(domain.mapping()).unwrap(),
+            domain.profile(),
+        )
+    };
+    assert_eq!(rebuilt(other_common).unwrap_err().status, Status::Invalid);
+    assert_eq!(rebuilt("01.6.0").unwrap_err().status, Status::Invalid);
+    if !older {
+        // A later common version this build does not know is unsupported, not corrupt.
+        assert_eq!(rebuilt("1.99.0").unwrap_err().status, Status::Unsupported);
+    }
+
+    // Packages of the other common version cannot carry this domain.
+    assert!(domain.check_manifest(&manifest()).is_ok());
+    let mut metadata = manifest();
+    metadata["darkbox"]["version"] = json!(other_common);
+    assert!(domain.check_manifest(&metadata).is_err());
+    let mut metadata = manifest();
+    metadata["extensions"] =
+        json!({NAMESPACE: {"version": other_protocol, "required": true, "data": {}}});
+    assert!(domain.check_manifest(&metadata).is_err());
 }

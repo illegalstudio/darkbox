@@ -107,6 +107,6 @@ jobs:
           persist-credentials: false
       - name: Check minimum supported Rust
         run: |
-          rustup toolchain install 1.88.0 --profile minimal
-          cargo +1.88.0 check --all-targets --locked
-          cargo +1.88.0 check --all-targets --no-default-features --locked
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 check --all-targets --locked
+          cargo +1.89.0 check --all-targets --no-default-features --locked

@@ -1,12 +1,18 @@
-use super::{Baseline, MAX_BASELINE_BYTES, Result, VERSION, invalid, unsupported};
+use super::{
+    Baseline, MAPPING_VERSION, MAX_BASELINE_BYTES, Result, SyncProtocol, invalid, unsupported,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
+/// Largest accepted canonical transaction, in bytes.
 pub const MAX_TRANSACTION_BYTES: usize = 1_048_576;
+/// Largest accepted segment, in bytes.
 pub const MAX_SEGMENT_BYTES: usize = 4_194_304;
+/// Largest accepted number of operations in a transaction.
 pub const MAX_OPERATIONS: usize = 4096;
+/// Largest accepted number of transactions in a segment.
 pub const MAX_SEGMENT_TRANSACTIONS: usize = 256;
 
 /// Protocol unsigned integers always serialize as exact canonical decimal strings.
@@ -29,6 +35,8 @@ impl<'de> Deserialize<'de> for Counter {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Identifies one operation: replica, transaction sequence and operation index.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Dot {
     pub replica_id: String,
     pub sequence: Counter,
@@ -44,6 +52,7 @@ impl std::fmt::Display for Dot {
     }
 }
 impl Dot {
+    /// Parse the `replica:sequence:index` form.
     pub fn parse(text: &str) -> Result<Self> {
         let parts: Vec<_> = text.split(':').collect();
         if parts.len() != 3 || !hex(parts[0], 32) {
@@ -89,6 +98,7 @@ pub fn random_id() -> Result<String> {
         .map_err(super::sql)
 }
 
+/// Lowercase hexadecimal SHA-256 of bytes.
 pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -109,7 +119,7 @@ pub(crate) fn version(kind: &str, actual: &str, expected: &str) -> Result<()> {
     if kind != expected {
         return Err(invalid("Incorrect record kind"));
     }
-    if actual != VERSION {
+    if SyncProtocol::parse(actual).is_none() {
         return Err(unsupported("Unsupported sync protocol version"));
     }
     Ok(())
@@ -165,6 +175,7 @@ pub fn canonical<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     write(&value, &mut bytes, 0)?;
     Ok(bytes)
 }
+/// Parse a record of at most `maximum` bytes, accepting only its exact canonical encoding.
 pub fn decode<T: DeserializeOwned + Serialize>(bytes: &[u8], maximum: usize) -> Result<T> {
     if bytes.len() > maximum {
         return Err(super::limit("Sync JSON bytes"));
@@ -182,17 +193,21 @@ pub fn decode<T: DeserializeOwned + Serialize>(bytes: &[u8], maximum: usize) -> 
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// An immutable object identified by SHA-256 and size.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Blob {
     pub sha256: String,
     pub size: Counter,
 }
 impl Blob {
+    /// Check the hash syntax.
     pub fn validate(&self) -> Result<()> {
         if !hex(&self.sha256, 64) {
             return Err(invalid("Invalid blob hash"));
         }
         Ok(())
     }
+    /// The content-addressed path of this object inside an exchange or store.
     pub fn relative_path(&self) -> Result<String> {
         self.validate()?;
         Ok(format!(
@@ -205,6 +220,8 @@ impl Blob {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+/// A typed value carried by an operation.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub enum SyncValue {
     Null,
     Bool {
@@ -237,16 +254,20 @@ pub enum SyncValue {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// One entry of a map value.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct MapEntry {
     pub key: String,
     pub value: SyncValue,
 }
 impl SyncValue {
+    /// A text value.
     pub fn text(value: impl Into<String>) -> Self {
         Self::Text {
             value: value.into(),
         }
     }
+    /// The protocol name of this value's type.
     pub fn type_name(&self) -> &'static str {
         match self {
             Self::Null => "null",
@@ -328,6 +349,8 @@ fn validate_integer(text: &str) -> Result<()> {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+/// One change to the replicated state.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub enum Operation {
     Create {
         collection: String,
@@ -390,11 +413,14 @@ impl Operation {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The latest known transaction of one replica.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Tip {
     pub replica_id: String,
     pub sequence: Counter,
     pub sha256: String,
 }
+/// One tip per replica, sorted by replica identifier.
 pub type Frontier = Vec<Tip>;
 pub(crate) fn validate_frontier(frontier: &Frontier) -> Result<()> {
     if !frontier
@@ -412,6 +438,8 @@ pub(crate) fn validate_frontier(frontier: &Frontier) -> Result<()> {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// An immutable, causally ordered batch of operations by one replica.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct SyncTransaction {
     pub kind: String,
     pub protocol_version: String,
@@ -425,6 +453,7 @@ pub struct SyncTransaction {
     pub operations: Vec<Operation>,
 }
 impl SyncTransaction {
+    /// The identifier of the operation at this index.
     pub fn dot(&self, index: usize) -> Dot {
         Dot {
             replica_id: self.replica_id.clone(),
@@ -432,6 +461,7 @@ impl SyncTransaction {
             index: Counter(index as u64),
         }
     }
+    /// The exact canonical bytes.
     pub fn bytes(&self) -> Result<Vec<u8>> {
         let bytes = canonical(self)?;
         if bytes.len() > MAX_TRANSACTION_BYTES {
@@ -439,9 +469,11 @@ impl SyncTransaction {
         }
         Ok(bytes)
     }
+    /// The SHA-256 of the canonical bytes.
     pub fn hash(&self) -> Result<String> {
         Ok(sha256(&self.bytes()?))
     }
+    /// Every object the operations reference.
     pub fn blobs(&self) -> Result<BTreeSet<Blob>> {
         let mut blobs = BTreeSet::new();
         for op in &self.operations {
@@ -450,12 +482,13 @@ impl SyncTransaction {
         Ok(blobs)
     }
     pub(crate) fn shape(&self, domain: &Domain) -> Result<()> {
-        version(
+        domain.record(
             &self.kind,
-            &self.protocol_version,
             "darkbox-sync-transaction",
+            &self.protocol_version,
+            &self.sync_id,
+            &self.root_sha256,
         )?;
-        domain.bind(&self.sync_id, &self.root_sha256)?;
         if !hex(&self.replica_id, 32)
             || self.sequence.0 == 0
             || self.lamport.0 == 0
@@ -486,12 +519,16 @@ impl SyncTransaction {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The application profile and data-format version of a domain.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Application {
     pub profile: String,
     pub format_version: String,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// A file bound by path, size and SHA-256.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct FileRef {
     pub path: String,
     pub size: Counter,
@@ -499,6 +536,8 @@ pub struct FileRef {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The immutable root of a domain (`library.json`).
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct DomainRoot {
     pub kind: String,
     pub protocol_version: String,
@@ -516,6 +555,8 @@ pub struct DomainRoot {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Where the mapped application state is stored.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct StorageMapping {
     pub mode: String,
     pub database_path: String,
@@ -523,6 +564,8 @@ pub struct StorageMapping {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The projection a mapping requires.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct ProjectionMapping {
     pub id: String,
     pub version: String,
@@ -531,6 +574,8 @@ pub struct ProjectionMapping {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// How one replicated field maps to database columns.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct FieldMapping {
     pub name: String,
     pub kind: String,
@@ -546,6 +591,8 @@ pub struct FieldMapping {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// How one replicated collection maps to a table.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct CollectionMapping {
     pub name: String,
     pub table: String,
@@ -555,6 +602,8 @@ pub struct CollectionMapping {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The immutable mapping between replicated collections and application tables (`mapping.json`).
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct SyncMapping {
     pub kind: String,
     pub mapping_version: String,
@@ -564,8 +613,14 @@ pub struct SyncMapping {
     pub projection: ProjectionMapping,
 }
 impl SyncMapping {
+    /// Check the mapping's own consistency.
     pub fn validate(&self) -> Result<()> {
-        version(&self.kind, &self.mapping_version, "darkbox-sync-mapping")?;
+        if self.kind != "darkbox-sync-mapping" {
+            return Err(invalid("Incorrect record kind"));
+        }
+        if self.mapping_version != MAPPING_VERSION {
+            return Err(unsupported("Unsupported sync mapping version"));
+        }
         if !matches!(
             self.storage.mode.as_str(),
             "single-database" | "journal-with-caches"
@@ -663,12 +718,14 @@ impl SyncMapping {
         }
         Ok(())
     }
+    /// The collection with this name.
     pub fn collection(&self, name: &str) -> Result<&CollectionMapping> {
         self.collections
             .iter()
             .find(|c| c.name == name)
             .ok_or_else(|| invalid("Unknown collection"))
     }
+    /// The field with this name and kind in a collection.
     pub fn field(&self, collection: &str, field: &str, kind: &str) -> Result<&FieldMapping> {
         self.collection(collection)?
             .fields
@@ -691,11 +748,20 @@ pub struct Domain {
     baseline: Option<Baseline>,
 }
 impl Domain {
-    pub fn generate(mapping: SyncMapping, profile: Vec<u8>) -> Result<Self> {
-        Self::new(random_id()?, random_id()?, mapping, profile)
+    /// Create a domain with random identities. The protocol is permanent for
+    /// the domain: `SyncProtocol::V1_0` requires common 1.5.0 packages and
+    /// `SyncProtocol::V1_1` requires common 1.6.0 or later.
+    pub fn generate(
+        protocol: SyncProtocol,
+        mapping: SyncMapping,
+        profile: Vec<u8>,
+    ) -> Result<Self> {
+        Self::new(protocol, random_id()?, random_id()?, mapping, profile)
     }
 
+    /// Create a domain with explicit identities, for example to keep an existing `packageId`.
     pub fn new(
+        protocol: SyncProtocol,
         sync_id: String,
         package_id: String,
         mapping: SyncMapping,
@@ -704,10 +770,10 @@ impl Domain {
         let mapping_bytes = canonical(&mapping)?;
         let root = DomainRoot {
             kind: "darkbox-sync-domain".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: protocol.version().into(),
             sync_id,
             package_id,
-            common_version: "1.5.0".into(),
+            common_version: protocol.minimum_common().into(),
             application: mapping.application.clone(),
             profile: FileRef {
                 path: "profile/profile.md".into(),
@@ -726,9 +792,11 @@ impl Domain {
         };
         Self::from_parts(&canonical(&root)?, &mapping_bytes, &profile)
     }
+    /// Rebuild a domain from its exact root, mapping and profile bytes.
     pub fn from_parts(root_bytes: &[u8], mapping_bytes: &[u8], profile: &[u8]) -> Result<Self> {
         Self::from_parts_with_baseline(root_bytes, mapping_bytes, profile, None)
     }
+    /// Rebuild a domain whose root pins a compact baseline.
     pub fn from_parts_with_baseline(
         root_bytes: &[u8],
         mapping_bytes: &[u8],
@@ -737,8 +805,28 @@ impl Domain {
     ) -> Result<Self> {
         let root: DomainRoot = decode(root_bytes, MAX_SEGMENT_BYTES)?;
         version(&root.kind, &root.protocol_version, "darkbox-sync-domain")?;
-        if root.common_version != "1.5.0"
-            || root.encoding != "jcs-strings-v1"
+        let protocol = SyncProtocol::parse(&root.protocol_version)
+            .ok_or_else(|| unsupported("Unsupported sync protocol version"))?;
+        let floor = crate::versions::numbers(&root.common_version)
+            .filter(|(major, minor, patch)| {
+                format!("{major}.{minor}.{patch}") == root.common_version
+            })
+            .ok_or_else(|| invalid("Sync domain common version"))?;
+        let admitted = match protocol {
+            SyncProtocol::V1_0 => root.common_version == protocol.minimum_common(),
+            SyncProtocol::V1_1 => floor.0 == 1 && floor >= (1, 6, 0),
+        };
+        if !admitted {
+            return Err(invalid(
+                "Sync domain common version is outside its protocol version",
+            ));
+        }
+        if SyncProtocol::for_common(&root.common_version) != Some(protocol) {
+            return Err(unsupported(
+                "Sync domain requires a common version this build does not support",
+            ));
+        }
+        if root.encoding != "jcs-strings-v1"
             || root.merge
                 != if root.baseline.is_some() {
                     "causal-records-seed-v1"
@@ -790,6 +878,7 @@ impl Domain {
             baseline,
         })
     }
+    /// The compact baseline this domain starts from, if any.
     pub fn baseline(&self) -> Option<&Baseline> {
         self.baseline.as_ref()
     }
@@ -810,24 +899,50 @@ impl Domain {
             Some(&bytes),
         )
     }
+    /// The immutable root record.
     pub fn root(&self) -> &DomainRoot {
         &self.root
     }
+    /// The mapping.
     pub fn mapping(&self) -> &SyncMapping {
         &self.mapping
     }
+    /// The exact bytes of the application profile document.
     pub fn profile(&self) -> &[u8] {
         &self.profile
     }
+    /// The SHA-256 of the canonical root, which every other record carries.
     pub fn root_hash(&self) -> &str {
         &self.hash
     }
+    /// The permanent protocol of this domain.
+    pub fn protocol(&self) -> SyncProtocol {
+        SyncProtocol::parse(&self.root.protocol_version).expect("validated at construction")
+    }
+    /// Check one record's kind, its protocol version against this domain's
+    /// and its domain binding.
+    pub(crate) fn record(
+        &self,
+        kind: &str,
+        expected: &str,
+        protocol_version: &str,
+        sync_id: &str,
+        root_hash: &str,
+    ) -> Result<()> {
+        version(kind, protocol_version, expected)?;
+        if protocol_version != self.root.protocol_version {
+            return Err(invalid("Record protocol version differs from its domain"));
+        }
+        self.bind(sync_id, root_hash)
+    }
+    /// Fail unless a record's `syncId` and `rootSha256` name this domain.
     pub fn bind(&self, sync_id: &str, root_hash: &str) -> Result<()> {
         if sync_id != self.root.sync_id || root_hash != self.hash {
             return Err(invalid("Wrong sync domain or root"));
         }
         Ok(())
     }
+    /// Fail unless a manifest can carry this domain: same package, profile and a common version the protocol admits.
     pub fn check_manifest(&self, manifest: &Value) -> Result<()> {
         if manifest["extensions"]
             .get(crate::protection::NAMESPACE)
@@ -835,8 +950,16 @@ impl Domain {
         {
             return Err(unsupported("Sync v1 refuses protected libraries"));
         }
-        if manifest["darkbox"]["version"] != "1.5.0"
-            || manifest["packageId"] != self.root.package_id
+        let declared = &manifest["extensions"][super::NAMESPACE]["version"];
+        if !declared.is_null() && *declared != self.root.protocol_version {
+            return Err(invalid(
+                "Sync extension version differs from the domain protocol",
+            ));
+        }
+        if !self.protocol().admits(
+            &self.root.common_version,
+            manifest["darkbox"]["version"].as_str().unwrap_or_default(),
+        ) || manifest["packageId"] != self.root.package_id
             || manifest["application"]["id"] != self.root.application.profile
             || manifest["application"]["formatVersion"] != self.root.application.format_version
         {

@@ -98,9 +98,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .prefix(".darkbox-example-")
         .tempdir_in(parent)?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let base = root.join("archive/1.1.0");
+    // The common canonical bundle, plus the bundle of the declared protection extension.
     let mut files = BTreeMap::new();
-    collect(&base, &base, &mut files)?;
+    for base in [
+        root.join("archive/1.6.0"),
+        root.join(format!("extensions/{NAMESPACE}/1.0.0")),
+    ] {
+        collect(&base, &base, &mut files)?;
+    }
     files.insert(
         "docs/profile.md".into(),
         fs::read(root.join("examples/profiles/protected-notes.md"))?,
@@ -161,6 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!([{"name":"notes","description":"Public id/label and protected secret BLOB"}]);
     manifest["folders"].as_array_mut().unwrap().extend([
         json!({"path":"assets","description":"Public and protected attachments"}),
+        json!({"path":"docs/darkbox/protection","description":"Official protection extension documentation"}),
         json!({"path":"extensions","description":"Extension resources"}),
         json!({"path":format!("extensions/{NAMESPACE}"),"description":"Detached signature"}),
     ]);
@@ -191,12 +197,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         zip.finish()?;
     }
-    let options = VerificationOptions {
-        decryption_keys: Some(&DemoKeys),
-        trusted_signers: BTreeMap::from([("test-signer".into(), signer.public_key())]),
-        require_protection: true,
-        ..Default::default()
-    };
+    let options = VerificationOptions::default()
+        .with_decryption_keys(&DemoKeys)
+        .with_trusted_signers(BTreeMap::from([(
+            "test-signer".into(),
+            signer.public_key(),
+        )]))
+        .with_require_protection(true);
     let report = darkbox::analyze_with(candidate.path(), Mode::Verify, Limits::default(), &options);
     if report.status != darkbox::Status::Passed {
         return Err(format!(

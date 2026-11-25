@@ -10,7 +10,7 @@ use tempfile::{NamedTempFile, PersistError};
 struct DirectoryGuard(File);
 impl Drop for DirectoryGuard {
     fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.0);
+        crate::locks::unlock(&self.0);
     }
 }
 
@@ -30,7 +30,7 @@ fn lock_parent(target: &Path, end: Instant) -> io::Result<Option<DirectoryGuard>
         if Instant::now() >= end {
             return Err(io::Error::from(io::ErrorKind::TimedOut));
         }
-        match fs2::FileExt::try_lock_exclusive(&file) {
+        match crate::locks::try_exclusive(&file) {
             Ok(()) => break,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => {

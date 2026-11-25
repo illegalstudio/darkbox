@@ -10,9 +10,13 @@ use std::{
 /// Trusted, version-pinned application code. Never load this code from a package.
 /// `project` must preserve local-only values and persist a deterministic conflict view.
 pub trait SyncProjection {
+    /// Stable identifier of this projection, as recorded in the mapping.
     fn id(&self) -> &str;
+    /// Version of this projection, as recorded in the mapping.
     fn version(&self) -> &str;
+    /// Check that the application database has the tables and columns the mapping names.
     fn validate_mapping(&self, domain: &Domain, connection: &Connection) -> Result<()>;
+    /// Rewrite the application tables from a logical state inside the given transaction.
     fn project(
         &self,
         transaction: &Transaction<'_>,
@@ -20,6 +24,7 @@ pub trait SyncProjection {
         previous: &LogicalState,
         next: &LogicalState,
     ) -> Result<()>;
+    /// Check that the application tables equal the projection of a logical state.
     fn verify(&self, connection: &Connection, domain: &Domain, state: &LogicalState) -> Result<()>;
     /// Preserve installation-local columns for stable record IDs during rebase/recovery.
     fn copy_local(
@@ -194,7 +199,8 @@ fn mark_fork(connection: &mut Connection, evidence: &[Vec<u8>]) -> Result<()> {
 }
 
 /// Attach metadata under an application write barrier. The library must already
-/// use common 1.5.0 and the exact unprotected application profile for this domain.
+/// use a common version the domain protocol admits (1.5.0 for sync 1.0.0, 1.6.0 or
+/// later for sync 1.1.0) and the exact unprotected application profile for this domain.
 /// Existing application data is imported through the registered profile, never guessed.
 pub fn attach_working(
     library: &crate::DirectoryLibrary,
@@ -244,11 +250,26 @@ pub fn attach_working(
         manifest["extensions"] = serde_json::json!({});
     }
     manifest["extensions"][NAMESPACE] = working_extension(domain);
+    // A bundle-capable common version carries this extension's documentation
+    // as its own canonical bundle inside the library.
+    let bundle = manifest["darkbox"]["version"]
+        .as_str()
+        .and_then(crate::versions::find)
+        .and_then(|spec| {
+            crate::versions::extension_bundle(spec, NAMESPACE, &domain.root().protocol_version)
+        });
+    for file in bundle.into_iter().flat_map(|bundle| bundle.files) {
+        super::exchange::publish_bytes(root, file.path, file.bytes, limits)?;
+    }
     super::snapshot::update_journal_declarations(&mut manifest, domain, true)?;
     let folders = manifest["folders"]
         .as_array_mut()
         .ok_or_else(|| invalid("Missing folders"))?;
-    for path in ["extensions", PREFIX] {
+    for path in ["extensions", PREFIX].into_iter().chain(
+        bundle
+            .into_iter()
+            .flat_map(|bundle| bundle.folders.iter().copied()),
+    ) {
         if !folders.iter().any(|f| f["path"] == path) {
             folders.push(
                 serde_json::json!({"path":path,"description":"Darkbox synchronization metadata"}),
@@ -279,6 +300,8 @@ pub fn attach_working(
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Unpublished local edits preserved before a library adopts a newer base.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct RecoveryJournal {
     pub kind: String,
     pub protocol_version: String,
@@ -293,23 +316,34 @@ pub struct RecoveryJournal {
 
 /// Metadata-only pending status. Local publication does not certify cloud upload.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct PendingStatus {
+    /// The replica that authored the transaction.
     pub replica_id: String,
+    /// The transaction's sequence number.
     pub sequence: Counter,
+    /// Dependencies that have not arrived.
     pub missing_dependencies: Frontier,
+    /// Referenced objects that have not arrived.
     pub missing_objects: Vec<Blob>,
+    /// Whether everything it waits for is now present.
     pub ready_to_validate: bool,
 }
 
 /// One writable incarnation, borrowing the local working-library guard exclusively.
 /// It never reuses an old incarnation after reopening or restoring a database.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SessionOptions {
+    /// Stable identifier of this device.
     pub device_id: String,
+    /// Display label of this installation.
     pub label: String,
+    /// The limits in force.
     pub limits: SyncLimits,
 }
 impl SessionOptions {
+    /// Options for a device identifier and a display label, with default limits.
     pub fn new(device_id: impl Into<String>, label: impl Into<String>) -> Self {
         Self {
             device_id: device_id.into(),
@@ -319,12 +353,17 @@ impl SessionOptions {
     }
 }
 /// Allocated under the same SQLite write transaction as the edit.
+#[non_exhaustive]
 pub struct BatchContext<'a> {
+    /// The accepted history the edit builds on.
     pub history: &'a History,
+    /// The replica authoring the transaction.
     pub replica_id: &'a str,
+    /// The sequence number the transaction will have.
     pub sequence: Counter,
 }
 impl BatchContext<'_> {
+    /// The identifier the operation at this index will have in the transaction being built.
     pub fn dot(&self, index: usize) -> Result<Dot> {
         if index >= MAX_OPERATIONS {
             return Err(invalid("Operation index exceeds protocol bound"));
@@ -363,8 +402,11 @@ pub struct SyncSession<'a> {
 pub struct OwnedSyncSession(SyncSession<'static>);
 
 /// Opening failed while retaining the caller's exclusive library guard.
+#[non_exhaustive]
 pub struct OwnedSessionError {
+    /// Why the session could not be opened or closed.
     pub error: crate::Error,
+    /// The library, with its guard returned to the caller.
     pub library: Box<crate::DirectoryLibrary>,
 }
 impl std::fmt::Debug for OwnedSessionError {
@@ -386,6 +428,7 @@ impl std::error::Error for OwnedSessionError {
     }
 }
 impl OwnedSessionError {
+    /// Take back the error and the library whose guard the failed session held.
     pub fn into_parts(self) -> (crate::Error, crate::DirectoryLibrary) {
         (self.error, *self.library)
     }
@@ -398,6 +441,7 @@ impl std::ops::Deref for OwnedSyncSession {
     }
 }
 impl OwnedSyncSession {
+    /// Open a session that owns its library guard for as long as it lives.
     pub fn open(
         library: crate::DirectoryLibrary,
         connection: &mut Connection,
@@ -453,6 +497,7 @@ impl OwnedSyncSession {
 }
 
 impl<'a> SyncSession<'a> {
+    /// Open a writable session on a working library, creating a new replica incarnation.
     pub fn open(
         library: &'a mut crate::DirectoryLibrary,
         connection: &mut Connection,
@@ -523,7 +568,7 @@ impl<'a> SyncSession<'a> {
             .map_err(sql)?;
         let replica = ReplicaDescriptor {
             kind: "darkbox-sync-replica".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: domain.root().protocol_version.clone(),
             sync_id: domain.root().sync_id.clone(),
             root_sha256: domain.root_hash().into(),
             replica_id,
@@ -547,15 +592,19 @@ impl<'a> SyncSession<'a> {
             limits,
         })
     }
+    /// The working library directory.
     pub fn working_path(&self) -> &Path {
         self.library.path()
     }
+    /// This session's replica descriptor.
     pub fn replica(&self) -> &ReplicaDescriptor {
         &self.replica
     }
+    /// The local object store.
     pub fn objects(&self) -> &ObjectStore {
         &self.objects
     }
+    /// The domain this session writes to.
     pub fn domain(&self) -> &Domain {
         &self.domain
     }
@@ -580,6 +629,7 @@ impl<'a> SyncSession<'a> {
             load_history(connection, &self.domain, &self.limits)?,
         ))
     }
+    /// Load the accepted causal history from the journal.
     pub fn history(&self, connection: &Connection) -> Result<History> {
         self.check(connection)?;
         let (revision, history) = self.take_history(connection)?;
@@ -599,6 +649,7 @@ impl<'a> SyncSession<'a> {
     ) -> Result<SyncTransaction> {
         self.edit_with(connection, adapter, |_| Ok(operations))
     }
+    /// Commit one local edit: build operations, project them and queue the transaction, atomically.
     pub fn edit_with(
         &self,
         connection: &mut Connection,
@@ -855,6 +906,7 @@ impl<'a> SyncSession<'a> {
             }
         }
     }
+    /// Import everything new from an exchange and apply what is causally ready.
     pub fn receive_exchange(
         &self,
         connection: &mut Connection,
@@ -998,6 +1050,7 @@ impl<'a> SyncSession<'a> {
         }
         Ok(count)
     }
+    /// Publish a receipt for the frontier this session has durably applied.
     pub fn publish_receipt(
         &self,
         connection: &mut Connection,
@@ -1021,7 +1074,7 @@ impl<'a> SyncSession<'a> {
         );
         let receipt = Receipt {
             kind: "darkbox-sync-receipt".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: self.domain.root().protocol_version.clone(),
             sync_id: self.domain.root().sync_id.clone(),
             root_sha256: self.domain.root_hash().into(),
             replica_id: self.replica.replica_id.clone(),
@@ -1039,6 +1092,7 @@ impl<'a> SyncSession<'a> {
         exchange.publish_receipt(&receipt)?;
         Ok(receipt)
     }
+    /// Received transactions that still wait for dependencies or objects.
     pub fn pending(&self, connection: &Connection) -> Result<Vec<PendingStatus>> {
         self.check(connection)?;
         check_budget(connection, &self.limits)?;
@@ -1070,6 +1124,7 @@ impl<'a> SyncSession<'a> {
         }
         Ok(result)
     }
+    /// How many received transactions are still waiting.
     pub fn pending_count(&self, connection: &Connection) -> Result<usize> {
         self.check(connection)?;
         let n: i64 = connection
@@ -1079,6 +1134,7 @@ impl<'a> SyncSession<'a> {
             .map_err(sql)?;
         Ok(n as usize)
     }
+    /// How many local transactions are queued for publication.
     pub fn queued_count(&self, connection: &Connection) -> Result<usize> {
         self.check(connection)?;
         let n: i64 = connection
@@ -1138,7 +1194,7 @@ impl<'a> SyncSession<'a> {
         }
         let recovery = RecoveryJournal {
             kind: "darkbox-sync-recovery".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: self.domain.root().protocol_version.clone(),
             sync_id: self.domain.root().sync_id.clone(),
             root_sha256: self.domain.root_hash().into(),
             source_revision,
@@ -1187,6 +1243,7 @@ impl<'a> SyncSession<'a> {
         builder.finish()?;
         Ok(recovery)
     }
+    /// Fail if the journal changed since a rebase was prepared at the given revision.
     pub fn check_rebase_revision(&self, connection: &Connection, expected: Counter) -> Result<()> {
         self.check(connection)?;
         if meta(connection, "forked")?.is_some() {
@@ -1201,6 +1258,7 @@ impl<'a> SyncSession<'a> {
         }
         Ok(())
     }
+    /// The journal's current local revision.
     pub fn revision(&self, connection: &Connection) -> Result<Counter> {
         self.check(connection)?;
         cache_revision(connection)
@@ -1331,13 +1389,8 @@ fn add_recovery_resources(
     domain: &Domain,
     limits: &crate::Limits,
 ) -> Result<()> {
-    let spec = crate::creation::specification(manifest)?;
-    let canonical: BTreeSet<_> = spec
-        .files
-        .iter()
-        .map(|file| file.path)
-        .chain(std::iter::once(crate::versions::CATALOG_PATH))
-        .collect();
+    crate::creation::specification(manifest)?;
+    let canonical = crate::versions::canonical_paths(manifest);
     let databases: BTreeSet<_> = manifest["databases"]
         .as_array()
         .unwrap()
@@ -1357,11 +1410,9 @@ fn add_recovery_resources(
             }
             let entry = entry.map_err(crate::io_failure)?;
             let path = entry.path();
-            let relative = path
-                .strip_prefix(root)
-                .unwrap()
-                .to_str()
+            let relative = super::exchange::protocol_path(root, &path)?
                 .ok_or_else(|| invalid("Recovery resource path"))?;
+            let relative = relative.as_str();
             if relative == PREFIX || relative.starts_with(&format!("{PREFIX}/")) {
                 continue;
             }

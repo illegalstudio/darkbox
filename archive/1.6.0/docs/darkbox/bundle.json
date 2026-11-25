@@ -1,0 +1,59 @@
+{
+  "darkbox": {
+    "id": "darkbox",
+    "version": "1.6.0"
+  },
+  "folders": [
+    "docs",
+    "docs/darkbox",
+    "docs/sqlite",
+    "docs/sqlite/images"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "size": 18709,
+      "sha256": "3a6abb6c2547568455b7aedd30c7c7bd42a68e3114554315250f905434be5426"
+    },
+    {
+      "path": "docs/darkbox/delta.schema.json",
+      "size": 2336,
+      "sha256": "e7fb9d83012b38b094de7250d291dd359527ccc7996abffc1d225ee89da9439e"
+    },
+    {
+      "path": "docs/darkbox/large-libraries.md",
+      "size": 18161,
+      "sha256": "5846e8218f8b52f133dc8de1573246c533db74760507de2b24c85bdf494f082c"
+    },
+    {
+      "path": "docs/sqlite/SOURCE.md",
+      "size": 2865,
+      "sha256": "d52ff2eed1218718fb189ce38a7bf36ea89647eede1f9bc9361ae2412b090603"
+    },
+    {
+      "path": "docs/sqlite/copyright.html",
+      "size": 8351,
+      "sha256": "44ca9f793055c8e32fc65f65a4f5bcf813a33f5bdaaa084067dd617a4ed3cc70"
+    },
+    {
+      "path": "docs/sqlite/fileformat2.html",
+      "size": 110473,
+      "sha256": "905067afacc30583c9ee86778b532094cc1830c7ec7b5f019bcfd2eb9ded97a2"
+    },
+    {
+      "path": "docs/sqlite/images/nocopy.gif",
+      "size": 3449,
+      "sha256": "7c3c04918ca0a9cc5b7e6d1f195895fad18a438779da0e7f17814dadafa57f8d"
+    },
+    {
+      "path": "docs/sqlite/images/sqlite370_banner.svg",
+      "size": 12707,
+      "sha256": "462c4ce8229b585dd6880cd308b121d9de63eb619db05e469598594e80d7b151"
+    },
+    {
+      "path": "docs/sqlite/sqlite.css",
+      "size": 7650,
+      "sha256": "df6c3feeaa715f05028e5c9ee958d6ac7df3b7c9a11551f2852fac8f4a1d9896"
+    }
+  ]
+}

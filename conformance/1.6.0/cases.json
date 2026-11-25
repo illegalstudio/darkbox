@@ -1,0 +1,442 @@
+{
+  "cases": [
+    {
+      "description": "The smallest conforming package: manifest, canonical bundle, profile document and one database, using DEFLATE.",
+      "expected": "valid",
+      "file": "valid-minimal.zip",
+      "id": "valid-minimal",
+      "referenceDiagnostic": null,
+      "section": "2",
+      "sha256": "dd285fd2e9aa266b55232e66d4000b9d53068f28cfa49235082b64cb4f42505b"
+    },
+    {
+      "description": "The same package with every entry using STORE.",
+      "expected": "valid",
+      "file": "valid-stored.zip",
+      "id": "valid-stored",
+      "referenceDiagnostic": null,
+      "section": "2",
+      "sha256": "b7fff16dcbe1e44bca32a4699d3f0633bd9305e9d4a40778880d108cc80ad680"
+    },
+    {
+      "description": "Entries written with ZIP64 extended information.",
+      "expected": "valid",
+      "file": "valid-zip64.zip",
+      "id": "valid-zip64",
+      "referenceDiagnostic": null,
+      "section": "2",
+      "sha256": "fbff98cd7bb9a956b5f38498f09dd1a28abbac8c821ca9c925111426db89c563"
+    },
+    {
+      "description": "A declared empty folder represented by an explicit directory entry.",
+      "expected": "valid",
+      "file": "valid-empty-folder.zip",
+      "id": "valid-empty-folder",
+      "referenceDiagnostic": null,
+      "section": "2",
+      "sha256": "7c6f9797e484376da6737bea60b4500876413ebdd551a2360df33924943dca6e"
+    },
+    {
+      "description": "A declared database at the package root.",
+      "expected": "valid",
+      "file": "valid-root-database.zip",
+      "id": "valid-root-database",
+      "referenceDiagnostic": null,
+      "section": "2",
+      "sha256": "37019e603a895ecad85b498620d10b624ad74e7ff8f5c19868808506ef99c4c9"
+    },
+    {
+      "description": "An unknown optional third-party extension with its own resource: skipped, not an error.",
+      "expected": "valid",
+      "file": "valid-optional-extension.zip",
+      "id": "valid-optional-extension",
+      "referenceDiagnostic": null,
+      "section": "8",
+      "sha256": "d82e4686b404de0285109cd0823541a129d66d1133a69f36a9d4b39a5c311c03"
+    },
+    {
+      "description": "A manifest with CRLF line endings, which readers accept.",
+      "expected": "valid",
+      "file": "valid-crlf-manifest.zip",
+      "id": "valid-crlf-manifest",
+      "referenceDiagnostic": null,
+      "section": "4",
+      "sha256": "0e45cbc305ca9ccf6c14c42eff2c891821245af4e3a8dfc0e2144ccbb032247b"
+    },
+    {
+      "description": "No root manifest.json.",
+      "expected": "invalid",
+      "file": "invalid-missing-manifest.zip",
+      "id": "invalid-missing-manifest",
+      "referenceDiagnostic": "manifest.missing",
+      "section": "2",
+      "sha256": "3f9a616a7a61eae0c9d12758291b09ce3a9461fae9e140a015573061ac3f7bc3"
+    },
+    {
+      "description": "The manifest repeats an object key.",
+      "expected": "invalid",
+      "file": "invalid-manifest-duplicate-key.zip",
+      "id": "invalid-manifest-duplicate-key",
+      "referenceDiagnostic": "manifest.json",
+      "section": "3",
+      "sha256": "b596404025ccabc62db84366acfd5a1a6a3077a37859e41fc5689b8f2b2e8c99"
+    },
+    {
+      "description": "The manifest starts with a UTF-8 byte order mark.",
+      "expected": "invalid",
+      "file": "invalid-manifest-bom.zip",
+      "id": "invalid-manifest-bom",
+      "referenceDiagnostic": "manifest.encoding",
+      "section": "3",
+      "sha256": "3fc6dc5e97eb25d997119fd6e7b90672d74550c4575f1f2bdb4a507c79dd21d7"
+    },
+    {
+      "description": "An unknown property in a common manifest object.",
+      "expected": "invalid",
+      "file": "invalid-manifest-unknown-field.zip",
+      "id": "invalid-manifest-unknown-field",
+      "referenceDiagnostic": "manifest.schema",
+      "section": "3",
+      "sha256": "b5a21fa5fe8e6d69b0e520e8a7e850d8fabb725cf301295d7adbeea2b6441e58"
+    },
+    {
+      "description": "The canonical root README.md is absent.",
+      "expected": "invalid",
+      "file": "invalid-missing-readme.zip",
+      "id": "invalid-missing-readme",
+      "referenceDiagnostic": "bundle.missing",
+      "section": "5",
+      "sha256": "cde37dbb8b3733d7827a08cac3ac2ab6a071619332494e5fd68dd3af9febdbef"
+    },
+    {
+      "description": "The canonical README.md has one appended line.",
+      "expected": "invalid",
+      "file": "invalid-modified-readme.zip",
+      "id": "invalid-modified-readme",
+      "referenceDiagnostic": "bundle.file",
+      "section": "5",
+      "sha256": "764e0c62901ce43329fbd4d6131b2e090763f0c827afabd7407a726063d66964"
+    },
+    {
+      "description": "The bundle catalog has the same content with different whitespace: it must equal the trusted reference byte for byte.",
+      "expected": "invalid",
+      "file": "invalid-modified-catalog.zip",
+      "id": "invalid-modified-catalog",
+      "referenceDiagnostic": "bundle.catalog",
+      "section": "5",
+      "sha256": "c02f8b24df6391aff1ee432632a535f3e7724ce5a1911c797ba362cb703d05da"
+    },
+    {
+      "description": "An application file inside the reserved docs/darkbox/ subtree.",
+      "expected": "invalid",
+      "file": "invalid-reserved-extra-file.zip",
+      "id": "invalid-reserved-extra-file",
+      "referenceDiagnostic": "bundle.extra",
+      "section": "4",
+      "sha256": "6bdc0102de718696c9de58f62b9f9481ab098922a873ad3f3fcae5894e612282"
+    },
+    {
+      "description": "The protection extension bundle is present although the manifest does not declare protection.",
+      "expected": "invalid",
+      "file": "invalid-undeclared-extension-bundle.zip",
+      "id": "invalid-undeclared-extension-bundle",
+      "referenceDiagnostic": "bundle.extra",
+      "section": "9",
+      "sha256": "3cd20f06463ec2324e8b9d951bbdbbe3ca54b10d0749e21eaeb9e6c7dcda5fa8"
+    },
+    {
+      "description": "The manifest declares the protection extension but its canonical bundle is absent.",
+      "expected": "invalid",
+      "file": "invalid-extension-without-bundle.zip",
+      "id": "invalid-extension-without-bundle",
+      "referenceDiagnostic": "bundle.missing",
+      "section": "9",
+      "sha256": "959acb2676d48fbbce80e65680a5884ad5de9ead509c2af75bd51fedf84f5f25"
+    },
+    {
+      "description": "The profile document named by application.profilePath is absent.",
+      "expected": "invalid",
+      "file": "invalid-missing-profile.zip",
+      "id": "invalid-missing-profile",
+      "referenceDiagnostic": "profile.missing",
+      "section": "5",
+      "sha256": "01febbd0d752e3b0cb0fb03b39519fe73b456222915f277874448b5adb2a30e8"
+    },
+    {
+      "description": "The profile document starts with a UTF-8 byte order mark.",
+      "expected": "invalid",
+      "file": "invalid-profile-bom.zip",
+      "id": "invalid-profile-bom",
+      "referenceDiagnostic": "profile.encoding",
+      "section": "5",
+      "sha256": "809a75814a738c388aed725ddf0869204069b8c2b89a653657ccb62034c230f1"
+    },
+    {
+      "description": "A directory that the manifest does not declare.",
+      "expected": "invalid",
+      "file": "invalid-undeclared-folder.zip",
+      "id": "invalid-undeclared-folder",
+      "referenceDiagnostic": "folder.undeclared",
+      "section": "2",
+      "sha256": "a007c5b0137630dfd9381adff4a0fba7060072670cd848c0c37e8c0082f16cfa"
+    },
+    {
+      "description": "A declared empty folder without its explicit directory entry.",
+      "expected": "invalid",
+      "file": "invalid-missing-folder.zip",
+      "id": "invalid-missing-folder",
+      "referenceDiagnostic": "folder.missing",
+      "section": "2",
+      "sha256": "60a4626439a43d90ef076f69c9d2340a41fd7636361ad0d998df7243975cbb2b"
+    },
+    {
+      "description": "A declared folder that is a regular file in the package.",
+      "expected": "invalid",
+      "file": "invalid-folder-is-file.zip",
+      "id": "invalid-folder-is-file",
+      "referenceDiagnostic": "path.collision",
+      "section": "2",
+      "sha256": "40966c2537c3fd286402cf846a53e3d69f9730be439e11e62f0e286137e025b0"
+    },
+    {
+      "description": "A regular file at the root that is neither metadata nor a declared database.",
+      "expected": "invalid",
+      "file": "invalid-unexpected-root-file.zip",
+      "id": "invalid-unexpected-root-file",
+      "referenceDiagnostic": "file.root",
+      "section": "2",
+      "sha256": "381185f5acba705263253e73bf06a5555dd6d80e55d5ef002725e22a3a75d8e7"
+    },
+    {
+      "description": "An entry name containing a parent-directory component.",
+      "expected": "invalid",
+      "file": "invalid-path-traversal.zip",
+      "id": "invalid-path-traversal",
+      "referenceDiagnostic": "path.invalid",
+      "section": "4",
+      "sha256": "09817a2e128d5a8d8b1e7c7b0252fb153c7fb837d9730cdeb9c45894375d37c8"
+    },
+    {
+      "description": "An entry name containing a backslash.",
+      "expected": "invalid",
+      "file": "invalid-backslash-path.zip",
+      "id": "invalid-backslash-path",
+      "referenceDiagnostic": "path.invalid",
+      "section": "4",
+      "sha256": "aff40ef334e9556c51e78f0f36f16b6dbb37d5d7a96fc789690e5925971b9527"
+    },
+    {
+      "description": "An entry named after a Windows device.",
+      "expected": "invalid",
+      "file": "invalid-device-name.zip",
+      "id": "invalid-device-name",
+      "referenceDiagnostic": "path.device_name",
+      "section": "4",
+      "sha256": "eacbcadc60ae9dd477a10e56eac78e6213c57dcbbd4aaf8c9f90a2d4a0006a0a"
+    },
+    {
+      "description": "Two paths that differ only by ASCII case.",
+      "expected": "invalid",
+      "file": "invalid-case-collision.zip",
+      "id": "invalid-case-collision",
+      "referenceDiagnostic": "path.collision",
+      "section": "4",
+      "sha256": "479af27a71d949834a45d9e592ad70fd3c0732136a54ef88202dfe75b183293b"
+    },
+    {
+      "description": "A path that is both a regular file and a parent directory.",
+      "expected": "invalid",
+      "file": "invalid-file-directory-collision.zip",
+      "id": "invalid-file-directory-collision",
+      "referenceDiagnostic": "path.collision",
+      "section": "4",
+      "sha256": "6ab39489bf444ef279dbeb73fc14d653ffd070207e980235fbbc49c8c688dc5d"
+    },
+    {
+      "description": "Two ZIP entries with the same name.",
+      "expected": "invalid",
+      "file": "invalid-duplicate-entry.zip",
+      "id": "invalid-duplicate-entry",
+      "referenceDiagnostic": "path.collision",
+      "section": "4",
+      "sha256": "b16d73a7668839f354dfbd79cfc5566c5f68b3f8f15098e792f35c7168d0d8e1"
+    },
+    {
+      "description": "One stored data byte differs from the recorded CRC.",
+      "expected": "invalid",
+      "file": "invalid-crc.zip",
+      "id": "invalid-crc",
+      "referenceDiagnostic": "zip.data",
+      "section": "2",
+      "sha256": "d00b5e4146d1c8fa8fd274bbbec177ce07ab23c126baa2b229ee87bf31a2f909"
+    },
+    {
+      "description": "The archive is cut short inside its end record.",
+      "expected": "invalid",
+      "file": "invalid-truncated.zip",
+      "id": "invalid-truncated",
+      "referenceDiagnostic": "zip.end_record",
+      "section": "2",
+      "sha256": "c2bbd40d8362bd8201d6c4c18fb199e672259c04c002c4f07f3e1bf6ec975509"
+    },
+    {
+      "description": "An entry flagged as encrypted.",
+      "expected": "invalid",
+      "file": "invalid-encrypted-entry.zip",
+      "id": "invalid-encrypted-entry",
+      "referenceDiagnostic": "zip.encryption",
+      "section": "2",
+      "sha256": "6aafa37d2e1362ec02ead148a5258c5444eedc9910706d555a6ee91ffbd33606"
+    },
+    {
+      "description": "The end record names another disk.",
+      "expected": "invalid",
+      "file": "invalid-split-volume.zip",
+      "id": "invalid-split-volume",
+      "referenceDiagnostic": "zip.split_volume",
+      "section": "2",
+      "sha256": "f7d3c2f2efe55eef566c074ff82c0039590bc3b605815beaee7162be8da50998"
+    },
+    {
+      "description": "An entry whose Unix mode is a symbolic link.",
+      "expected": "invalid",
+      "file": "invalid-symlink-entry.zip",
+      "id": "invalid-symlink-entry",
+      "referenceDiagnostic": "zip.entry_type",
+      "section": "4",
+      "sha256": "fa952bcf71e76a58fb1d2516728a11d8d5a281cba3da1e9fe5cc4f80a6b4d7fe"
+    },
+    {
+      "description": "Bytes prepended to the archive, as in a self-extracting wrapper.",
+      "expected": "invalid",
+      "file": "invalid-self-extracting-wrapper.zip",
+      "id": "invalid-self-extracting-wrapper",
+      "referenceDiagnostic": "zip.directory",
+      "section": "2",
+      "sha256": "c6af9507635115400f42a55e6f1c00b7ac20942213edc2649195bf3c7653f83e"
+    },
+    {
+      "description": "A second SQLite database that the manifest does not inventory.",
+      "expected": "invalid",
+      "file": "invalid-undeclared-database.zip",
+      "id": "invalid-undeclared-database",
+      "referenceDiagnostic": "sqlite.undeclared",
+      "section": "2",
+      "sha256": "c7fd126fd543cbf8786b0835abb8e0e2e8336ce6341a6a42c822827bd0289a1b"
+    },
+    {
+      "description": "A declared database that is absent.",
+      "expected": "invalid",
+      "file": "invalid-missing-database.zip",
+      "id": "invalid-missing-database",
+      "referenceDiagnostic": "database.missing",
+      "section": "7",
+      "sha256": "841c8838c5fa460048f85a64adc028e648359fc0e88336ff0ea4b6bb80211126"
+    },
+    {
+      "description": "A write-ahead log beside a declared database.",
+      "expected": "invalid",
+      "file": "invalid-sqlite-sidecar.zip",
+      "id": "invalid-sqlite-sidecar",
+      "referenceDiagnostic": "sqlite.sidecar",
+      "section": "6",
+      "sha256": "51fe4dfdefb62ccb4ebf26f2397052af4ae14c85eab6a1ff4d52ace42ed371db"
+    },
+    {
+      "description": "A database whose header still selects WAL mode.",
+      "expected": "invalid",
+      "file": "invalid-wal-journal-mode.zip",
+      "id": "invalid-wal-journal-mode",
+      "referenceDiagnostic": "sqlite.journal_mode",
+      "section": "6",
+      "sha256": "9bf16a45471ae03a27be08b7d01371d3dcf6047e305e645d56ae338a654db154"
+    },
+    {
+      "description": "The manifest lists a table that the database does not contain.",
+      "expected": "invalid",
+      "file": "invalid-table-inventory.zip",
+      "id": "invalid-table-inventory",
+      "referenceDiagnostic": "sqlite.tables",
+      "section": "3",
+      "sha256": "d86ada53b733b4d768a18a64671c65cc8eecaa6cb27abdbe59cae2296eea4b30"
+    },
+    {
+      "description": "The database contains an application table that the manifest does not list.",
+      "expected": "invalid",
+      "file": "invalid-unlisted-table.zip",
+      "id": "invalid-unlisted-table",
+      "referenceDiagnostic": "sqlite.tables",
+      "section": "3",
+      "sha256": "39f7b49bd69feb4d245568cb8067579240f7a56d39bda3ce15d8d66b89767d6c"
+    },
+    {
+      "description": "The declared userVersion differs from the database.",
+      "expected": "invalid",
+      "file": "invalid-user-version.zip",
+      "id": "invalid-user-version",
+      "referenceDiagnostic": "sqlite.user_version",
+      "section": "3",
+      "sha256": "bf024016bc53b2a4b1781bbc9115c16c96964451e1db9140fb37fae1d796698f"
+    },
+    {
+      "description": "The database fails PRAGMA foreign_key_check.",
+      "expected": "invalid",
+      "file": "invalid-foreign-keys.zip",
+      "id": "invalid-foreign-keys",
+      "referenceDiagnostic": "sqlite.foreign_keys",
+      "section": "6",
+      "sha256": "f650ea50c921fb8ccd6b173f6ad2744600f6072adfb2551c109f0cb2fdbae334"
+    },
+    {
+      "description": "The database fails PRAGMA integrity_check.",
+      "expected": "invalid",
+      "file": "invalid-corrupt-database.zip",
+      "id": "invalid-corrupt-database",
+      "referenceDiagnostic": "sqlite.check",
+      "section": "6",
+      "sha256": "e5002bb2306a56969ffb2cf35bae05df3aca9fc3101ae34854f6daeb37e4a67f"
+    },
+    {
+      "description": "Sync extension 1.0.0, which is bound to common version 1.5.0, declared under 1.6.0.",
+      "expected": "invalid",
+      "file": "invalid-sync-1.0.0.zip",
+      "id": "invalid-sync-1.0.0",
+      "referenceDiagnostic": "manifest.schema",
+      "section": "9",
+      "sha256": "56fb3add45cc189faaa5f674ff1bb1118721bec0c400428537748878180b4dea"
+    },
+    {
+      "description": "A common specification version that no reader implements.",
+      "expected": "unsupported",
+      "file": "unsupported-common-version.zip",
+      "id": "unsupported-common-version",
+      "referenceDiagnostic": "version.unsupported",
+      "section": "8",
+      "sha256": "5aed9a572c3c8b5b9ae496f234510ae6615b5c4bed0f66058b5c87075cc24fb4"
+    },
+    {
+      "description": "An unknown required third-party extension.",
+      "expected": "unsupported",
+      "file": "unsupported-required-extension.zip",
+      "id": "unsupported-required-extension",
+      "referenceDiagnostic": "extension.required",
+      "section": "8",
+      "sha256": "646356b833bfd0f282c4789743bfd58d7fd83ee53f186aec0ce80ddc8dc4a9d0"
+    },
+    {
+      "description": "A required official extension version without a trusted reference bundle: unsupported, never corrupt.",
+      "expected": "unsupported",
+      "file": "unsupported-official-extension-version.zip",
+      "id": "unsupported-official-extension-version",
+      "referenceDiagnostic": "extension.required",
+      "section": "9",
+      "sha256": "e4989dcad0f6a30ced8f4cc8518236098c3b1f851ca1a0552e7fda5a5bf5a85c"
+    }
+  ],
+  "darkbox": "1.6.0",
+  "outcomes": {
+    "invalid": "A rule of the declared common version is violated or data is damaged.",
+    "unsupported": "The package needs a version or extension the reader does not implement. This is not corruption.",
+    "valid": "Every common machine-checkable rule passes."
+  }
+}

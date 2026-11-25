@@ -35,15 +35,12 @@ impl NonceSequence for Nonces {
     }
 }
 fn declaration() -> DatabaseDeclaration {
-    DatabaseDeclaration {
-        path: DB.into(),
-        description: "Library".into(),
-        user_version: Some(1),
-        tables: vec![TableDeclaration {
-            name: "items".into(),
-            description: "Item names".into(),
-        }],
-    }
+    DatabaseDeclaration::new(
+        DB,
+        "Library",
+        vec![TableDeclaration::new("items", "Item names")],
+    )
+    .with_user_version(1)
 }
 impl Fixture {
     fn new() -> Self {
@@ -200,7 +197,7 @@ fn rewrite_delta(path: &Path, mutate: impl FnOnce(&mut Value, &mut BTreeMap<Stri
     for i in 0..archive.len() {
         let entry = archive.by_index(i).unwrap();
         if !entry.is_dir() {
-            files.insert(entry.name().to_owned(), bytes(entry));
+            files.insert(entry.name().unwrap().into_owned(), bytes(entry));
         }
     }
     drop(archive);
@@ -581,10 +578,7 @@ fn explicit_staging_is_used_for_snapshots_edits_databases_and_transfer_verificat
     let options = fixture.options(false);
     let storage = fixture.path("storage");
     fs::create_dir(&storage).unwrap();
-    let limits = Limits {
-        staging_directory: Some(storage.clone()),
-        ..Default::default()
-    };
+    let limits = Limits::default().with_staging_directory(storage.clone());
     {
         let package =
             Package::open(fixture.path("base.project"), limits.clone(), &options).unwrap();
@@ -617,15 +611,9 @@ fn explicit_staging_is_used_for_snapshots_edits_databases_and_transfer_verificat
         .unwrap();
     }
     assert_eq!(fs::read_dir(&storage).unwrap().count(), 0);
-    let bad = Limits {
-        staging_directory: Some(fixture.path("missing-storage")),
-        ..Default::default()
-    };
+    let bad = Limits::default().with_staging_directory(fixture.path("missing-storage"));
     assert!(Package::open(fixture.path("base.project"), bad, &options).is_err());
-    let inside = Limits {
-        staging_directory: Some(fixture.path("directory/media")),
-        ..Default::default()
-    };
+    let inside = Limits::default().with_staging_directory(fixture.path("directory/media"));
     assert_eq!(
         darkbox::analyze_with(fixture.path("directory"), Mode::Verify, inside, &options).status,
         Status::Invalid

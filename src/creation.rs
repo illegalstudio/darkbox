@@ -1,7 +1,7 @@
 //! Incremental package creation and publication of complete replacement editions.
 use crate::extensions::EntryDigest;
 use crate::protection::{self, ManifestSigner};
-use crate::versions::{self, Catalog, VersionSpec};
+use crate::versions::{self, VersionSpec};
 use crate::{Error, Limits, Mode, Report, Status, VerificationOptions};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -253,7 +253,7 @@ impl<'a> PackageWriter<'a> {
         }
         if protected {
             let data = protection::data(&manifest)?;
-            if spec.version == "1.0.0" {
+            if !spec.capabilities.protection {
                 return Err(Error::invalid(
                     "protection.common_version",
                     "Protection requires Darkbox 1.1.0",
@@ -353,8 +353,8 @@ impl<'a> PackageWriter<'a> {
                 .map_err(zip_error)?;
             writer.entries += 1;
         }
-        let catalog: Catalog = serde_json::from_slice(spec.catalog).unwrap();
-        if catalog.folders.iter().any(|folder| {
+        let canonical_folders = versions::canonical_folders(spec, &writer.manifest).unwrap();
+        if canonical_folders.iter().any(|folder| {
             !writer
                 .nodes
                 .get(&folder.to_ascii_lowercase())
@@ -365,7 +365,8 @@ impl<'a> PackageWriter<'a> {
                 "Manifest must declare every matching canonical bundle directory",
             ));
         }
-        for file in spec.files {
+        // Declared official extensions bring their own canonical bundles.
+        for file in versions::canonical_files(spec, &writer.manifest) {
             writer.write_resource(file.path, Cursor::new(file.bytes))?;
         }
         writer.write_resource(versions::CATALOG_PATH, Cursor::new(spec.catalog))?;
@@ -705,6 +706,8 @@ impl<'a> PackageWriter<'a> {
         self.check_destination()?;
         report.file = self.destination.display().to_string();
         report.limits = self.limits.clone();
+        // Directories can be flushed only on Unix-like systems.
+        #[cfg(unix)]
         let parent = self
             .destination
             .parent()
@@ -730,7 +733,10 @@ impl<'a> PackageWriter<'a> {
         }
         #[cfg(unix)]
         if parent_handle.sync_all().is_err() {
-            report.diagnostics.push(crate::Diagnostic { severity: "warning", code: "create.durability".into(), path: None, message: "Package was atomically published but final directory synchronization failed; crash durability is uncertain".into() });
+            report.warn(
+                "create.durability",
+                "Package was atomically published but final directory synchronization failed; crash durability is uncertain",
+            );
         }
         Ok((report, snapshot))
     }
@@ -814,10 +820,10 @@ impl<'a> PackageWriter<'a> {
             for index in 0..archive.len() {
                 crate::container::check_deadline(self.deadline)?;
                 let mut entry = archive.by_index(index).map_err(crate::zip_failure)?;
-                if entry.is_dir() || !entry.name().starts_with(&prefix) {
+                let path = entry.name().map_err(crate::zip_failure)?.into_owned();
+                if entry.is_dir() || !path.starts_with(&prefix) {
                     continue;
                 }
-                let path = entry.name().to_owned();
                 let mut hash = Sha256::new();
                 let mut bytes = 0u64;
                 let mut buffer = [0u8; 65_536];

@@ -18,11 +18,11 @@ An embedded profile document must state its application identifier and data-form
 
 The information needed to interpret packaged data must be available inside the archive without its original application or network access. Additional embedded documents can supplement the main profile document; external links cannot replace essential documentation. A table description in the manifest is an inventory entry, not a complete data-format definition.
 
-Profile documentation is Markdown encoded as UTF-8 without a BOM; writers use LF. `docs/profile.md` is the recommended archive path, with `docs` declared in `folders`. Other valid paths are allowed inside declared folders, outside extension namespaces and the reserved `docs/sqlite/` and `docs/darkbox/` subtrees. The document is separate from the unchanged, version-specific Darkbox documentation bundle. Every archive includes all contents of `archive/<darkbox.version>/` in its ZIP root, including the original SQLite binary-format reference and the canonical file catalog; the application profile explains the meaning of the data stored using that format.
+Profile documentation is Markdown encoded as UTF-8 without a BOM; writers use LF. `docs/profile.md` is the recommended archive path, with `docs` declared in `folders`. Other valid paths are allowed inside declared folders, outside extension namespaces and the reserved `docs/sqlite/` and `docs/darkbox/` subtrees. The document is separate from the unchanged, version-specific Darkbox documentation bundle. Every archive includes all contents of `archive/<darkbox.version>/` in its ZIP root, including the original SQLite binary-format reference and the canonical file catalog; the application profile explains the meaning of the data stored using that format. From common 1.6.0, an archive that declares an official extension also includes the canonical bundle of that extension version, copied from `extensions/<namespace>/<version>/` into the reserved `docs/darkbox/<name>/` directory, with its folders declared in `folders`.
 
 A version-specific validator should be accessible without running the application. Documentation does not authorize automatic execution of SQL or migrations. If a profile uses several databases or file attachments, it must specify a coherent snapshot across them. SQLite foreign-key checks on each database do not validate cross-database references.
 
-The [official protection extension](../archive/1.1.0/docs/darkbox/protection/1.0.0.md) keeps public columns and documentation readable while encrypting selected BLOB values and individual attachments. Producers encrypt before inserting into SQLite. Introducing protected representations changes application data conventions and requires the profile owner's compatibility/version decision. Keys, license/password policy and signer trust belong to the application; generic verification authenticates bytes and context, then leaves plaintext type and meaning validation to the profile.
+The [official protection extension](../extensions/studio.illegal.darkbox.protection/1.0.0/docs/darkbox/protection/1.0.0.md) keeps public columns and documentation readable while encrypting selected BLOB values and individual attachments. Producers encrypt before inserting into SQLite. Introducing protected representations changes application data conventions and requires the profile owner's compatibility/version decision. Keys, license/password policy and signer trust belong to the application; generic verification authenticates bytes and context, then leaves plaintext type and meaning validation to the profile.
 
 ## Illustrative profiles
 
@@ -45,9 +45,9 @@ Existing portable-package formats, local caches, installed libraries, licenses a
 
 When a migration changes the data-format version, package the matching profile documentation together with the migrated payload and updated manifest. The archived documentation must continue to describe the exact data being saved.
 
-## Synchronization mappings (1.5.0)
+## Synchronization mappings (1.5.0 and later)
 
-A profile adopting `studio.illegal.darkbox.sync` 1.0.0 includes its exact immutable
+A profile adopting `studio.illegal.darkbox.sync` includes its exact immutable
 `SyncMapping` and documents stable record/codec interpretation, synchronized and
 local-only columns, ordered owner relationships, its deterministic conflict view
 and the reserved `_darkbox_sync_` journal tables. The application registers the
@@ -57,5 +57,13 @@ business invariants or authorize execution of packaged SQL/code.
 Concurrent valid operations remain in causal state even when the visible database
 needs to quarantine conflicting records. Profiles define deterministic projection
 and fallback semantics independently of arrival order, locale or wall clock.
-Data-format changes require an explicitly reconciled new sync domain in protocol
-1.0.0. See [the sync guide](sync.md) and [normative reference](../archive/1.5.0/docs/darkbox/sync/1.0.0.md).
+Data-format changes require an explicitly reconciled new sync domain in protocols
+1.0.0 and 1.1.0.
+
+Sync 1.1.0 is for common 1.6.0 and later 1.x versions; sync 1.0.0 stays bound to
+common 1.5.0 exactly and is not declared by a 1.6.0 manifest. The two protocol
+versions share the same mapping format and rules, and a domain never changes its
+protocol version. See [the sync guide](sync.md), the
+[1.1.0 normative reference](../extensions/studio.illegal.darkbox.sync/1.1.0/docs/darkbox/sync/1.1.0.md)
+and, for existing 1.0.0 domains, the
+[1.0.0 normative reference](../archive/1.5.0/docs/darkbox/sync/1.0.0.md).

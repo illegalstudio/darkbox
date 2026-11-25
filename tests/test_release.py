@@ -80,6 +80,30 @@ class VersionPolicy(unittest.TestCase):
             release.publication_versions(registry, ["3.0.0"])
 
 
+    def test_extension_bundles_freeze_with_their_minimum_common_version(self):
+        def registry():
+            return {"versions": [{"version": "1.0.0", "released": True},
+                                 {"version": "2.0.0", "released": False}],
+                    "extensions": [{"namespace": "studio.illegal.darkbox.old", "version": "1.0.0", "released": False, "minCommon": "1.0.0"},
+                                   {"namespace": "studio.illegal.darkbox.new", "version": "1.0.0", "released": False, "minCommon": "2.0.0"}]}
+        # A software-only release freezes no reference.
+        data = registry()
+        self.assertEqual(release.publication_versions(data, []), [])
+        self.assertFalse(any(row["released"] for row in data["extensions"]))
+        # Pending bundles are frozen once their minimum common version is published.
+        data = registry()
+        self.assertEqual(release.publication_versions(data, [], extensions=True), ["studio.illegal.darkbox.old 1.0.0"])
+        self.assertEqual([row["released"] for row in data["extensions"]], [True, False])
+        data = registry()
+        self.assertEqual(len(release.publication_versions(data, ["2.0.0"], extensions=True)), 2)
+        self.assertTrue(all(row["released"] for row in data["extensions"]))
+        # A published bundle cannot depend on an unpublished common version.
+        data = registry()
+        data["extensions"][1]["released"] = True
+        with self.assertRaises(ValueError):
+            release.publication_versions(data, [])
+
+
 class InteractiveRelease(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="darkbox-release-flow-")

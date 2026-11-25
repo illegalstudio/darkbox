@@ -20,15 +20,14 @@ impl Fixture {
             .resource_inventory()
             .folder("data", "Database")
             .folder("media", "Immutable objects")
-            .database(DatabaseDeclaration {
-                path: DB.into(),
-                description: "Records".into(),
-                user_version: Some(1),
-                tables: vec![TableDeclaration {
-                    name: "items".into(),
-                    description: "Records".into(),
-                }],
-            })
+            .database(
+                DatabaseDeclaration::new(
+                    DB,
+                    "Records",
+                    vec![TableDeclaration::new("items", "Records")],
+                )
+                .with_user_version(1),
+            )
             .build()
             .unwrap();
         Self {
@@ -114,7 +113,7 @@ fn initialize_lock_seal_and_reopen_without_intermediate_zip() {
     .unwrap();
     let mut zip = zip::ZipArchive::new(fs::File::open(f.path("sealed.zip")).unwrap()).unwrap();
     for i in 0..zip.len() {
-        assert!(!zip.by_index(i).unwrap().name().ends_with(".lock"));
+        assert!(!zip.by_index(i).unwrap().name().unwrap().ends_with(".lock"));
     }
 }
 
@@ -185,10 +184,7 @@ fn hot_wal_backup_and_direct_delta_capture_committed_state() {
             f.manifest.clone(),
             &connections,
             Limits::default(),
-            &VerificationOptions {
-                trusted_digests: Some(&Cache),
-                ..Default::default()
-            },
+            &VerificationOptions::default().with_trusted_digests(&Cache),
         )
         .unwrap();
     assert_eq!(report.trusted_resources.len(), 1);
@@ -256,10 +252,7 @@ fn cached_checks_are_explicit_and_full_verification_remains_available() {
         f.path("library"),
         darkbox::Mode::Verify,
         Limits::default(),
-        &VerificationOptions {
-            trusted_digests: Some(&Cache),
-            ..Default::default()
-        },
+        &VerificationOptions::default().with_trusted_digests(&Cache),
     );
     assert_eq!(report.status, Status::Passed);
     assert_eq!(report.scope, "common_checks_with_trusted_resources");
@@ -275,10 +268,7 @@ fn cached_checks_are_explicit_and_full_verification_remains_available() {
             f.manifest.clone(),
             &BTreeMap::from([(DB.to_owned(), &db)]),
             Limits::default(),
-            &VerificationOptions {
-                trusted_digests: Some(&Cache),
-                ..Default::default()
-            },
+            &VerificationOptions::default().with_trusted_digests(&Cache),
         )
         .unwrap_err();
     assert_eq!(error.code, "transfer.changed");
@@ -341,8 +331,8 @@ fn shared_readers_block_writers_and_aliases_share_one_lock() {
     drop(library);
     let first = fs::File::open(&path).unwrap();
     let second = fs::File::open(&path).unwrap();
-    fs2::FileExt::try_lock_shared(&first).unwrap();
-    fs2::FileExt::try_lock_shared(&second).unwrap();
+    first.try_lock_shared().unwrap();
+    second.try_lock_shared().unwrap();
     assert_passed(&f.path("library"));
     assert!(DirectoryLibrary::open(f.path("library")).is_err());
     drop(first);
@@ -371,10 +361,7 @@ fn metadata_cannot_use_cached_hashes_and_staging_stays_outside_library() {
     let f = Fixture::new();
     f.sealed();
     fs::write(f.path("library/README.md"), b"broken canonical bytes").unwrap();
-    let options = VerificationOptions {
-        trusted_digests: Some(&All),
-        ..Default::default()
-    };
+    let options = VerificationOptions::default().with_trusted_digests(&All);
     let report = darkbox::analyze_with(
         f.path("library"),
         darkbox::Mode::Verify,
@@ -387,10 +374,7 @@ fn metadata_cannot_use_cached_hashes_and_staging_stays_outside_library() {
     let error = library
         .seal(
             f.manifest.clone(),
-            Limits {
-                staging_directory: Some(f.path("library")),
-                ..Default::default()
-            },
+            Limits::default().with_staging_directory(f.path("library")),
             &VerificationOptions::default(),
         )
         .unwrap_err();
@@ -418,14 +402,8 @@ fn cached_seal_can_handle_a_sparse_four_gib_resource_without_reading_it_all() {
     let report = library
         .seal(
             f.manifest.clone(),
-            Limits {
-                timeout_seconds: 10,
-                ..Limits::large()
-            },
-            &VerificationOptions {
-                trusted_digests: Some(&Sparse),
-                ..Default::default()
-            },
+            Limits::large().with_timeout_seconds(10),
+            &VerificationOptions::default().with_trusted_digests(&Sparse),
         )
         .unwrap();
     assert_eq!(report.scope, "common_checks_with_trusted_resources");
@@ -458,10 +436,7 @@ fn delta_base_directory_is_fully_read_even_when_target_cache_is_enabled() {
         f.path("target"),
         f.path("bad.delta"),
         Limits::default(),
-        &VerificationOptions {
-            trusted_digests: Some(&Cache),
-            ..Default::default()
-        },
+        &VerificationOptions::default().with_trusted_digests(&Cache),
     )
     .unwrap_err();
     assert_eq!(error.status, Status::Invalid);

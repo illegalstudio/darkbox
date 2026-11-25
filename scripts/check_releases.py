@@ -36,6 +36,21 @@ def check(base):
             raise ValueError("Cannot compare published references")
         if changes.stdout.strip():
             raise ValueError(f"Published references for {version} changed: {changes.stdout.decode().strip()}")
+    extensions = {(row["namespace"], row["version"]): row
+                  for row in json.loads((ROOT / "versions.json").read_bytes()).get("extensions", [])}
+    for row in json.loads(previous.stdout).get("extensions", []):
+        if not row["released"]:
+            continue
+        key = (row["namespace"], row["version"])
+        if key not in extensions or not extensions[key]["released"]:
+            raise ValueError(f"Published extension {key[0]} {key[1]} cannot lose support or publication status")
+        if extensions[key]["minCommon"] != row["minCommon"]:
+            raise ValueError(f"Published extension {key[0]} {key[1]} cannot change its minimum common version")
+        changes = git("diff", "--name-only", base, "--", f"extensions/{key[0]}/{key[1]}")
+        if changes.returncode:
+            raise ValueError("Cannot compare published extension bundles")
+        if changes.stdout.strip():
+            raise ValueError(f"Published extension bundle {key[0]} {key[1]} changed: {changes.stdout.decode().strip()}")
     print("Published versions and references are retained")
 
 

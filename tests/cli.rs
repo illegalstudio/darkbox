@@ -252,7 +252,7 @@ fn both_profiles_pass_common_checks_without_full_profile_claims() {
 
 #[test]
 fn every_supported_version_has_schema_valid_examples_and_catalog() {
-    for (version, _) in darkbox::supported_versions() {
+    for version in darkbox::supported_versions().map(|supported| supported.version) {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let schema: Value = serde_json::from_slice(
             &fs::read(root.join(format!("schema/{version}/manifest.schema.json"))).unwrap(),
@@ -675,22 +675,10 @@ fn limits_operational_failures_and_cli_exit_codes_are_distinct() {
     let fixture = Fixture::new("notebook");
     let path = fixture.archive(CompressionMethod::Deflated, false);
     for limits in [
-        Limits {
-            max_entries: 1,
-            ..Limits::default()
-        },
-        Limits {
-            max_metadata_bytes: 10,
-            ..Limits::default()
-        },
-        Limits {
-            max_total_bytes: 100,
-            ..Limits::default()
-        },
-        Limits {
-            max_entry_bytes: 100,
-            ..Limits::default()
-        },
+        Limits::default().with_max_entries(1),
+        Limits::default().with_max_metadata_bytes(10),
+        Limits::default().with_max_total_bytes(100),
+        Limits::default().with_max_entry_bytes(100),
     ] {
         assert_status(
             &darkbox::analyze(&path, Mode::Verify, limits),
@@ -788,4 +776,145 @@ fn limits_operational_failures_and_cli_exit_codes_are_distinct() {
             }
         );
     }
+}
+
+fn extension_bundle(namespace: &str, version: &str) -> BTreeMap<String, Vec<u8>> {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("extensions")
+        .join(namespace)
+        .join(version);
+    let mut files = BTreeMap::new();
+    collect(&base, &base, &mut files);
+    files
+}
+
+fn declare_folder(manifest: &mut Value, path: &str) {
+    manifest["folders"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"path": path, "description": "Official extension documentation"}));
+}
+
+#[test]
+fn extension_bundles_travel_only_with_declared_official_extensions() {
+    const PROTECTION: &str = "studio.illegal.darkbox.protection";
+    // The common 1.6.0 bundle carries no extension documentation.
+    let fixture = Fixture::for_version("1.6.0", "notebook");
+    assert!(
+        !fixture
+            .files
+            .keys()
+            .any(|path| path.starts_with("docs/darkbox/protection")
+                || path.starts_with("docs/darkbox/sync"))
+    );
+    assert_status(&fixture.verify(), Status::Passed);
+
+    // An undeclared bundle is noncanonical content in a reserved subtree.
+    let mut fixture = Fixture::for_version("1.6.0", "notebook");
+    fixture.files.extend(extension_bundle(PROTECTION, "1.0.0"));
+    fixture.manifest(|manifest| declare_folder(manifest, "docs/darkbox/protection"));
+    let report = fixture.verify();
+    assert_status(&report, Status::Invalid);
+    assert_code(&report, "bundle.extra");
+
+    // A declared official extension requires its complete bundle.
+    let declare = |manifest: &mut Value| {
+        manifest["extensions"] =
+            json!({PROTECTION: {"version": "1.0.0", "required": true, "data": {}}});
+    };
+    let mut fixture = Fixture::for_version("1.6.0", "notebook");
+    fixture.manifest(declare);
+    let report = fixture.verify();
+    assert_status(&report, Status::Invalid);
+    assert_code(&report, "bundle.missing");
+
+    // Every bundle file, including its catalog, is compared with the trusted reference.
+    for path in [
+        "docs/darkbox/protection/1.0.0.md",
+        "docs/darkbox/protection/1.0.0.bundle.json",
+    ] {
+        let mut fixture = Fixture::for_version("1.6.0", "notebook");
+        fixture.files.extend(extension_bundle(PROTECTION, "1.0.0"));
+        fixture.files.get_mut(path).unwrap().push(b'\n');
+        fixture.manifest(|manifest| {
+            declare(manifest);
+            declare_folder(manifest, "docs/darkbox/protection");
+        });
+        let report = fixture.verify();
+        assert_status(&report, Status::Invalid);
+        assert_code(&report, "bundle.file");
+    }
+
+    // An official extension version unknown to this reader is unsupported when
+    // required and unchecked when optional. Its documentation is never reported
+    // as verified, and never as corruption.
+    for (required, status) in [(true, Status::Unsupported), (false, Status::Passed)] {
+        let mut fixture = Fixture::for_version("1.6.0", "notebook");
+        fixture.files.insert(
+            "docs/darkbox/future/9.0.0.md".into(),
+            b"# Future extension 9.0.0\n".to_vec(),
+        );
+        fixture.manifest(|manifest| {
+            declare_folder(manifest, "docs/darkbox/future");
+            manifest["extensions"] = json!({"studio.illegal.darkbox.future": {"version": "9.0.0", "required": required, "data": {}}});
+        });
+        let report = fixture.verify();
+        assert_status(&report, status);
+        assert_code(&report, "extension.bundle_unverified");
+    }
+
+    // Sync 1.0.0 is bound to common 1.5.0 and cannot be declared here.
+    let mut fixture = Fixture::for_version("1.6.0", "notebook");
+    fixture.manifest(|manifest| {
+        manifest["packageId"] = json!("00112233445566778899aabbccddeeff");
+        manifest["extensions"] = json!({"studio.illegal.darkbox.sync": {"version": "1.0.0", "required": true, "data": {}}});
+    });
+    let report = fixture.verify();
+    assert_status(&report, Status::Invalid);
+    assert_code(&report, "manifest.schema");
+}
+
+#[test]
+fn extension_bundle_catalogs_match_their_schema_and_sources() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let schema: Value = serde_json::from_slice(
+        &fs::read(root.join("schema/1.6.0/extension-bundle.schema.json")).unwrap(),
+    )
+    .unwrap();
+    jsonschema::meta::validate(&schema).unwrap();
+    let validator = jsonschema::validator_for(&schema).unwrap();
+    let mut bundles = 0;
+    for namespace in fs::read_dir(root.join("extensions")).unwrap() {
+        let namespace = namespace.unwrap();
+        for version in fs::read_dir(namespace.path()).unwrap() {
+            let version = version.unwrap().file_name().into_string().unwrap();
+            let namespace = namespace.file_name().into_string().unwrap();
+            let files = extension_bundle(&namespace, &version);
+            let name = namespace.rsplit('.').next().unwrap();
+            let catalog_path = format!("docs/darkbox/{name}/{version}.bundle.json");
+            let catalog: Value = serde_json::from_slice(&files[&catalog_path]).unwrap();
+            assert!(validator.is_valid(&catalog), "{namespace} {version}");
+            assert_eq!(catalog["extension"]["namespace"], namespace);
+            assert_eq!(catalog["extension"]["version"], version);
+            let listed: Vec<_> = catalog["files"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|file| file["path"].as_str().unwrap().to_owned())
+                .collect();
+            let expected: Vec<_> = files
+                .keys()
+                .filter(|path| **path != catalog_path)
+                .cloned()
+                .collect();
+            assert_eq!(listed, expected);
+            for file in catalog["files"].as_array().unwrap() {
+                let bytes = &files[file["path"].as_str().unwrap()];
+                assert_eq!(file["size"], bytes.len());
+                assert_eq!(file["sha256"], format!("{:x}", Sha256::digest(bytes)));
+            }
+            bundles += 1;
+        }
+    }
+    assert!(bundles >= 2);
 }

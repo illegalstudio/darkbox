@@ -1,0 +1,49 @@
+name: Fuzz
+
+# Short scheduled runs of every fuzz target. Longer campaigns are run by hand
+# with `cargo +nightly fuzz run <target>` from the repository root.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: 'Seconds per target'
+        default: '300'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [package, sync_records, protection_block]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install nightly Rust and cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo install cargo-fuzz --locked
+      - name: Seed the package target with the conformance corpus
+        if: matrix.target == 'package'
+        run: |
+          mkdir -p fuzz/corpus/package
+          cp conformance/*/*.zip fuzz/corpus/package/
+      - name: Run ${{ matrix.target }}
+        env:
+          FUZZ_TARGET: ${{ matrix.target }}
+          FUZZ_SECONDS: ${{ inputs.seconds || '300' }}
+        run: cargo +nightly fuzz run "$FUZZ_TARGET" -- -max_total_time="$FUZZ_SECONDS" -max_len=4194304
+      - name: Keep crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts
+          if-no-files-found: ignore

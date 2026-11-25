@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:darkbox:bundle-catalog-schema:1",
+  "title": "Darkbox canonical bundle catalog",
+  "type": "object",
+  "required": ["darkbox", "folders", "files"],
+  "additionalProperties": false,
+  "properties": {
+    "darkbox": {
+      "type": "object",
+      "required": ["id", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "const": "darkbox" },
+        "version": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)$" }
+      }
+    },
+    "folders": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "size", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "$ref": "#/$defs/path" },
+          "size": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)*$",
+      "not": { "pattern": "[^A-Za-z0-9_./-]" }
+    }
+  },
+  "$comment": "Also check sorted unique paths, canonical folder coverage, all source files except the catalog itself, exact file lengths and SHA-256 values. The catalog is validated by comparison with the locally trusted version-specific reference, not by an archive-supplied self-hash."
+}
