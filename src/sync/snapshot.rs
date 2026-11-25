@@ -1001,7 +1001,7 @@ fn publish_package(
         hash.update(&buffer[..n]);
         temp.write_all(&buffer[..n]).map_err(crate::io_failure)?;
     }
-    if total != reference.size.0 || format!("{:x}", hash.finalize()) != reference.sha256 {
+    if total != reference.size.0 || crate::digest::hex(hash.finalize()) != reference.sha256 {
         return Err(invalid("Snapshot package changed"));
     }
     temp.as_file().sync_all().map_err(crate::io_failure)?;

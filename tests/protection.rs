@@ -16,6 +16,15 @@ use tempfile::TempDir;
 use zeroize::Zeroizing;
 use zip::{ZipWriter, write::SimpleFileOptions};
 
+/// Lowercase hexadecimal digits of a digest.
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 const PACKAGE: &str = "00112233445566778899aabbccddeeff";
 const KEY: [u8; 32] = [42; 32];
 const DATABASE: &str = "data/project.sqlite";
@@ -175,7 +184,7 @@ impl Fixture {
             .map(|(path, bytes)| EntryDigest {
                 path: path.clone(),
                 size: bytes.len() as u64,
-                sha256: format!("{:x}", Sha256::digest(bytes)),
+                sha256: hex(Sha256::digest(bytes)),
             })
             .collect();
         self.manifest["extensions"][NAMESPACE]["data"]["inventory"] =

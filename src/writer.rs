@@ -287,7 +287,7 @@ pub fn save(
                 crate::extensions::EntryDigest {
                     path: path.clone(),
                     size: bytes.len() as u64,
-                    sha256: format!("{:x}", Sha256::digest(bytes)),
+                    sha256: crate::digest::hex(Sha256::digest(bytes)),
                 },
             )
         })
@@ -316,7 +316,7 @@ pub fn save(
             .map(|(path, bytes)| crate::extensions::EntryDigest {
                 path: path.clone(),
                 size: bytes.len() as u64,
-                sha256: format!("{:x}", Sha256::digest(bytes)),
+                sha256: crate::digest::hex(Sha256::digest(bytes)),
             })
             .collect();
         manifest["extensions"][protection::NAMESPACE]["data"] =
@@ -449,7 +449,9 @@ pub(crate) fn check_protected_blocks(
                     options
                         .decryption_keys
                         .and_then(|keys| keys.key(id))
-                        .map(|key| format!("key:{:x}", Sha256::digest(key.as_slice())))
+                        .map(|key| {
+                            format!("key:{}", crate::digest::hex(Sha256::digest(key.as_slice())))
+                        })
                         .unwrap_or_else(|| format!("id:{id}"))
                 })
                 .clone()

@@ -513,7 +513,7 @@ impl<'a> PackageWriter<'a> {
         let digest = EntryDigest {
             path: path.to_owned(),
             size,
-            sha256: format!("{:x}", hash.finalize()),
+            sha256: crate::digest::hex(hash.finalize()),
         };
         self.inventory.insert(path.to_owned(), digest.clone());
         Ok(digest)
@@ -857,7 +857,7 @@ impl<'a> PackageWriter<'a> {
                     EntryDigest {
                         path,
                         size: bytes,
-                        sha256: format!("{:x}", hash.finalize()),
+                        sha256: crate::digest::hex(hash.finalize()),
                     },
                 );
             }

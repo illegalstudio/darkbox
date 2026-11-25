@@ -31,8 +31,8 @@ pub fn lock_path(path: impl AsRef<Path>) -> Result<PathBuf, Error> {
         .ok_or_else(|| Error::invalid("directory.name", "Library name must be UTF-8"))?
         .to_lowercase();
     Ok(path.parent().unwrap().join(format!(
-        ".darkbox-{:x}.lock",
-        Sha256::digest(name.as_bytes())
+        ".darkbox-{}.lock",
+        crate::digest::hex(Sha256::digest(name.as_bytes()))
     )))
 }
 

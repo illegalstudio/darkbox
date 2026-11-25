@@ -12,6 +12,15 @@ use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
+/// Lowercase hexadecimal digits of a digest.
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 const VERSION: &str = "1.6.0";
 const PROTECTION: &str = "studio.illegal.darkbox.protection";
 const DATABASE: &str = "data/project.sqlite";
@@ -56,11 +65,7 @@ fn reference_implementation_agrees_with_the_corpus() {
             listed.push(file.to_owned());
             let path = directory.join(file);
             let bytes = fs::read(&path).unwrap_or_else(|_| panic!("Missing corpus file: {id}"));
-            assert_eq!(
-                case["sha256"],
-                format!("{:x}", Sha256::digest(&bytes)),
-                "{id}"
-            );
+            assert_eq!(case["sha256"], hex(Sha256::digest(&bytes)), "{id}");
             let report = darkbox::verify(&path);
             assert_eq!(
                 case["expected"],
@@ -849,7 +854,7 @@ fn regenerate_corpus() {
             "section": section,
             "description": description,
             "referenceDiagnostic": diagnostic,
-            "sha256": format!("{:x}", Sha256::digest(&bytes)),
+            "sha256": hex(Sha256::digest(&bytes)),
         }));
     }
     let document = json!({

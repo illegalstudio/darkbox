@@ -851,7 +851,7 @@ impl PackageEditor {
             digest: EntryDigest {
                 path: path.into(),
                 size,
-                sha256: format!("{:x}", hash.finalize()),
+                sha256: crate::digest::hex(hash.finalize()),
             },
         })
     }
@@ -1517,7 +1517,7 @@ pub(crate) fn lock_destination(path: &Path) -> Result<DestinationLock, Error> {
     // Case-fold lock names on every platform so spelling aliases cannot bypass
     // coordination on case-insensitive filesystems. Extra contention is safe.
     let name = path.file_name().unwrap().to_string_lossy().to_lowercase();
-    let hash = format!("{:x}", Sha256::digest(name.as_bytes()));
+    let hash = crate::digest::hex(Sha256::digest(name.as_bytes()));
     let lock_path = path.parent().unwrap().join(format!(".darkbox-{hash}.lock"));
     if let Ok(metadata) = std::fs::symlink_metadata(&lock_path)
         && !metadata.is_file()

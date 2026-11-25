@@ -181,7 +181,7 @@ fn copy_checked(
             .map_err(crate::creation::output_error)?;
         hash.update(&buffer[..count]);
     }
-    if size != expected.size || format!("{:x}", hash.finalize()) != expected.sha256 {
+    if size != expected.size || crate::digest::hex(hash.finalize()) != expected.sha256 {
         return Err(
             Error::invalid("transfer.changed", "Resource changed since verification")
                 .at(&expected.path),
@@ -455,10 +455,9 @@ fn identity(input: &Verified) -> Result<Identity, Error> {
     Ok(Identity {
         package_id: id.into(),
         manifest_sha256: input.files()["manifest.json"].sha256.clone(),
-        inventory_sha256: format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&inventory).unwrap())
-        ),
+        inventory_sha256: crate::digest::hex(Sha256::digest(
+            serde_json::to_vec(&inventory).unwrap(),
+        )),
     })
 }
 fn compatible(base: &Verified, target: &Verified) -> Result<(), Error> {
@@ -714,7 +713,7 @@ fn reconstruct(
         }
         if name == "delta.json"
             && (scan.size != bytes.len() as u64
-                || scan.sha256 != format!("{:x}", Sha256::digest(&bytes)))
+                || scan.sha256 != crate::digest::hex(Sha256::digest(&bytes)))
         {
             return Err(invalid("Delta descriptor changed during verification"));
         }

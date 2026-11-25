@@ -215,6 +215,11 @@ pub fn block_header(block: &[u8]) -> Result<&[u8], Error> {
     Ok(&block[..HEADER])
 }
 
+/// A fixed-size field of a block whose length was already checked.
+fn fixed<const N: usize>(bytes: &[u8]) -> Result<[u8; N], Error> {
+    bytes.try_into().map_err(|_| block_error())
+}
+
 /// Encrypt bytes into one self-describing AES-256-GCM block bound to its context.
 pub fn encrypt_block(
     plaintext: &[u8],
@@ -232,7 +237,7 @@ pub fn encrypt_block(
     let ciphertext = Aes256Gcm::new_from_slice(key)
         .unwrap()
         .encrypt(
-            Nonce::from_slice(&header[8..20]),
+            &Nonce::from(fixed::<12>(&header[8..20])?),
             Payload {
                 msg: plaintext,
                 aad: &aad,
@@ -252,15 +257,15 @@ pub fn decrypt_block(
     let header = block_header(block)?;
     let aad = context.aad(header)?;
     // An in-place zeroizing buffer also clears unauthenticated plaintext on failure.
-    use aes_gcm::aead::AeadInPlace;
+    use aes_gcm::aead::AeadInOut;
     let mut plaintext = Zeroizing::new(block[HEADER..block.len() - 16].to_vec());
     Aes256Gcm::new_from_slice(key)
         .unwrap()
-        .decrypt_in_place_detached(
-            Nonce::from_slice(&header[8..20]),
+        .decrypt_inout_detached(
+            &Nonce::from(fixed::<12>(&header[8..20])?),
             &aad,
-            plaintext.as_mut(),
-            aes_gcm::Tag::from_slice(&block[block.len() - 16..]),
+            plaintext.as_mut_slice().into(),
+            &aes_gcm::Tag::from(fixed::<16>(&block[block.len() - 16..])?),
         )
         .map_err(|_| {
             Error::invalid(
@@ -667,7 +672,7 @@ fn check_block(
                 .and_then(|keys| keys.key(&block_context.key_id));
             let key_identity = key
                 .as_ref()
-                .map(|key| format!("key:{:x}", Sha256::digest(key.as_slice())))
+                .map(|key| format!("key:{}", crate::digest::hex(Sha256::digest(key.as_slice()))))
                 .unwrap_or_else(|| format!("id:{}", block_context.key_id));
             if !nonces.insert((key_identity, nonce)) {
                 report.record(Error::invalid(
@@ -697,7 +702,7 @@ fn check_block(
         .encrypted
         .push(EncryptedContent {
             context: block_context,
-            block_sha256: format!("{:x}", Sha256::digest(bytes)),
+            block_sha256: crate::digest::hex(Sha256::digest(bytes)),
             nonce_hex,
             authentication,
             plaintext_validation: PlaintextValidation::NotPerformed,
