@@ -1521,7 +1521,11 @@ fn background_publication_and_local_edits_share_a_coherent_outbox_snapshot() {
     std::thread::scope(|scope| {
         let publisher = scope.spawn(|| {
             let db = Connection::open(&path).unwrap();
-            db.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+            // Marking a transaction as published takes the write lock, which the
+            // editing loop below reacquires at once. SQLite polls instead of queueing,
+            // so the wait must outlast the whole burst of edits on slow storage.
+            db.busy_timeout(std::time::Duration::from_secs(120))
+                .unwrap();
             for _ in 0..25 {
                 session.publish_pending(&db, &exchange).unwrap();
             }

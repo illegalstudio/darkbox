@@ -312,7 +312,12 @@ operation group. Expensive resource hashing happens outside the SQLite write
 transaction. Before committing, the SDK rechecks the causal revision and retained
 resource identities. A changed revision returns `sync.revision_changed` and requires rebuilding the group.
 The session supports background publication with a separate SQLite connection;
-each publisher freezes its outbox/history view before doing file I/O.
+each publisher freezes its outbox/history view before doing file I/O. Publication
+records each published transaction through that connection, which briefly takes
+the database write lock. SQLite polls for a busy lock instead of queueing, so set
+a busy timeout on the publisher connection that outlasts the longest burst of
+local edits; otherwise `publish_pending` can return `sync.sqlite` with the message
+"database is locked". Publication is safe to repeat after that error.
 
 Application projection, exact immutable transaction bytes, causal history and
 outbox commit together in one authoritative main database. A separate WAL-mode
