@@ -11,8 +11,13 @@ Software versions (the `darkbox` crate and command-line tool) and specification 
 - The cryptographic dependencies are upgraded together: `aes` 0.9, `aes-gcm` 0.11, `sha2` 0.11 and `ed25519-dalek` 3.0. They are internal to the crate, so the public API is unchanged, and the protection test vectors confirm that encrypted blocks, signatures and digests are byte-for-byte the same. `aes-gcm` is built without its operating-system random source, which Darkbox never used: nonces and keys come from the caller.
 - `clap` is updated to 4.6.9 and `jsonschema` to 0.63.
 
+### Added
+
+- The [conformance corpus](conformance/README.md) covers packages protected with the official protection extension and delta transfers, with 16 new cases (64 in total). A case can now list the inputs its verification needs: trusted signer keys, decryption keys or the base edition of a delta. Existing cases and archives are unchanged.
+
 ### Fixed
 
+- A delta payload or copied resource longer than its verified size is reported as invalid (`transfer.changed`), like a shorter one. It was reported as a resource-limit failure, which wrongly suggested that higher limits would accept it.
 - The sync concurrency test that failed intermittently on Windows was a test defect, not a library defect. Its background publisher waited at most five seconds for the database write lock while the main thread edited in a tight loop; SQLite polls for a busy lock instead of queueing, so on slow storage the wait could expire. The test now waits long enough, and the [sync guide](docs/sync.md) explains which busy timeout a background publisher needs.
 
 ### Documentation
