@@ -114,6 +114,25 @@ fn same_cached(a: &Metadata, b: &Metadata) -> bool {
     }
     same(a, b)
 }
+/// A filesystem path below `root` as a protocol path, which always separates
+/// components with `/` whatever the platform uses. `None` when a component is
+/// not UTF-8 and therefore cannot be a canonical protocol path.
+pub(crate) fn protocol_path(root: &Path, path: &Path) -> Result<Option<String>> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| invalid("Sync path escaped its root"))?;
+    let mut parts = Vec::new();
+    for component in relative.components() {
+        let std::path::Component::Normal(name) = component else {
+            return Err(invalid("Sync path escaped its root"));
+        };
+        match name.to_str() {
+            Some(name) => parts.push(name),
+            None => return Ok(None),
+        }
+    }
+    Ok(Some(parts.join("/")))
+}
 pub(crate) fn open_regular(root: &Path, relative: &str, maximum: u64) -> Result<(File, Metadata)> {
     let path = checked_path(root, relative, false)?;
     let before = fs::symlink_metadata(&path).map_err(crate::io_failure)?;
@@ -1119,17 +1138,15 @@ fn collect(
             let entry = entry.map_err(crate::io_failure)?;
             let kind = entry.file_type().map_err(crate::io_failure)?;
             let path = entry.path();
-            let relative = path
-                .strip_prefix(root)
-                .map_err(|_| invalid("Sync path escaped its root"))?;
-            let Some(relative) = relative.to_str() else {
+            let Some(relative) = protocol_path(root, &path)? else {
                 ignored.push(diag(
-                    &relative.to_string_lossy(),
+                    &path.strip_prefix(root).unwrap_or(&path).to_string_lossy(),
                     "sync.ignored",
                     "Non-UTF-8 names cannot be canonical protocol paths",
                 ));
                 continue;
             };
+            let relative = relative.as_str();
             if kind.is_dir() {
                 let parts: Vec<_> = relative.split('/').collect();
                 let canonical = match parts.as_slice() {

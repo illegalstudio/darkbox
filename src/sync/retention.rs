@@ -717,11 +717,10 @@ fn remove_owned_tree(root: &Path, directory: &Path, maximum: usize) -> Result<us
     let mut stack = vec![directory.to_owned()];
     let mut count = 0;
     while let Some(path) = stack.pop() {
-        let relative = path
-            .strip_prefix(root)
+        let relative = super::exchange::protocol_path(root, &path)
             .map_err(|_| invalid("Retention escaped repository"))?
-            .to_str()
             .ok_or_else(|| invalid("Non-UTF-8 generation path"))?;
+        let relative = relative.as_str();
         let checked = super::exchange::checked_path(root, relative, false)?;
         let metadata = fs::symlink_metadata(&checked).map_err(crate::io_failure)?;
         if metadata.file_type().is_symlink() {

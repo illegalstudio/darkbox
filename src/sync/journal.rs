@@ -1410,11 +1410,9 @@ fn add_recovery_resources(
             }
             let entry = entry.map_err(crate::io_failure)?;
             let path = entry.path();
-            let relative = path
-                .strip_prefix(root)
-                .unwrap()
-                .to_str()
+            let relative = super::exchange::protocol_path(root, &path)?
                 .ok_or_else(|| invalid("Recovery resource path"))?;
+            let relative = relative.as_str();
             if relative == PREFIX || relative.starts_with(&format!("{PREFIX}/")) {
                 continue;
             }
