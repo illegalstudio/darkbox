@@ -13,6 +13,7 @@ Software versions (the `darkbox` crate and command-line tool) and specification 
 
 ### Added
 
+- `SyncLimits` has `with_io`, `with_max_history_bytes`, `with_max_transactions` and `with_max_scan_files`, and `SessionOptions` has `with_limits`. They were the only growable option types without builders, found while moving an application to the 2.0 API; assigning the public fields still works.
 - The [conformance corpus](conformance/README.md) covers packages protected with the official protection extension and delta transfers, with 16 new cases (64 in total). A case can now list the inputs its verification needs: trusted signer keys, decryption keys or the base edition of a delta. Existing cases and archives are unchanged.
 
 ### Fixed

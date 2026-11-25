@@ -40,10 +40,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Too many example arguments".into());
     }
     fs::create_dir(&root)?;
-    let mut limits = SyncLimits::default();
     let staging = root.join("staging");
     fs::create_dir(&staging)?;
-    limits.io.staging_directory = Some(staging);
+    let limits =
+        SyncLimits::default().with_io(darkbox::Limits::default().with_staging_directory(staging));
     let objects_a = ObjectStore::open(root.join("objects-a"), limits.clone())?;
     let media = objects_a.put(&mut b"An immutable example attachment".as_slice())?;
     let domain = Domain::generate(notes::protocol(), notes::mapping(), notes::profile())?;
@@ -106,11 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let generation = repository.publish_initial(&checkpoint, &Notes, 100)?;
     let session_options = |label: &str| -> Result<SessionOptions, darkbox::Error> {
-        Ok({
-            let mut options = SessionOptions::new(random_id()?, label);
-            options.limits = limits.clone();
-            options
-        })
+        Ok(SessionOptions::new(random_id()?, label).with_limits(limits.clone()))
     };
     let sa =
         repository.open_owned_session(a, &mut ca, objects_a, session_options("PC A")?, &Notes)?;

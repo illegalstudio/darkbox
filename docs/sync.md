@@ -219,8 +219,8 @@ let session = repository.open_session(
 )?;
 ```
 
-`SessionOptions::new(device_id, label)` uses default `SyncLimits`; assign its
-public `limits` field afterwards to change them. The repository persists the newest observed generation as a high-water witness in the journal. Returning sessions reopen their locally pinned domain, even when its cloud generation has expired, so private recovery remains available. Their old-generation exchanges still refuse publication. Open the local session before using a freshly opened repository handle for maintenance; `open` alone has no access to an existing local journal. The main database must be exactly the domain's declared database inside that
+`SessionOptions::new(device_id, label)` uses default `SyncLimits`; change them
+with `with_limits`, building the limits with the `SyncLimits::default().with_*` methods. The repository persists the newest observed generation as a high-water witness in the journal. Returning sessions reopen their locally pinned domain, even when its cloud generation has expired, so private recovery remains available. Their old-generation exchanges still refuse publication. Open the local session before using a freshly opened repository handle for maintenance; `open` alone has no access to an existing local journal. The main database must be exactly the domain's declared database inside that
 working library. `SyncSession` borrows the library guard exclusively. It creates
 a fresh replica incarnation on every opening, including after crash, backup
 restore or copied installation. A persistent device ID/label is display metadata,
