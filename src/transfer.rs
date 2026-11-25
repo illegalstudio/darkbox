@@ -158,6 +158,9 @@ fn copy_checked(
     limits: &Limits,
     end: Instant,
 ) -> Result<(), Error> {
+    let changed = || {
+        Error::invalid("transfer.changed", "Resource changed since verification").at(&expected.path)
+    };
     let mut size = 0u64;
     let mut hash = Sha256::new();
     let mut buffer = [0; 65_536];
@@ -172,20 +175,20 @@ fn copy_checked(
         }
         size = size
             .checked_add(count as u64)
-            .filter(|size| *size <= limits.max_entry_bytes && *size <= expected.size)
-            .ok_or_else(|| {
-                Error::limit("Resource grew beyond its verified size or the entry size limit")
-            })?;
+            .filter(|size| *size <= limits.max_entry_bytes)
+            .ok_or_else(|| Error::limit("Resource exceeds the entry size limit"))?;
+        // More bytes than verified is a changed resource, not a reader limit:
+        // raising the limits would not make it acceptable.
+        if size > expected.size {
+            return Err(changed());
+        }
         output
             .write_all(&buffer[..count])
             .map_err(crate::creation::output_error)?;
         hash.update(&buffer[..count]);
     }
-    if size != expected.size || format!("{:x}", hash.finalize()) != expected.sha256 {
-        return Err(
-            Error::invalid("transfer.changed", "Resource changed since verification")
-                .at(&expected.path),
-        );
+    if size != expected.size || crate::digest::hex(hash.finalize()) != expected.sha256 {
+        return Err(changed());
     }
     Ok(())
 }
@@ -455,10 +458,9 @@ fn identity(input: &Verified) -> Result<Identity, Error> {
     Ok(Identity {
         package_id: id.into(),
         manifest_sha256: input.files()["manifest.json"].sha256.clone(),
-        inventory_sha256: format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&inventory).unwrap())
-        ),
+        inventory_sha256: crate::digest::hex(Sha256::digest(
+            serde_json::to_vec(&inventory).unwrap(),
+        )),
     })
 }
 fn compatible(base: &Verified, target: &Verified) -> Result<(), Error> {
@@ -714,7 +716,7 @@ fn reconstruct(
         }
         if name == "delta.json"
             && (scan.size != bytes.len() as u64
-                || scan.sha256 != format!("{:x}", Sha256::digest(&bytes)))
+                || scan.sha256 != crate::digest::hex(Sha256::digest(&bytes)))
         {
             return Err(invalid("Delta descriptor changed during verification"));
         }

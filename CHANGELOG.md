@@ -8,6 +8,22 @@ Software versions (the `darkbox` crate and command-line tool) and specification 
 
 - Specification versions 1.0.0 to 1.4.0 are read-only for new packages. Every version is still read and verified, and existing packages of those versions are still saved in place or as a copy. `PackageWriter`, `PackageEditor` and `DirectoryLibrary::initialize` refuse to start a new package in them with the unsupported error `version.retired`. New packages use 1.6.0, or 1.5.0 for existing sync 1.0.0 domains. This changes behavior for callers that created packages in the retired versions; `VerificationOptions::with_retired_versions(true)` restores it for package writers.
 - `versions.json` has a `writable` flag per version, `SpecificationVersion` exposes it, and `darkbox versions` marks read-only versions.
+- The cryptographic dependencies are upgraded together: `aes` 0.9, `aes-gcm` 0.11, `sha2` 0.11 and `ed25519-dalek` 3.0. They are internal to the crate, so the public API is unchanged, and the protection test vectors confirm that encrypted blocks, signatures and digests are byte-for-byte the same. `aes-gcm` is built without its operating-system random source, which Darkbox never used: nonces and keys come from the caller.
+- `clap` is updated to 4.6.9 and `jsonschema` to 0.63.
+
+### Added
+
+- `SyncLimits` has `with_io`, `with_max_history_bytes`, `with_max_transactions` and `with_max_scan_files`, and `SessionOptions` has `with_limits`. They were the only growable option types without builders, found while moving an application to the 2.0 API; assigning the public fields still works.
+- The [conformance corpus](conformance/README.md) covers packages protected with the official protection extension and delta transfers, with 16 new cases (64 in total). A case can now list the inputs its verification needs: trusted signer keys, decryption keys or the base edition of a delta. Existing cases and archives are unchanged.
+
+### Fixed
+
+- A delta payload or copied resource longer than its verified size is reported as invalid (`transfer.changed`), like a shorter one. It was reported as a resource-limit failure, which wrongly suggested that higher limits would accept it.
+- The sync concurrency test that failed intermittently on Windows was a test defect, not a library defect. Its background publisher waited at most five seconds for the database write lock while the main thread edited in a tight loop; SQLite polls for a busy lock instead of queueing, so on slow storage the wait could expire. The test now waits long enough, and the [sync guide](docs/sync.md) explains which busy timeout a background publisher needs. The Windows job in CI now blocks; Windows is still not a release target.
+
+### Documentation
+
+- The [profile guide](docs/profiles.md) recommends durable formats for application content: UTF-8 plain text or Markdown for prose, documented text-based markup for rich text, JSON or columns for structured values, and openly specified media formats. These are recommendations for profile authors; the common specification still does not restrict resource formats.
 
 ## Software 2.0.0 (2026-11-25)
 

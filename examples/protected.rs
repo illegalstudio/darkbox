@@ -15,6 +15,15 @@ use std::path::{Path, PathBuf};
 use zeroize::Zeroizing;
 use zip::{ZipWriter, write::SimpleFileOptions};
 
+/// Lowercase hexadecimal digits of a digest.
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 const PACKAGE: &str = "00112233445566778899aabbccddeeff";
 const TEST_KEY: [u8; 32] = [42; 32];
 
@@ -170,7 +179,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"path":"extensions","description":"Extension resources"}),
         json!({"path":format!("extensions/{NAMESPACE}"),"description":"Detached signature"}),
     ]);
-    let inventory:Vec<_>=files.iter().map(|(path,bytes)| json!({"path":path,"size":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes))})).collect();
+    let inventory:Vec<_>=files.iter().map(|(path,bytes)| json!({"path":path,"size":bytes.len(),"sha256":hex(Sha256::digest(bytes))})).collect();
     manifest["extensions"][NAMESPACE] = json!({"version":"1.0.0","required":true,"data":{"packageId":PACKAGE,
         "signature":{"algorithm":"Ed25519","signerId":"test-signer","path":SIGNATURE_PATH},"inventory":inventory,
         "files":[{"path":"assets/private.bin","keyId":"test-key"}],

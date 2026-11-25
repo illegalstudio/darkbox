@@ -100,7 +100,7 @@ pub fn random_id() -> Result<String> {
 
 /// Lowercase hexadecimal SHA-256 of bytes.
 pub fn sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    crate::digest::hex(Sha256::digest(bytes))
 }
 pub(crate) fn hex(s: &str, length: usize) -> bool {
     s.len() == length

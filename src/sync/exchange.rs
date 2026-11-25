@@ -359,7 +359,7 @@ impl ObjectStore {
             temp.write_all(&buffer[..n]).map_err(crate::io_failure)?;
         }
         let blob = Blob {
-            sha256: format!("{:x}", hash.finalize()),
+            sha256: crate::digest::hex(hash.finalize()),
             size: Counter(size),
         };
         if expected.is_some_and(|b| b != &blob) {
@@ -525,7 +525,7 @@ fn verify_blob(root: &Path, blob: &Blob, limits: &SyncLimits) -> Result<Option<M
         hash.update(&buffer[..n]);
     }
     let valid = size == blob.size.0
-        && format!("{:x}", hash.finalize()) == blob.sha256
+        && crate::digest::hex(hash.finalize()) == blob.sha256
         && same(&before, &file.metadata().map_err(crate::io_failure)?)
         && same(
             &before,

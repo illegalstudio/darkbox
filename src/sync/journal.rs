@@ -351,6 +351,11 @@ impl SessionOptions {
             limits: SyncLimits::default(),
         }
     }
+    /// Replace the limits in force.
+    pub fn with_limits(mut self, limits: SyncLimits) -> Self {
+        self.limits = limits;
+        self
+    }
 }
 /// Allocated under the same SQLite write transaction as the edit.
 #[non_exhaustive]

@@ -219,8 +219,8 @@ let session = repository.open_session(
 )?;
 ```
 
-`SessionOptions::new(device_id, label)` uses default `SyncLimits`; assign its
-public `limits` field afterwards to change them. The repository persists the newest observed generation as a high-water witness in the journal. Returning sessions reopen their locally pinned domain, even when its cloud generation has expired, so private recovery remains available. Their old-generation exchanges still refuse publication. Open the local session before using a freshly opened repository handle for maintenance; `open` alone has no access to an existing local journal. The main database must be exactly the domain's declared database inside that
+`SessionOptions::new(device_id, label)` uses default `SyncLimits`; change them
+with `with_limits`, building the limits with the `SyncLimits::default().with_*` methods. The repository persists the newest observed generation as a high-water witness in the journal. Returning sessions reopen their locally pinned domain, even when its cloud generation has expired, so private recovery remains available. Their old-generation exchanges still refuse publication. Open the local session before using a freshly opened repository handle for maintenance; `open` alone has no access to an existing local journal. The main database must be exactly the domain's declared database inside that
 working library. `SyncSession` borrows the library guard exclusively. It creates
 a fresh replica incarnation on every opening, including after crash, backup
 restore or copied installation. A persistent device ID/label is display metadata,
@@ -312,7 +312,12 @@ operation group. Expensive resource hashing happens outside the SQLite write
 transaction. Before committing, the SDK rechecks the causal revision and retained
 resource identities. A changed revision returns `sync.revision_changed` and requires rebuilding the group.
 The session supports background publication with a separate SQLite connection;
-each publisher freezes its outbox/history view before doing file I/O.
+each publisher freezes its outbox/history view before doing file I/O. Publication
+records each published transaction through that connection, which briefly takes
+the database write lock. SQLite polls for a busy lock instead of queueing, so set
+a busy timeout on the publisher connection that outlasts the longest burst of
+local edits; otherwise `publish_pending` can return `sync.sqlite` with the message
+"database is locked". Publication is safe to repeat after that error.
 
 Application projection, exact immutable transaction bytes, causal history and
 outbox commit together in one authoritative main database. A separate WAL-mode

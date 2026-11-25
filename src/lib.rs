@@ -7,6 +7,7 @@
 mod analysis;
 mod container;
 mod creation;
+mod digest;
 pub mod extensions;
 mod json;
 mod live;

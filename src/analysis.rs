@@ -887,7 +887,7 @@ pub(crate) fn stream(
     Ok(Scan {
         size,
         crc: crc.finalize(),
-        sha256: format!("{:x}", sha.finalize()),
+        sha256: crate::digest::hex(sha.finalize()),
         prefix,
         bytes,
     })

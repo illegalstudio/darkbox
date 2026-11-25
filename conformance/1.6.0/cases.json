@@ -431,12 +431,220 @@
       "referenceDiagnostic": "extension.required",
       "section": "9",
       "sha256": "e4989dcad0f6a30ced8f4cc8518236098c3b1f851ca1a0552e7fda5a5bf5a85c"
+    },
+    {
+      "description": "A sealed protected package verified with its trusted signer key and its decryption key: signature, inventory and every encrypted block pass.",
+      "expected": "valid",
+      "file": "valid-protected.zip",
+      "id": "valid-protected",
+      "inputs": {
+        "decryptionKeys": {
+          "corpus-key": "2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a"
+        },
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": null,
+      "section": "9",
+      "sha256": "65360cc841c6075edb638e098696be69d229d7c5db34e4d3d941d3a62b3681c2"
+    },
+    {
+      "description": "The same package verified with the trusted signer key only: signature and inventory pass, and encrypted blocks stay unauthenticated without making the package invalid.",
+      "expected": "valid",
+      "file": "valid-protected-without-decryption-key.zip",
+      "id": "valid-protected-without-decryption-key",
+      "inputs": {
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": null,
+      "section": "9",
+      "sha256": "65360cc841c6075edb638e098696be69d229d7c5db34e4d3d941d3a62b3681c2"
+    },
+    {
+      "description": "The same package verified without any trusted signer key: its signature cannot be evaluated, which is not corruption.",
+      "expected": "unsupported",
+      "file": "unsupported-protected-unknown-signer.zip",
+      "id": "unsupported-protected-unknown-signer",
+      "referenceDiagnostic": "protection.signer_unknown",
+      "section": "9",
+      "sha256": "65360cc841c6075edb638e098696be69d229d7c5db34e4d3d941d3a62b3681c2"
+    },
+    {
+      "description": "The same package verified with a decryption key that is not the one used to encrypt it.",
+      "expected": "invalid",
+      "file": "invalid-protected-wrong-decryption-key.zip",
+      "id": "invalid-protected-wrong-decryption-key",
+      "inputs": {
+        "decryptionKeys": {
+          "corpus-key": "0909090909090909090909090909090909090909090909090909090909090909"
+        },
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": "protection.authentication",
+      "section": "9",
+      "sha256": "65360cc841c6075edb638e098696be69d229d7c5db34e4d3d941d3a62b3681c2"
+    },
+    {
+      "description": "One space is appended to manifest.json after signing.",
+      "expected": "invalid",
+      "file": "invalid-protected-manifest-changed.zip",
+      "id": "invalid-protected-manifest-changed",
+      "inputs": {
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": "protection.signature_invalid",
+      "section": "9",
+      "sha256": "6f5802cf4eec9572701946811d45ba2b8593424b1e70da3eb7b3b25ae5fb0883"
+    },
+    {
+      "description": "The detached signature named by the manifest is absent.",
+      "expected": "invalid",
+      "file": "invalid-protected-signature-missing.zip",
+      "id": "invalid-protected-signature-missing",
+      "inputs": {
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": "protection.signature_missing",
+      "section": "9",
+      "sha256": "06f9374d4247071602bf7ebb25821a90dc4b782b05c35d5aa611e1aebdd32b4f"
+    },
+    {
+      "description": "A public attachment is modified after sealing: the signature still verifies, the signed inventory does not.",
+      "expected": "invalid",
+      "file": "invalid-protected-resource-changed.zip",
+      "id": "invalid-protected-resource-changed",
+      "inputs": {
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": "protection.inventory",
+      "section": "9",
+      "sha256": "0376c98de121afe6ff8dd20044e614f6abdc0110c2c1ef3806ce3e3c7febc468"
+    },
+    {
+      "description": "A file absent from the signed inventory is added after sealing.",
+      "expected": "invalid",
+      "file": "invalid-protected-resource-added.zip",
+      "id": "invalid-protected-resource-added",
+      "inputs": {
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": "protection.inventory",
+      "section": "9",
+      "sha256": "3fe3f4ddd08fc358d64043177da042b5902e6f90a0e5cab554d781f4022d1a4a"
+    },
+    {
+      "description": "Record n2 stores a block encrypted for record n1. The package is sealed and signed consistently, so only block authentication against its context detects the relocation.",
+      "expected": "invalid",
+      "file": "invalid-protected-relocated-block.zip",
+      "id": "invalid-protected-relocated-block",
+      "inputs": {
+        "decryptionKeys": {
+          "corpus-key": "2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a"
+        },
+        "trustedSigners": {
+          "corpus-signer": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        }
+      },
+      "referenceDiagnostic": "protection.authentication",
+      "section": "9",
+      "sha256": "990046364982b40b1bc9b34c950e11a04fc5d1060f1d3212ad2d01ec81ec931c"
+    },
+    {
+      "description": "A package that declares the optional library identity packageId. It is the base edition of the delta cases.",
+      "expected": "valid",
+      "file": "valid-package-identity.zip",
+      "id": "valid-package-identity",
+      "referenceDiagnostic": null,
+      "section": "11",
+      "sha256": "4bda0d5db00f1fb0309cbaae740f0709ef372c655f6d02e23a4e49dff09b74c1"
+    },
+    {
+      "description": "A delta that replaces the database, adds one file and removes another. Applied to its base it reconstructs a conforming target edition.",
+      "expected": "valid",
+      "file": "valid-delta.zip",
+      "id": "valid-delta",
+      "inputs": {
+        "base": "valid-package-identity.zip"
+      },
+      "referenceDiagnostic": null,
+      "section": "12",
+      "sha256": "4b2a41575c800e3c4aafe99e56aeb98b73edc8445b3c54e6f1c9235b2f9143c8"
+    },
+    {
+      "description": "The same delta verified as if it were a complete package: a delta is a transfer envelope, not a standalone project.",
+      "expected": "invalid",
+      "file": "invalid-delta-without-base.zip",
+      "id": "invalid-delta-without-base",
+      "referenceDiagnostic": "manifest.missing",
+      "section": "12",
+      "sha256": "4b2a41575c800e3c4aafe99e56aeb98b73edc8445b3c54e6f1c9235b2f9143c8"
+    },
+    {
+      "description": "The same delta applied to a conforming package that is not its base edition.",
+      "expected": "invalid",
+      "file": "invalid-delta-other-base.zip",
+      "id": "invalid-delta-other-base",
+      "inputs": {
+        "base": "valid-minimal.zip"
+      },
+      "referenceDiagnostic": "delta.invalid",
+      "section": "12",
+      "sha256": "4b2a41575c800e3c4aafe99e56aeb98b73edc8445b3c54e6f1c9235b2f9143c8"
+    },
+    {
+      "description": "One changed-file payload has an extra byte, with a correct ZIP checksum: the reconstructed file no longer matches targetFiles.",
+      "expected": "invalid",
+      "file": "invalid-delta-changed-payload.zip",
+      "id": "invalid-delta-changed-payload",
+      "inputs": {
+        "base": "valid-package-identity.zip"
+      },
+      "referenceDiagnostic": "transfer.changed",
+      "section": "12",
+      "sha256": "2a0601afbc74251ade028372dde225dbebab09c54a1770d90d5c0a03b3ba75fe"
+    },
+    {
+      "description": "The envelope contains a regular file that is neither delta.json nor an indexed payload.",
+      "expected": "invalid",
+      "file": "invalid-delta-extra-entry.zip",
+      "id": "invalid-delta-extra-entry",
+      "inputs": {
+        "base": "valid-package-identity.zip"
+      },
+      "referenceDiagnostic": "delta.invalid",
+      "section": "12",
+      "sha256": "19a0a4cbbe3bec2590a1e19b9ec9e5a539133037ea7408c8ec61c73c14e72ce5"
+    },
+    {
+      "description": "delta.json has a member the envelope version does not define.",
+      "expected": "invalid",
+      "file": "invalid-delta-unknown-member.zip",
+      "id": "invalid-delta-unknown-member",
+      "inputs": {
+        "base": "valid-package-identity.zip"
+      },
+      "referenceDiagnostic": "delta.invalid",
+      "section": "12",
+      "sha256": "6fa48b80fa5608e6ff03315eb7ac7583804f7952d885b1c740c46d216775d642"
     }
   ],
   "darkbox": "1.6.0",
   "outcomes": {
     "invalid": "A rule of the declared common version is violated or data is damaged.",
-    "unsupported": "The package needs a version or extension the reader does not implement. This is not corruption.",
-    "valid": "Every common machine-checkable rule passes."
+    "unsupported": "The package needs a version or extension the reader does not implement, or names a signer for which the case supplies no trusted key. This is not corruption.",
+    "valid": "Every common machine-checkable rule passes, with the rules of declared official extensions that the given inputs allow to check."
   }
 }

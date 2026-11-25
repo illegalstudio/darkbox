@@ -13,6 +13,15 @@ use std::process::Command;
 use tempfile::TempDir;
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
+/// Lowercase hexadecimal digits of a digest.
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 struct Fixture {
     dir: TempDir,
     files: BTreeMap<String, Vec<u8>>,
@@ -360,7 +369,7 @@ fn forged_archive_catalog_cannot_authorize_modified_documentation() {
     for entry in catalog["files"].as_array_mut().unwrap() {
         if entry["path"] == "README.md" {
             entry["size"] = json!(bytes.len());
-            entry["sha256"] = json!(format!("{:x}", Sha256::digest(bytes)));
+            entry["sha256"] = json!(hex(Sha256::digest(bytes)));
         }
     }
     fixture.files.insert(
@@ -911,7 +920,7 @@ fn extension_bundle_catalogs_match_their_schema_and_sources() {
             for file in catalog["files"].as_array().unwrap() {
                 let bytes = &files[file["path"].as_str().unwrap()];
                 assert_eq!(file["size"], bytes.len());
-                assert_eq!(file["sha256"], format!("{:x}", Sha256::digest(bytes)));
+                assert_eq!(file["sha256"], hex(Sha256::digest(bytes)));
             }
             bundles += 1;
         }

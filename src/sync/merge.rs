@@ -28,6 +28,28 @@ impl Default for SyncLimits {
         }
     }
 }
+impl SyncLimits {
+    /// Replace the limits for package and file operations.
+    pub fn with_io(mut self, io: crate::Limits) -> Self {
+        self.io = io;
+        self
+    }
+    /// Set the largest accepted history, in bytes.
+    pub fn with_max_history_bytes(mut self, bytes: u64) -> Self {
+        self.max_history_bytes = bytes;
+        self
+    }
+    /// Set the largest accepted number of transactions.
+    pub fn with_max_transactions(mut self, transactions: usize) -> Self {
+        self.max_transactions = transactions;
+        self
+    }
+    /// Set the largest number of files examined by one scan.
+    pub fn with_max_scan_files(mut self, files: usize) -> Self {
+        self.max_scan_files = files;
+        self
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

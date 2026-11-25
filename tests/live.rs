@@ -7,6 +7,15 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, fs, io::Read, path::Path};
 
+/// Lowercase hexadecimal digits of a digest.
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 const DB: &str = "data/library.sqlite";
 struct Fixture {
     dir: tempfile::TempDir,
@@ -63,7 +72,7 @@ impl Fixture {
 struct Cache;
 impl TrustedDigests for Cache {
     fn sha256(&self, path: &str, _: u64) -> Option<String> {
-        (path == "media/item.mp4").then(|| format!("{:x}", Sha256::digest(b"immutable media")))
+        (path == "media/item.mp4").then(|| hex(Sha256::digest(b"immutable media")))
     }
 }
 fn assert_passed(path: &Path) {

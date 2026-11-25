@@ -4,6 +4,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Lowercase hexadecimal digits of a digest.
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 const CATALOG: &str = "docs/darkbox/bundle.json";
 
 fn collect(
@@ -137,7 +146,7 @@ fn extension_bundle(root: &Path, row: &Value) -> String {
         assert_ne!(path, catalog_path, "The catalog excludes itself");
         let source = files.get(path).expect("Unknown extension catalog path");
         let bytes = fs::read(source).unwrap();
-        let digest = format!("{:x}", Sha256::digest(&bytes));
+        let digest = hex(Sha256::digest(&bytes));
         assert_eq!(entry["size"].as_u64(), Some(bytes.len() as u64));
         assert_eq!(
             entry["sha256"], digest,
@@ -147,7 +156,7 @@ fn extension_bundle(root: &Path, row: &Value) -> String {
     }
     // The catalog is compared with the embedded reference like any other file.
     let bytes = fs::read(&catalog_source).unwrap();
-    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let digest = hex(Sha256::digest(&bytes));
     generated.push_str(&format!("CanonicalFile {{ path: {catalog_path:?}, bytes: include_bytes!({catalog_source:?}), sha256: {digest:?} }},\n"));
     let folders: Vec<_> = folders.iter().map(|folder| format!("{folder:?}")).collect();
     format!(
@@ -227,7 +236,7 @@ fn main() {
             assert!(seen.insert(path), "Duplicate catalog path");
             let source = files.get(path).expect("Unknown catalog path");
             let bytes = fs::read(source).unwrap();
-            let digest = format!("{:x}", Sha256::digest(&bytes));
+            let digest = hex(Sha256::digest(&bytes));
             assert_eq!(
                 entry["size"].as_u64(),
                 Some(bytes.len() as u64),

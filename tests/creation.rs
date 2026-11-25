@@ -16,6 +16,15 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use zeroize::Zeroizing;
 
+/// Lowercase hexadecimal digits of a digest.
+fn hex(bytes: impl AsRef<[u8]>) -> String {
+    bytes
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 const KEY: [u8; 32] = [42; 32];
 const PACKAGE: &str = "00112233445566778899aabbccddeeff";
 const DATABASE: &str = "data/project.sqlite";
@@ -250,7 +259,7 @@ fn streams_paths_and_lazy_readers_with_automatic_canonical_bundles() {
         for _ in 0..512 {
             expected.update([0x5a; 32768]);
         }
-        let expected_hash = format!("{:x}", expected.finalize());
+        let expected_hash = hex(expected.finalize());
         assert_eq!(entry.sha256, expected_hash);
         let report = writer.finish().unwrap();
         assert_eq!(report.status, Status::Passed);
@@ -259,7 +268,7 @@ fn streams_paths_and_lazy_readers_with_automatic_canonical_bundles() {
         let mut entry = archive.by_name("assets/large.bin").unwrap();
         let mut hash = Sha256::new();
         io::copy(&mut entry, &mut HashWriter(&mut hash)).unwrap();
-        assert_eq!(format!("{:x}", hash.finalize()), expected_hash);
+        assert_eq!(hex(hash.finalize()), expected_hash);
         fixture.assert_clean();
     }
 }
@@ -333,7 +342,7 @@ fn protected_creation_signs_exact_final_manifest_and_inventories_every_file() {
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).unwrap();
         assert_eq!(expected.size, bytes.len() as u64);
-        assert_eq!(expected.sha256, format!("{:x}", Sha256::digest(bytes)));
+        assert_eq!(expected.sha256, hex(Sha256::digest(bytes)));
     }
     fixture.assert_clean();
 }

@@ -24,6 +24,19 @@ A version-specific validator should be accessible without running the applicatio
 
 The [official protection extension](../extensions/studio.illegal.darkbox.protection/1.0.0/docs/darkbox/protection/1.0.0.md) keeps public columns and documentation readable while encrypting selected BLOB values and individual attachments. Producers encrypt before inserting into SQLite. Introducing protected representations changes application data conventions and requires the profile owner's compatibility/version decision. Keys, license/password policy and signer trust belong to the application; generic verification authenticates bytes and context, then leaves plaintext type and meaning validation to the profile.
 
+## Choosing durable formats
+
+The common specification fixes the container, the manifest, the SQLite snapshots and the documentation. It does not restrict the formats of resource files or of the values stored in SQLite columns: a package is conforming whether an attachment is plain text or an undocumented binary blob. Long-term readability of the content therefore depends on the choices a profile makes. The following recommendations are guidance for profile authors, not conformance requirements.
+
+- Store text as UTF-8 in SQLite `TEXT` columns or in plain text files. Prefer plain text (`.txt`) or Markdown (`.md`) for prose; both remain readable with any editor, without the application.
+- Represent rich text with a documented, text-based markup (Markdown, HTML or a JSON structure described in the profile) instead of a serialized in-memory object or a word-processor binary format.
+- Store structured values as columns where possible, or as JSON with documented fields. Avoid language-specific serialization formats, which tie the data to one runtime and often to one version of it.
+- Prefer openly specified, widely implemented formats for media: PNG, JPEG or WebP for images, SVG for vector graphics, PDF for fixed-layout documents, FLAC, WAV, Opus or AAC in standard containers for audio, and common codecs in MP4, WebM or Matroska for video.
+- Do not compress or encode a text value before storing it unless the profile documents the exact algorithm and parameters; the ZIP container already compresses entries.
+- Record the media type of every resource whose format is not implied by the profile, so that a generic tool can identify it.
+
+When an application-specific or proprietary format cannot be avoided, the profile must still satisfy the rule above: document its structure in the archive, precisely enough to read the data without the original application. If that is impractical, store a readable rendition next to the original (for example extracted text or a rendered image) and define which of the two is authoritative.
+
 ## Illustrative profiles
 
 These profiles are fictional examples, not reconstructions of existing application formats. Their schemas, resource conventions and versions are not common Darkbox requirements.
