@@ -29,7 +29,7 @@ pub(crate) struct Entry<'a> {
     pub size: u64,
     pub compressed: u64,
     pub crc: Option<u32>,
-    pub compression: &'static str,
+    pub compression: crate::Compression,
 }
 
 impl Source {
@@ -239,7 +239,7 @@ impl Source {
         let length = file.metadata().map_err(crate::io_failure)?.len();
         if length > limits.max_archive_bytes {
             return Err(Error::limit(
-                "Compressed archive exceeds --max-archive-bytes",
+                "Compressed archive exceeds the archive size limit",
             ));
         }
         let directory = container::preflight(&mut file, length, limits, deadline)?;
@@ -294,8 +294,8 @@ impl Source {
                     compressed: file.compressed_size(),
                     crc: Some(file.crc32()),
                     compression: match file.compression() {
-                        CompressionMethod::Stored => "store",
-                        CompressionMethod::Deflated => "deflate",
+                        CompressionMethod::Stored => crate::Compression::Store,
+                        CompressionMethod::Deflated => crate::Compression::Deflate,
                         _ => {
                             return Err(Error::invalid(
                                 "zip.compression",
@@ -327,7 +327,7 @@ impl Source {
                         size: 0,
                         compressed: 0,
                         crc: None,
-                        compression: "none",
+                        compression: crate::Compression::None,
                     });
                 }
                 if !metadata.is_file() || metadata.len() != *size {
@@ -353,7 +353,7 @@ impl Source {
                     size: *size,
                     compressed: *size,
                     crc: None,
-                    compression: "none",
+                    compression: crate::Compression::None,
                 })
             }
         }
@@ -379,7 +379,9 @@ fn walk(
     for item in fs::read_dir(directory).map_err(crate::io_failure)? {
         container::check_deadline(deadline)?;
         if budget.remaining == 0 {
-            return Err(Error::limit("Directory entry count exceeds --max-entries"));
+            return Err(Error::limit(
+                "Directory has more entries than the configured limit",
+            ));
         }
         budget.remaining -= 1;
         children.push(item.map_err(crate::io_failure)?);
@@ -388,7 +390,9 @@ fn walk(
     for item in children {
         container::check_deadline(deadline)?;
         if entries.len() >= limits.max_entries {
-            return Err(Error::limit("Directory entry count exceeds --max-entries"));
+            return Err(Error::limit(
+                "Directory has more entries than the configured limit",
+            ));
         }
         let path = item.path();
         let name = path
@@ -417,13 +421,13 @@ fn walk(
         } else {
             let size = item.metadata().map_err(crate::io_failure)?.len();
             if size > limits.max_entry_bytes {
-                return Err(Error::limit("Directory file exceeds --max-entry-bytes").at(name));
+                return Err(Error::limit("Directory file exceeds the entry size limit").at(name));
             }
             budget.total = budget
                 .total
                 .checked_add(size)
                 .filter(|sum| *sum <= limits.max_total_bytes)
-                .ok_or_else(|| Error::limit("Directory size exceeds --max-total-bytes"))?;
+                .ok_or_else(|| Error::limit("Directory size exceeds the total size limit"))?;
             entries.push((name, size));
         }
     }

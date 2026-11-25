@@ -2,11 +2,13 @@ use super::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Largest accepted compact baseline, in bytes.
 pub const MAX_BASELINE_BYTES: usize = 64 * 1024 * 1024;
 
 /// A root-bound generation seed. Historical transactions are deliberately excluded.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Baseline {
     pub kind: String,
     pub protocol_version: String,
@@ -162,7 +164,7 @@ impl Baseline {
 
         Ok(Self {
             kind: "darkbox-sync-baseline".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: state.protocol_version.clone(),
             source_root_sha256: state.root_sha256.clone(),
             source_frontier: state.frontier.clone(),
             records,
@@ -283,7 +285,7 @@ impl Baseline {
         }
         let state = LogicalState {
             kind: "darkbox-sync-state".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: self.protocol_version.clone(),
             sync_id: "0".repeat(32),
             root_sha256: self.source_root_sha256.clone(),
             frontier: self.source_frontier.clone(),

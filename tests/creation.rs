@@ -77,7 +77,8 @@ impl Fixture {
             .tempdir()
             .unwrap();
         let mut manifest: Value =
-            serde_json::from_slice(include_bytes!("../examples/notebook.manifest.json")).unwrap();
+            serde_json::from_slice(include_bytes!("fixtures/1.1.0/notebook.manifest.json"))
+                .unwrap();
         manifest["application"] = json!({"id":"org.example.streaming","formatVersion":"1","profilePath":"docs/profile.md"});
         manifest["databases"][0]["userVersion"] = json!(1);
         manifest["databases"][0]["tables"] =
@@ -147,10 +148,14 @@ impl Fixture {
         }
     }
     fn options(&self, keyed: bool) -> VerificationOptions<'_> {
-        VerificationOptions {
-            decryption_keys: if keyed { Some(&self.keys) } else { None },
-            trusted_signers: BTreeMap::from([("test-signer".into(), self.signing.public_key())]),
-            ..Default::default()
+        {
+            let mut value =
+                VerificationOptions::default().with_trusted_signers(BTreeMap::from([(
+                    "test-signer".into(),
+                    self.signing.public_key(),
+                )]));
+            value.decryption_keys = if keyed { Some(&self.keys) } else { None };
+            value
         }
     }
     fn publish(
@@ -313,12 +318,15 @@ fn protected_creation_signs_exact_final_manifest_and_inventories_every_file() {
     assert!(inventory.windows(2).all(|pair| pair[0].path < pair[1].path));
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).unwrap();
-        if entry.is_dir() || entry.name() == "manifest.json" || entry.name() == SIGNATURE_PATH {
+        if entry.is_dir()
+            || entry.name().unwrap() == "manifest.json"
+            || entry.name().unwrap() == SIGNATURE_PATH
+        {
             continue;
         }
         let expected = inventory
             .iter()
-            .find(|record| record.path == entry.name())
+            .find(|record| record.path == entry.name().unwrap())
             .unwrap();
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).unwrap();
@@ -503,10 +511,7 @@ fn limits_reserved_names_collisions_and_ignored_errors_never_publish() {
         assert!(!path.exists());
         fixture.assert_clean();
     }
-    let limits = Limits {
-        max_entry_bytes: 256 * 1024,
-        ..Limits::default()
-    };
+    let limits = Limits::default().with_max_entry_bytes(256 * 1024);
     let path = fixture.output();
     let mut writer =
         PackageWriter::new(&path, fixture.manifest.clone(), limits, &options, None).unwrap();
@@ -722,26 +727,11 @@ fn archive_metadata_total_entry_and_time_budgets_are_enforced() {
     let options = fixture.options(false);
     let path = fixture.output();
     for limits in [
-        Limits {
-            max_archive_bytes: 1,
-            ..Limits::default()
-        },
-        Limits {
-            max_metadata_bytes: 1,
-            ..Limits::default()
-        },
-        Limits {
-            max_total_bytes: 1,
-            ..Limits::default()
-        },
-        Limits {
-            max_entries: 1,
-            ..Limits::default()
-        },
-        Limits {
-            timeout_seconds: 0,
-            ..Limits::default()
-        },
+        Limits::default().with_max_archive_bytes(1),
+        Limits::default().with_max_metadata_bytes(1),
+        Limits::default().with_max_total_bytes(1),
+        Limits::default().with_max_entries(1),
+        Limits::default().with_timeout_seconds(0),
     ] {
         let error = PackageWriter::new(&path, fixture.manifest.clone(), limits, &options, None)
             .err()
@@ -762,10 +752,7 @@ fn archive_metadata_total_entry_and_time_budgets_are_enforced() {
             Ok(buffer.len())
         }
     }
-    let limits = Limits {
-        max_archive_bytes: 512 * 1024,
-        ..Limits::default()
-    };
+    let limits = Limits::default().with_max_archive_bytes(512 * 1024);
     let mut writer =
         PackageWriter::new(&path, fixture.manifest.clone(), limits, &options, None).unwrap();
     assert_eq!(
@@ -777,10 +764,7 @@ fn archive_metadata_total_entry_and_time_budgets_are_enforced() {
     );
     assert!(writer.finish().is_err());
     fixture.assert_clean();
-    let limits = Limits {
-        max_metadata_bytes: 20_000,
-        ..Limits::default()
-    };
+    let limits = Limits::default().with_max_metadata_bytes(20_000);
     let protected = Fixture::new(true);
     let options = protected.options(true);
     let path = protected.output();
@@ -817,10 +801,7 @@ fn archive_metadata_total_entry_and_time_budgets_are_enforced() {
     let mut writer = PackageWriter::new(
         &path,
         fixture.manifest.clone(),
-        Limits {
-            timeout_seconds: 1,
-            ..Limits::default()
-        },
+        Limits::default().with_timeout_seconds(1),
         &options,
         None,
     )

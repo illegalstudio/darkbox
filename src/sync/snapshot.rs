@@ -10,14 +10,16 @@ use std::{
     path::Path,
 };
 
+/// The extension descriptor of a working library in this domain.
 pub fn working_extension(domain: &Domain) -> Value {
-    json!({"version":VERSION,"required":true,"data":{
+    json!({"version":domain.root().protocol_version,"required":true,"data":{
     "mode":"working","syncId":domain.root().sync_id,"rootSha256":domain.root_hash(),
     "rootPath":format!("{PREFIX}/root.json"),"mappingPath":format!("{PREFIX}/mapping.json"),
-    "journalDatabase":domain.mapping().storage.database_path,"journalSchemaVersion":VERSION}})
+    "journalDatabase":domain.mapping().storage.database_path,"journalSchemaVersion":JOURNAL_SCHEMA_VERSION}})
 }
+/// The extension descriptor of a sealed checkpoint in this domain.
 pub fn sealed_extension(domain: &Domain) -> Value {
-    json!({"version":VERSION,"required":true,"data":{
+    json!({"version":domain.root().protocol_version,"required":true,"data":{
     "mode":"sealed","syncId":domain.root().sync_id,"rootSha256":domain.root_hash(),
     "rootPath":format!("{PREFIX}/root.json"),"mappingPath":format!("{PREFIX}/mapping.json"),"checkpointPath":format!("{PREFIX}/checkpoint.json")}})
 }
@@ -51,6 +53,8 @@ enum DescriptorData {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// One object a checkpoint carries.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct SnapshotObject {
     pub sha256: String,
     pub size: Counter,
@@ -58,6 +62,8 @@ pub struct SnapshotObject {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The index of a sealed checkpoint: frontier, history, state and objects.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Checkpoint {
     pub kind: String,
     pub protocol_version: String,
@@ -70,6 +76,8 @@ pub struct Checkpoint {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Binds a published checkpoint package to its domain, frontier and state.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct SnapshotDescriptor {
     pub kind: String,
     pub protocol_version: String,
@@ -81,9 +89,15 @@ pub struct SnapshotDescriptor {
     pub state_sha256: String,
 }
 impl SnapshotDescriptor {
+    /// Check the descriptor against its domain.
     pub fn validate(&self, domain: &Domain) -> Result<()> {
-        version(&self.kind, &self.protocol_version, "darkbox-sync-snapshot")?;
-        domain.bind(&self.sync_id, &self.root_sha256)?;
+        domain.record(
+            &self.kind,
+            "darkbox-sync-snapshot",
+            &self.protocol_version,
+            &self.sync_id,
+            &self.root_sha256,
+        )?;
         validate_frontier(&self.frontier)?;
         if !hex(&self.replica_id, 32)
             || !hex(&self.package.sha256, 64)
@@ -98,6 +112,7 @@ impl SnapshotDescriptor {
         }
         Ok(())
     }
+    /// The exchange path this descriptor is published at.
     pub fn relative_path(&self) -> Result<String> {
         let bytes = canonical(self)?;
         Ok(format!(
@@ -111,7 +126,7 @@ impl SnapshotDescriptor {
 fn descriptor(manifest: &Value) -> Result<Descriptor> {
     let descriptor: Descriptor = serde_json::from_value(manifest["extensions"][NAMESPACE].clone())
         .map_err(|e| invalid(e.to_string()))?;
-    if descriptor.version != VERSION {
+    if SyncProtocol::parse(&descriptor.version).is_none() {
         return Err(unsupported("Sync extension version"));
     }
     if !descriptor.required {
@@ -179,16 +194,18 @@ fn verify_core(
     limits: &SyncLimits,
     mut read: impl FnMut(&str, u64) -> Result<Vec<u8>>,
 ) -> Result<(History, Checkpoint)> {
-    if manifest["darkbox"]["version"] != "1.5.0"
+    let descriptor = descriptor(manifest)?;
+    // Each extension version names the common versions that may carry it.
+    let common = manifest["darkbox"]["version"].as_str().unwrap_or_default();
+    if SyncProtocol::for_common(common) != SyncProtocol::parse(&descriptor.version)
         || manifest["extensions"]
             .get(crate::protection::NAMESPACE)
             .is_some()
     {
         return Err(unsupported(
-            "Sync v1 requires unprotected common 1.5.0 storage",
+            "Sync requires unprotected storage of a common version its extension version supports",
         ));
     }
-    let descriptor = descriptor(manifest)?;
     let (sync_id, root_hash, root_path, mapping_path, checkpoint_path) = match descriptor.data {
         DescriptorData::Sealed {
             sync_id,
@@ -216,7 +233,7 @@ fn verify_core(
                 || !hex(&root_sha256, 64)
                 || root_path != format!("{PREFIX}/root.json")
                 || mapping_path != format!("{PREFIX}/mapping.json")
-                || journal_schema_version != VERSION
+                || journal_schema_version != JOURNAL_SCHEMA_VERSION
             {
                 return Err(invalid("Working sync descriptor"));
             }
@@ -268,12 +285,13 @@ fn verify_core(
         &read(&checkpoint_path, limits.max_history_bytes)?,
         limits.max_history_bytes.min(usize::MAX as u64) as usize,
     )?;
-    version(
+    domain.record(
         &checkpoint.kind,
-        &checkpoint.protocol_version,
         "darkbox-sync-checkpoint",
+        &checkpoint.protocol_version,
+        &checkpoint.sync_id,
+        &checkpoint.root_sha256,
     )?;
-    domain.bind(&checkpoint.sync_id, &checkpoint.root_sha256)?;
     validate_frontier(&checkpoint.frontier)?;
     if checkpoint.history.path != format!("{PREFIX}/history.jsonl")
         || checkpoint.state.path != format!("{PREFIX}/state.json")
@@ -320,7 +338,9 @@ fn verify_core(
 /// Application materialization is explicitly left to a registered profile adapter.
 #[derive(Clone, Debug)]
 pub struct SyncVerifier {
+    /// Largest accepted history, in bytes.
     pub max_history_bytes: u64,
+    /// Largest accepted number of transactions.
     pub max_transactions: usize,
 }
 impl Default for SyncVerifier {
@@ -337,7 +357,7 @@ impl ExtensionVerifier for SyncVerifier {
         NAMESPACE
     }
     fn supports(&self, version: &str) -> bool {
-        version == VERSION
+        SyncProtocol::parse(version).is_some()
     }
     fn resources_to_stage(&self, manifest: &Value) -> Option<BTreeSet<String>> {
         let mut paths = BTreeSet::from([
@@ -419,18 +439,29 @@ impl ExtensionVerifier for SyncVerifier {
 
 /// Produce a fresh closed projection and full causal checkpoint. Additional profile
 /// resources/caches can be streamed through `add_path`/`add_reader` before finish.
+#[non_exhaustive]
 pub struct LocalProjection<'a> {
+    /// The application's projection.
     pub adapter: &'a dyn SyncProjection,
+    /// The application's own database connection.
     pub source: &'a Connection,
+}
+impl<'a> LocalProjection<'a> {
+    /// Project the application state held by `source` through `adapter`.
+    pub fn new(adapter: &'a dyn SyncProjection, source: &'a Connection) -> Self {
+        Self { adapter, source }
+    }
 }
 struct ProjectionInput<'a> {
     adapter: &'a dyn SyncProjection,
     source: Option<&'a Connection>,
 }
+/// Writes a sealed checkpoint package from a history and its projected application state.
 pub struct SnapshotBuilder<'a> {
     writer: crate::PackageWriter<'a>,
 }
 impl<'a> SnapshotBuilder<'a> {
+    /// Start a checkpoint whose application database is rebuilt from the history by `adapter`.
     pub fn new(
         destination: impl AsRef<Path>,
         manifest: Value,
@@ -453,6 +484,7 @@ impl<'a> SnapshotBuilder<'a> {
             options,
         )
     }
+    /// Start a checkpoint from the application's own closed database, verified against the history.
     pub fn from_local(
         destination: impl AsRef<Path>,
         manifest: Value,
@@ -541,7 +573,7 @@ impl<'a> SnapshotBuilder<'a> {
         }
         let checkpoint = Checkpoint {
             kind: "darkbox-sync-checkpoint".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: domain.root().protocol_version.clone(),
             sync_id: domain.root().sync_id.clone(),
             root_sha256: domain.root_hash().into(),
             frontier: history.frontier(),
@@ -582,6 +614,12 @@ impl<'a> SnapshotBuilder<'a> {
         let mut paths: Vec<_> = files.iter().map(|(p, _)| p.clone()).collect();
         paths.push(domain.mapping().storage.database_path.clone());
         paths.extend(checkpoint.objects.iter().map(|o| o.path.clone()));
+        // Declares the folders of this extension's canonical bundle as well.
+        paths.extend(
+            crate::versions::canonical_paths(&manifest)
+                .into_iter()
+                .map(str::to_owned),
+        );
         ensure_folders(&mut manifest, &paths)?;
         let mut writer =
             crate::PackageWriter::new_locked(destination, manifest, limits, options, None, None)?;
@@ -600,12 +638,15 @@ impl<'a> SnapshotBuilder<'a> {
         }
         Ok(Self { writer })
     }
+    /// Add a profile resource from a regular file.
     pub fn add_path(&mut self, path: &str, source: impl AsRef<Path>) -> Result<()> {
         self.writer.add_path(path, source).map(|_| ())
     }
+    /// Add a profile resource from a reader.
     pub fn add_reader(&mut self, path: &str, reader: impl Read) -> Result<()> {
         self.writer.add_reader(path, reader).map(|_| ())
     }
+    /// Finalize, fully verify and atomically publish the checkpoint package.
     pub fn finish(self) -> Result<crate::Report> {
         self.writer.finish()
     }
@@ -643,6 +684,7 @@ pub struct SyncSnapshot {
     package_hash: String,
 }
 impl SyncSnapshot {
+    /// Open and fully verify a sealed checkpoint package.
     pub fn open(
         path: impl AsRef<Path>,
         limits: SyncLimits,
@@ -653,6 +695,7 @@ impl SyncSnapshot {
             limits,
         )
     }
+    /// Interpret an already verified package as a sealed checkpoint.
     pub fn from_package(package: crate::Package, limits: SyncLimits) -> Result<Self> {
         if !package.report().trusted_resources.is_empty() {
             return Err(unsupported(
@@ -693,6 +736,7 @@ impl SyncSnapshot {
             package_hash,
         })
     }
+    /// Fetch and verify the checkpoint a snapshot descriptor points to in an exchange.
     pub fn fetch(
         exchange: &Exchange,
         descriptor: &SnapshotDescriptor,
@@ -718,15 +762,19 @@ impl SyncSnapshot {
         }
         Ok(snapshot)
     }
+    /// The causal history the checkpoint carries.
     pub fn history(&self) -> &History {
         &self.history
     }
+    /// The verified package.
     pub fn package(&self) -> &crate::Package {
         &self.package
     }
+    /// The SHA-256 of the complete package file.
     pub fn package_hash(&self) -> &str {
         &self.package_hash
     }
+    /// Check that the packaged application database equals the projection of the checkpoint state.
     pub fn verify_projection(&self, adapter: &dyn SyncProjection) -> Result<()> {
         projection_binding(self.history.domain(), adapter)?;
         let database = self
@@ -737,6 +785,7 @@ impl SyncSnapshot {
             adapter.verify(db, self.history.domain(), &self.history.state())
         })
     }
+    /// Copy every object of the checkpoint into a local store.
     pub fn import_objects(&self, store: &ObjectStore) -> Result<()> {
         for object in &self.checkpoint.objects {
             let mut reader = self.package.resource(&object.path)?;
@@ -750,6 +799,7 @@ impl SyncSnapshot {
         }
         Ok(())
     }
+    /// Publish the package and its descriptor to an exchange.
     pub fn publish(
         &self,
         exchange: &Exchange,
@@ -765,7 +815,7 @@ impl SyncSnapshot {
             .len();
         let descriptor = SnapshotDescriptor {
             kind: "darkbox-sync-snapshot".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: self.history.domain().root().protocol_version.clone(),
             sync_id: self.history.domain().root().sync_id.clone(),
             root_sha256: self.history.domain().root_hash().into(),
             replica_id: replica.replica_id.clone(),
@@ -827,12 +877,8 @@ impl SyncSnapshot {
             std::str::from_utf8(domain.profile()).unwrap(),
             limits.clone(),
         )?;
-        let canonical_paths: BTreeSet<_> = crate::creation::specification(&manifest)?
-            .files
-            .iter()
-            .map(|f| f.path)
-            .chain(std::iter::once(crate::versions::CATALOG_PATH))
-            .collect();
+        crate::creation::specification(&manifest)?;
+        let canonical_paths = crate::versions::canonical_paths(&manifest);
         let profile = manifest["application"]["profilePath"].as_str().unwrap();
         for resource in self.package.resources() {
             if resource.path == "manifest.json"

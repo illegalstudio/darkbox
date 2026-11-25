@@ -11,25 +11,35 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use zeroize::Zeroizing;
 
+/// Namespace of the official protection extension.
 pub const NAMESPACE: &str = "studio.illegal.darkbox.protection";
+/// The protection extension version this build implements.
 pub const VERSION: &str = "1.0.0";
+/// Fixed path of the detached Ed25519 manifest signature.
 pub const SIGNATURE_PATH: &str = "extensions/studio.illegal.darkbox.protection/manifest.ed25519";
 const HEADER: usize = 28;
 const MAX_PLAINTEXT: u64 = (1u64 << 36) - 32;
 
+/// Application-owned source of AES-256 keys.
 pub trait DecryptionKeys {
+    /// The key with this identifier, or `None` when the application does not hold it.
     fn key(&self, key_id: &str) -> Option<Zeroizing<[u8; 32]>>;
 }
 
 /// Implementations MUST reserve nonces durably and globally for the actual key,
 /// across sessions, devices, packages and key identifier aliases.
 pub trait NonceSequence {
+    /// Reserve the next unique nonce for this key. Allocation must be durable before use.
     fn next_nonce(&mut self, key_id: &str) -> Result<[u8; 12], Error>;
 }
 
+/// Application-owned Ed25519 signing capability. Private keys never enter a package.
 pub trait ManifestSigner {
+    /// The signer identifier declared in the manifest.
     fn signer_id(&self) -> &str;
+    /// The public key that verifies this signer's signatures.
     fn public_key(&self) -> [u8; 32];
+    /// Sign the exact manifest bytes.
     fn sign(&self, manifest_bytes: &[u8]) -> Result<[u8; 64], Error>;
 }
 
@@ -39,12 +49,15 @@ pub struct KeyRing {
     keys: BTreeMap<String, Zeroizing<[u8; 32]>>,
 }
 impl KeyRing {
+    /// Add or replace a key.
     pub fn insert(&mut self, id: impl Into<String>, key: Zeroizing<[u8; 32]>) {
         self.keys.insert(id.into(), key);
     }
+    /// Remove a key; returns whether it was present.
     pub fn remove(&mut self, id: &str) -> bool {
         self.keys.remove(id).is_some()
     }
+    /// Whether a key with this identifier is held.
     pub fn contains(&self, id: &str) -> bool {
         self.keys.contains_key(id)
     }
@@ -62,6 +75,7 @@ pub struct Ed25519Signer {
     key: ed25519_dalek::SigningKey,
 }
 impl Ed25519Signer {
+    /// Derive the signing key from a 32-byte seed.
     pub fn from_seed(id: impl Into<String>, seed: Zeroizing<[u8; 32]>) -> Self {
         Self {
             id: id.into(),
@@ -84,6 +98,9 @@ impl ManifestSigner for Ed25519Signer {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[non_exhaustive]
+/// Where one encrypted block lives.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub enum BlockLocation {
     File {
         path: String,
@@ -97,6 +114,8 @@ pub enum BlockLocation {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// The authenticated context an encrypted block is bound to.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct BlockContext {
     pub package_id: String,
     pub key_id: String,
@@ -111,6 +130,7 @@ fn lp(output: &mut Vec<u8>, text: &str) -> Result<(), Error> {
 }
 
 impl BlockContext {
+    /// The additional authenticated data for a block with this header.
     pub fn aad(&self, header: &[u8]) -> Result<Vec<u8>, Error> {
         if header.len() != HEADER {
             return Err(block_error());
@@ -176,6 +196,7 @@ fn block_error() -> Error {
     Error::invalid("protection.block", "Malformed encrypted block")
 }
 
+/// Validate an encrypted block's fixed header and return it.
 pub fn block_header(block: &[u8]) -> Result<&[u8], Error> {
     if block.len() < HEADER + 16 || &block[..4] != b"DBXP" {
         return Err(block_error());
@@ -194,6 +215,7 @@ pub fn block_header(block: &[u8]) -> Result<&[u8], Error> {
     Ok(&block[..HEADER])
 }
 
+/// Encrypt bytes into one self-describing AES-256-GCM block bound to its context.
 pub fn encrypt_block(
     plaintext: &[u8],
     key: &[u8; 32],
@@ -221,6 +243,7 @@ pub fn encrypt_block(
     Ok(header)
 }
 
+/// Authenticate and decrypt one block for its exact context.
 pub fn decrypt_block(
     block: &[u8],
     key: &[u8; 32],
@@ -250,6 +273,8 @@ pub fn decrypt_block(
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Declares one encrypted resource file.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct FileProtection {
     pub path: String,
     pub key_id: String,
@@ -257,6 +282,8 @@ pub struct FileProtection {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Declares one encrypted column of a table.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct SqliteProtection {
     pub database: String,
     pub table: String,
@@ -267,6 +294,8 @@ pub struct SqliteProtection {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Declares the detached manifest signature.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct SignatureDeclaration {
     pub algorithm: String,
     pub signer_id: String,
@@ -275,6 +304,8 @@ pub struct SignatureDeclaration {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The `data` object of the protection extension descriptor.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct ProtectionData {
     pub package_id: String,
     pub signature: SignatureDeclaration,
@@ -283,23 +314,73 @@ pub struct ProtectionData {
     pub sqlite: Vec<SqliteProtection>,
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct EncryptedContent {
-    pub context: BlockContext,
-    pub block_sha256: String,
-    pub nonce_hex: Option<String>,
-    pub authentication: &'static str,
-    pub plaintext_validation: &'static str,
+crate::model::report_vocabulary! {
+    /// The outcome of checking the detached manifest signature.
+    SignatureStatus {
+        /// The signature was not checked.
+        NotVerified => "not_verified",
+        /// A trusted signer's key verified the exact manifest bytes.
+        Verified => "verified",
+        /// The signature does not match the manifest.
+        Invalid => "invalid",
+        /// The application supplied no trusted key for the declared signer.
+        UnknownSigner => "unknown_signer",
+    }
 }
 
+crate::model::report_vocabulary! {
+    /// The outcome of authenticating one encrypted block.
+    AuthenticationStatus {
+        /// The block could not be examined.
+        NotVerified => "not_verified",
+        /// Decryption with the supplied key authenticated the block.
+        Verified => "verified",
+        /// The supplied key did not authenticate the block.
+        Failed => "failed",
+        /// No key was supplied; this does not indicate corruption.
+        KeyAbsent => "key_absent",
+    }
+}
+
+crate::model::report_vocabulary! {
+    /// Whether decrypted content was validated beyond authentication.
+    PlaintextValidation {
+        /// Built-in checks never interpret plaintext.
+        NotPerformed => "not_performed",
+    }
+}
+
+/// One encrypted file or database value found during verification.
 #[derive(Clone, Debug, Serialize)]
+#[non_exhaustive]
+pub struct EncryptedContent {
+    /// Where the block lives and the context it is bound to.
+    pub context: BlockContext,
+    /// SHA-256 of the complete encrypted block.
+    pub block_sha256: String,
+    /// The block's nonce, when its header could be read.
+    pub nonce_hex: Option<String>,
+    /// Whether the block was authenticated.
+    pub authentication: AuthenticationStatus,
+    /// Whether the plaintext was validated.
+    pub plaintext_validation: PlaintextValidation,
+}
+
+/// The result of verifying the protection extension.
+#[derive(Clone, Debug, Serialize)]
+#[non_exhaustive]
 pub struct ProtectionReport {
+    /// The declared protection extension version.
     pub extension_version: String,
-    pub signature: &'static str,
+    /// The outcome of the manifest signature check.
+    pub signature: SignatureStatus,
+    /// Whether the signed payload inventory matched every file.
     pub inventory_verified: bool,
+    /// Every encrypted block that was found.
     pub encrypted: Vec<EncryptedContent>,
 }
 
+/// The built-in verifier and writer for the official protection extension.
 pub struct ProtectionVerifier;
 
 pub(crate) fn data(manifest: &Value) -> Result<ProtectionData, Error> {
@@ -376,7 +457,7 @@ impl ExtensionVerifier for ProtectionVerifier {
     }
 
     fn verify(&self, context: &ExtensionContext<'_>, report: &mut Report) -> Result<(), Error> {
-        if context.manifest["darkbox"]["version"] == "1.0.0" {
+        if !crate::versions::capabilities(context.manifest).protection {
             return Err(Error::invalid(
                 "protection.common_version",
                 "Protection requires Darkbox 1.1.0 or a later explicitly supported version",
@@ -385,7 +466,7 @@ impl ExtensionVerifier for ProtectionVerifier {
         let data = data(context.manifest)?;
         report.protection = Some(ProtectionReport {
             extension_version: VERSION.into(),
-            signature: "not_verified",
+            signature: SignatureStatus::NotVerified,
             inventory_verified: false,
             encrypted: Vec::new(),
         });
@@ -415,17 +496,17 @@ impl ExtensionVerifier for ProtectionVerifier {
                 .is_ok()
             });
             if valid {
-                report.protection.as_mut().unwrap().signature = "verified";
+                report.protection.as_mut().unwrap().signature = SignatureStatus::Verified;
                 report.checks.push("protection.signature");
             } else {
-                report.protection.as_mut().unwrap().signature = "invalid";
+                report.protection.as_mut().unwrap().signature = SignatureStatus::Invalid;
                 report.record(Error::invalid(
                     "protection.signature_invalid",
                     "Manifest signature verification failed",
                 ));
             }
         } else {
-            report.protection.as_mut().unwrap().signature = "unknown_signer";
+            report.protection.as_mut().unwrap().signature = SignatureStatus::UnknownSigner;
             report.record(Error::new(
                 Status::Unsupported,
                 "protection.signer_unknown",
@@ -572,7 +653,7 @@ fn check_block(
             "Encrypted block count exceeds configured entry limit",
         ));
     }
-    let mut authentication = "not_verified";
+    let mut authentication = AuthenticationStatus::NotVerified;
     let mut nonce_hex = None;
     match block_header(bytes) {
         Ok(header) => {
@@ -596,14 +677,14 @@ fn check_block(
             }
             if let Some(key) = key {
                 match decrypt_block(bytes, &key, &block_context) {
-                    Ok(_) => authentication = "verified",
+                    Ok(_) => authentication = AuthenticationStatus::Verified,
                     Err(error) => {
-                        authentication = "failed";
+                        authentication = AuthenticationStatus::Failed;
                         report.record(error);
                     }
                 }
             } else {
-                authentication = "key_absent";
+                authentication = AuthenticationStatus::KeyAbsent;
                 report.note("protection.key_absent", "Encrypted content was not authenticated after decryption because its key is absent; this does not indicate corruption");
             }
         }
@@ -619,7 +700,7 @@ fn check_block(
             block_sha256: format!("{:x}", Sha256::digest(bytes)),
             nonce_hex,
             authentication,
-            plaintext_validation: "not_performed",
+            plaintext_validation: PlaintextValidation::NotPerformed,
         });
     Ok(())
 }

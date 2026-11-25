@@ -42,7 +42,7 @@ impl Drop for DirectoryLock {
         // Explicitly unlock when this process releases its last guard. A child
         // between fork and exec can briefly inherit even CLOEXEC descriptors;
         // closing only the parent's descriptor would extend the lock lifetime.
-        let _ = fs2::FileExt::unlock(&self.0);
+        crate::locks::unlock(&self.0);
     }
 }
 fn lock(path: &Path, exclusive: bool) -> Result<Arc<DirectoryLock>, Error> {
@@ -70,9 +70,9 @@ fn lock(path: &Path, exclusive: bool) -> Result<Arc<DirectoryLock>, Error> {
         Err(error) => return Err(crate::io_failure(error)),
     };
     let result = if exclusive {
-        fs2::FileExt::try_lock_exclusive(&file)
+        crate::locks::try_exclusive(&file)
     } else {
-        fs2::FileExt::try_lock_shared(&file)
+        crate::locks::try_shared(&file)
     };
     result.map_err(|error| {
         if error.kind() == std::io::ErrorKind::WouldBlock {
@@ -195,7 +195,7 @@ impl DirectoryLibrary {
             crate::paths::validate(folder)?;
             fs::create_dir(candidate.path().join(folder)).map_err(crate::io_failure)?;
         }
-        for file in spec.files {
+        for file in crate::versions::canonical_files(spec, &manifest) {
             write_file(&candidate.path().join(file.path), file.bytes)?;
         }
         write_file(
@@ -242,9 +242,11 @@ impl DirectoryLibrary {
         sync_directory(root.parent().unwrap())?;
         Ok(Self { root, lock: guard })
     }
+    /// The library directory.
     pub fn path(&self) -> &Path {
         &self.root
     }
+    /// The stable sibling lock file that coordinates this library.
     pub fn lock_path(&self) -> Result<PathBuf, Error> {
         lock_path(&self.root)
     }
@@ -331,14 +333,11 @@ impl DirectoryLibrary {
         databases: &BTreeMap<String, &crate::rusqlite::Connection>,
         limits: Limits,
     ) -> Result<HotCapture, Error> {
-        if !matches!(
-            manifest["darkbox"]["version"].as_str(),
-            Some("1.4.0" | "1.5.0")
-        ) {
+        if !crate::versions::capabilities(&manifest).hot_capture {
             return Err(Error::new(
                 Status::Unsupported,
                 "directory.capture_version",
-                "Split-barrier capture requires common 1.4.0 or 1.5.0",
+                "Split-barrier capture requires a common version with retained hot captures (1.4.0 or later)",
             ));
         }
         self.capture(manifest, databases, &limits, true)
@@ -473,6 +472,7 @@ pub struct HotCapture {
     end: std::time::Instant,
 }
 impl HotCapture {
+    /// Stream the captured edition into a new complete ZIP package.
     pub fn write_backup(
         self,
         destination: impl AsRef<Path>,
@@ -484,6 +484,7 @@ impl HotCapture {
         let prepared = self.prepare(options)?;
         crate::transfer::pack_verified(prepared.verified, &destination, &limits, options, end)
     }
+    /// Stream the captured edition as a delta against a verified base edition.
     pub fn write_delta(
         self,
         base: impl AsRef<Path>,
@@ -624,7 +625,7 @@ impl HotCapture {
             .trusted_resources
             .retain(|entry| trusted.contains(entry));
         if verified.report.trusted_resources.is_empty() {
-            verified.report.scope = "common_machine_checks";
+            verified.report.scope = crate::Scope::CommonMachineChecks;
             verified
                 .report
                 .checks
@@ -659,10 +660,7 @@ struct Prepared {
     _metadata: tempfile::TempDir,
 }
 fn require_live(manifest: &Value) -> Result<(), Error> {
-    if !matches!(
-        manifest["darkbox"]["version"].as_str(),
-        Some("1.3.0" | "1.4.0" | "1.5.0")
-    ) || !manifest["packageId"].is_string()
+    if !crate::versions::capabilities(manifest).live_directory || !manifest["packageId"].is_string()
     {
         return Err(Error::new(
             Status::Unsupported,

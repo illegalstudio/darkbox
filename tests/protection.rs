@@ -108,7 +108,7 @@ impl Fixture {
         let base = root.join("archive/1.1.0");
         collect(&base, &base, &mut files);
         let mut manifest: Value = serde_json::from_slice(
-            &fs::read(root.join("examples/notebook.manifest.json")).unwrap(),
+            &fs::read(root.join("tests/fixtures/1.1.0/notebook.manifest.json")).unwrap(),
         )
         .unwrap();
         manifest["application"] = json!({"id":"org.example.protected-notes","formatVersion":"1","profilePath":"docs/profile.md"});
@@ -212,11 +212,15 @@ impl Fixture {
         path
     }
     fn options<'a>(&self, keys: Option<&'a dyn DecryptionKeys>) -> VerificationOptions<'a> {
-        VerificationOptions {
-            decryption_keys: keys,
-            trusted_signers: BTreeMap::from([("test-signer".into(), Signing::new().public_key())]),
-            require_protection: true,
-            ..Default::default()
+        {
+            let mut value = VerificationOptions::default()
+                .with_trusted_signers(BTreeMap::from([(
+                    "test-signer".into(),
+                    Signing::new().public_key(),
+                )]))
+                .with_require_protection(true);
+            value.decryption_keys = keys;
+            value
         }
     }
     fn verify(&self, keys: Option<&dyn DecryptionKeys>) -> darkbox::Report {
@@ -574,10 +578,7 @@ fn writer_retains_ciphertext_for_public_edits_and_requires_signing_and_keys_for_
     let path = fixture.path();
     let original = fs::read(&path).unwrap();
     let options = fixture.options(None);
-    let edit = || PackageUpdate {
-        files: BTreeMap::from([("assets/public.txt".into(), Some(b"Public edit".to_vec()))]),
-        ..Default::default()
-    };
+    let edit = || PackageUpdate::default().with_file("assets/public.txt", b"Public edit".to_vec());
     assert!(darkbox::save(&path, &path, edit(), Limits::default(), &options, None).is_err());
     assert_eq!(fs::read(&path).unwrap(), original);
     let destination = fixture.dir.path().join("saved.project");
@@ -606,10 +607,7 @@ fn writer_retains_ciphertext_for_public_edits_and_requires_signing_and_keys_for_
         &mut nonces,
     )
     .unwrap();
-    let update = || PackageUpdate {
-        files: BTreeMap::from([("assets/private.bin".into(), Some(encrypted.clone()))]),
-        ..Default::default()
-    };
+    let update = || PackageUpdate::default().with_file("assets/private.bin", encrypted.clone());
     assert!(
         darkbox::save(
             &path,
@@ -659,10 +657,7 @@ fn writer_refuses_downgrade_moved_blocks_and_invalid_candidates_without_replacin
         darkbox::save(
             &path,
             &path,
-            PackageUpdate {
-                manifest: Some(manifest),
-                ..Default::default()
-            },
+            PackageUpdate::default().with_manifest(manifest),
             Limits::default(),
             &fixture.options(None),
             Some(&Signing::new())
@@ -673,10 +668,7 @@ fn writer_refuses_downgrade_moved_blocks_and_invalid_candidates_without_replacin
         db.execute("UPDATE notes SET id='moved' WHERE id='r1'", [])
             .unwrap();
     });
-    let update = PackageUpdate {
-        files: BTreeMap::from([(DATABASE.into(), Some(fixture.files[DATABASE].clone()))]),
-        ..Default::default()
-    };
+    let update = PackageUpdate::default().with_file(DATABASE, fixture.files[DATABASE].clone());
     assert!(
         darkbox::save(
             &path,
@@ -688,13 +680,8 @@ fn writer_refuses_downgrade_moved_blocks_and_invalid_candidates_without_replacin
         )
         .is_err()
     );
-    let update = PackageUpdate {
-        files: BTreeMap::from([(
-            "README.md".into(),
-            Some(b"Changed canonical bytes".to_vec()),
-        )]),
-        ..Default::default()
-    };
+    let update =
+        PackageUpdate::default().with_file("README.md", b"Changed canonical bytes".to_vec());
     assert!(
         darkbox::save(
             &path,
@@ -851,10 +838,7 @@ fn extension_registration_requires_explicit_writer_capability() {
         darkbox::save(
             &path,
             &path,
-            PackageUpdate {
-                manifest: Some(manifest),
-                ..Default::default()
-            },
+            PackageUpdate::default().with_manifest(manifest),
             Limits::default(),
             &options,
             Some(&Signing::new())
@@ -881,13 +865,8 @@ fn writer_preserves_unknown_optional_data_and_does_not_overwrite_separate_destin
     let path = fixture.path();
     let original = fs::read(&path).unwrap();
     let options = fixture.options(None);
-    let update = PackageUpdate {
-        files: BTreeMap::from([(
-            "extensions/org.example.opaque/resource.bin".into(),
-            Some(vec![1]),
-        )]),
-        ..Default::default()
-    };
+    let update =
+        PackageUpdate::default().with_file("extensions/org.example.opaque/resource.bin", vec![1]);
     assert!(
         darkbox::save(
             &path,
@@ -1029,10 +1008,7 @@ fn writer_rejects_a_new_encryption_reusing_a_previous_revision_nonce() {
     .unwrap();
     let keys = Keys(KEY);
     let options = fixture.options(Some(&keys));
-    let update = PackageUpdate {
-        files: BTreeMap::from([("assets/private.bin".into(), Some(encrypted))]),
-        ..Default::default()
-    };
+    let update = PackageUpdate::default().with_file("assets/private.bin", encrypted);
     let error = darkbox::save(
         &path,
         &path,

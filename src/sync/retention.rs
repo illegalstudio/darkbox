@@ -8,6 +8,8 @@ use std::{
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// How long superseded generations are kept and when a new checkpoint is due.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct RetentionPolicy {
     pub retention_seconds: Counter,
     pub keep_checkpoints: Counter,
@@ -43,6 +45,8 @@ impl RetentionPolicy {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The immutable identity and policy of a repository.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct RepositoryRoot {
     pub kind: String,
     pub protocol_version: String,
@@ -55,6 +59,8 @@ pub struct RepositoryRoot {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// One independently complete generation of a repository.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Generation {
     pub kind: String,
     pub protocol_version: String,
@@ -67,9 +73,11 @@ pub struct Generation {
     pub checkpoint: SnapshotDescriptor,
 }
 impl Generation {
+    /// The generation identifier: the SHA-256 of its canonical bytes.
     pub fn id(&self) -> Result<String> {
         Ok(sha256(&canonical(self)?))
     }
+    /// The repository path this generation record is published at.
     pub fn relative_path(&self) -> Result<String> {
         let bytes = canonical(self)?;
         Ok(format!(
@@ -88,6 +96,13 @@ impl Generation {
             &self.protocol_version,
             "darkbox-sync-generation",
         )?;
+        if self.protocol_version != repository.descriptor.protocol_version
+            || self.checkpoint.protocol_version != repository.descriptor.protocol_version
+        {
+            return Err(invalid(
+                "Generation protocol version differs from its repository",
+            ));
+        }
         if self.repository_sha256 != repository.hash
             || self.parent.as_ref().is_some_and(|id| !hex(id, 64))
             || self.replaces.iter().any(|id| !hex(id, 64))
@@ -127,14 +142,26 @@ impl Generation {
     }
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+/// How a local library's base relates to the repository's current generation.
 pub enum BaseStatus {
+    /// The library is based on the current generation.
     Current,
-    Superseded { retire_at: Counter },
+    /// A newer generation exists; the old base stays usable until `retire_at`.
+    Superseded {
+        /// The UTC second after which the old base expires.
+        retire_at: Counter,
+    },
+    /// The base has expired and must be rebased before publishing.
     Expired,
 }
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
+/// What a pruning pass removed.
 pub struct PruneReport {
+    /// Identifiers of the pruned generations.
     pub generations: Vec<String>,
+    /// How many files were deleted.
     pub removed_files: usize,
 }
 /// A membership-free cloud exchange containing independently complete generations.
@@ -147,6 +174,7 @@ pub struct SyncRepository {
     limits: SyncLimits,
 }
 impl SyncRepository {
+    /// Create a repository for a domain with a retention policy.
     pub fn create(
         path: impl AsRef<Path>,
         domain: &Domain,
@@ -156,7 +184,7 @@ impl SyncRepository {
         policy.validate()?;
         let descriptor = RepositoryRoot {
             kind: "darkbox-sync-repository".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: domain.root().protocol_version.clone(),
             repository_id: random_id()?,
             package_id: domain.root().package_id.clone(),
             application: domain.root().application.clone(),
@@ -175,6 +203,7 @@ impl SyncRepository {
             limits,
         })
     }
+    /// Open an existing repository, checking the root hash the installation pinned.
     pub fn open(path: impl AsRef<Path>, pinned_hash: &str, limits: SyncLimits) -> Result<Self> {
         if !fs::symlink_metadata(path.as_ref())
             .map_err(crate::io_failure)?
@@ -218,12 +247,15 @@ impl SyncRepository {
         }
         Ok(temporary)
     }
+    /// The repository directory.
     pub fn path(&self) -> &Path {
         &self.root
     }
+    /// The SHA-256 of the canonical repository root.
     pub fn root_hash(&self) -> &str {
         &self.hash
     }
+    /// The repository's retention policy.
     pub fn policy(&self) -> &RetentionPolicy {
         &self.descriptor.policy
     }
@@ -319,6 +351,7 @@ impl SyncRepository {
         }
         Ok(result)
     }
+    /// The current generation, never older than one this installation has already seen.
     pub fn current(&self) -> Result<Generation> {
         for certificate in self.retirement_records()? {
             if let Some(witness) = certificate
@@ -378,6 +411,7 @@ impl SyncRepository {
         *high_water = Some((current.ordinal, identity));
         Ok(current.clone())
     }
+    /// Whether a library based on this domain is current, superseded or expired at UTC second `now`.
     pub fn base_status(&self, domain: &Domain, now: u64) -> Result<BaseStatus> {
         self.check_domain(domain)?;
         self.current()?;
@@ -410,6 +444,7 @@ impl SyncRepository {
         }
         Ok(BaseStatus::Expired)
     }
+    /// The exchange of one generation's domain.
     pub fn exchange(&self, generation: &Generation) -> Result<Exchange> {
         generation.validate(self)?;
         let path = super::exchange::safe_path(&self.root, &generation.domain_path(), false)?;
@@ -433,6 +468,7 @@ impl SyncRepository {
         }
         Ok(())
     }
+    /// Fetch and fully verify the checkpoint of a generation.
     pub fn checkpoint(
         &self,
         generation: &Generation,
@@ -482,6 +518,7 @@ impl SyncRepository {
         self.check_domain(snapshot.history().domain())?;
         Ok(snapshot)
     }
+    /// Publish the first generation from a sealed checkpoint.
     pub fn publish_initial(
         &self,
         snapshot: &SyncSnapshot,
@@ -535,7 +572,7 @@ impl SyncRepository {
         let exchange = Exchange::create(path, domain.clone(), self.limits.clone())?;
         let publisher = ReplicaDescriptor {
             kind: "darkbox-sync-replica".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: domain.root().protocol_version.clone(),
             sync_id: domain.root().sync_id.clone(),
             root_sha256: domain.root_hash().into(),
             replica_id: random_id()?,
@@ -546,7 +583,7 @@ impl SyncRepository {
         let checkpoint = snapshot.publish(&exchange, &publisher)?;
         let generation = Generation {
             kind: "darkbox-sync-generation".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: self.descriptor.protocol_version.clone(),
             repository_sha256: self.hash.clone(),
             ordinal,
             parent: parent.map(Generation::id).transpose()?,
@@ -591,6 +628,7 @@ impl SyncRepository {
         )?;
         Ok(generation)
     }
+    /// Whether the policy calls for a new compact generation at UTC second `now`.
     pub fn compaction_due(&self, history: &History, now: u64) -> Result<bool> {
         let current = self.current()?;
         if current.checkpoint.root_sha256 != history.domain().root_hash() {
@@ -608,6 +646,7 @@ impl SyncRepository {
                         >= self.policy().checkpoint_interval_seconds.0),
         )
     }
+    /// Publish a new generation whose baseline compacts the source checkpoint.
     pub fn compact(
         &self,
         source: &SyncSnapshot,
@@ -731,15 +770,41 @@ fn build_compact(
     Ok(())
 }
 
+#[non_exhaustive]
+/// Where a rebase rebuilds the library and preserves unpublished edits.
 pub struct RebaseTarget<'a> {
+    /// The absent directory the rebuilt library is written to.
     pub destination: &'a Path,
+    /// The local object store.
     pub objects: &'a ObjectStore,
+    /// Where unpublished local edits are preserved, if any exist.
     pub recovery_path: Option<&'a Path>,
 }
+impl<'a> RebaseTarget<'a> {
+    /// Rebuild at an absent destination, importing media into `objects`.
+    pub fn new(destination: &'a Path, objects: &'a ObjectStore) -> Self {
+        Self {
+            destination,
+            objects,
+            recovery_path: None,
+        }
+    }
+    /// Where to preserve unpublished local edits before adopting a newer base.
+    pub fn with_recovery_path(mut self, path: &'a Path) -> Self {
+        self.recovery_path = Some(path);
+        self
+    }
+}
+#[non_exhaustive]
+/// A rebuilt library ready to replace one based on an older generation.
 pub struct PreparedRebase {
+    /// The rebuilt library.
     pub library: crate::DirectoryLibrary,
+    /// The generation it is based on.
     pub generation: Generation,
+    /// The source journal revision the rebase was prepared from.
     pub source_revision: Counter,
+    /// The recovery package holding unpublished edits, if one was written.
     pub recovery: Option<PathBuf>,
     domain: Domain,
 }
@@ -864,6 +929,7 @@ impl SyncRepository {
             domain: checkpoint.history().domain().clone(),
         })
     }
+    /// Recheck that neither the source library nor the current generation changed since the rebase was prepared.
     pub fn check_prepared_rebase(
         &self,
         session: &SyncSession<'_>,
@@ -909,10 +975,25 @@ impl SyncRepository {
     }
 }
 
+#[non_exhaustive]
+/// Inputs for resolving concurrent generation branches.
 pub struct ResolutionTarget<'a> {
+    /// The local object store.
     pub objects: &'a ObjectStore,
+    /// Where every observed branch is exported before resolution.
     pub recovery_directory: &'a Path,
+    /// The current time, in UTC seconds.
     pub now: u64,
+}
+impl<'a> ResolutionTarget<'a> {
+    /// Resolve at UTC second `now`, exporting every observed branch first.
+    pub fn new(objects: &'a ObjectStore, recovery_directory: &'a Path, now: u64) -> Self {
+        Self {
+            objects,
+            recovery_directory,
+            now,
+        }
+    }
 }
 impl SyncRepository {
     /// Explicitly choose a reconciled state. Every observed branch is first exported
@@ -1016,6 +1097,7 @@ impl SyncRepository {
             target.now,
         )
     }
+    /// Export one retained generation as a complete, verified package.
     pub fn export_generation(
         &self,
         generation: &Generation,
@@ -1077,13 +1159,8 @@ impl SyncRepository {
 }
 fn copy_snapshot_extras(source: &SyncSnapshot, builder: &mut SnapshotBuilder<'_>) -> Result<()> {
     let manifest = source.package().manifest();
-    let spec = crate::creation::specification(manifest)?;
-    let canonical_paths: BTreeSet<_> = spec
-        .files
-        .iter()
-        .map(|file| file.path)
-        .chain(std::iter::once(crate::versions::CATALOG_PATH))
-        .collect();
+    crate::creation::specification(manifest)?;
+    let canonical_paths = crate::versions::canonical_paths(manifest);
     for resource in source.package().resources() {
         if resource.path == "manifest.json"
             || canonical_paths.contains(resource.path.as_str())
@@ -1195,6 +1272,7 @@ impl SyncRepository {
         })
     }
 
+    /// Open a session after checking that the library is based on the current generation.
     pub fn open_session<'a>(
         &self,
         library: &'a mut crate::DirectoryLibrary,
@@ -1267,6 +1345,8 @@ impl SyncRepository {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// A record that generations before an ordinal have expired, with the witnesses that justify it.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Retirement {
     pub kind: String,
     pub protocol_version: String,
@@ -1291,6 +1371,11 @@ impl Retirement {
             &self.protocol_version,
             "darkbox-sync-retirement",
         )?;
+        if self.protocol_version != repository.descriptor.protocol_version {
+            return Err(invalid(
+                "Retirement protocol version differs from its repository",
+            ));
+        }
         if self.repository_sha256 != repository.hash
             || self.retired_before.0 == 0
             || self.witnesses.is_empty()
@@ -1401,6 +1486,7 @@ impl SyncRepository {
         result.sort_by_key(|record| record.retired_before);
         Ok(result)
     }
+    /// The ordinal below which generations have been retired.
     pub fn retired_before(&self) -> Result<Counter> {
         self.check_root()?;
         Ok(self
@@ -1485,7 +1571,7 @@ impl SyncRepository {
             witnesses.sort_by_key(|generation| generation.ordinal);
             let record = Retirement {
                 kind: "darkbox-sync-retirement".into(),
-                protocol_version: VERSION.into(),
+                protocol_version: self.descriptor.protocol_version.clone(),
                 repository_sha256: self.hash.clone(),
                 retired_before: floor,
                 checked_at: Counter(now),

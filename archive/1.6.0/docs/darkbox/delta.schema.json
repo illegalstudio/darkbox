@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:darkbox:delta-schema:1.0.0",
+  "title": "Darkbox delta transfer 1.0.0",
+  "description": "Structural validation only. Exact base, target, path safety, sorted inventories, CRC and reconstruction checks are additional requirements.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "darkboxDelta",
+    "base",
+    "target",
+    "targetFiles",
+    "folders",
+    "changed",
+    "removed"
+  ],
+  "properties": {
+    "darkboxDelta": {
+      "const": "1.0.0"
+    },
+    "base": {
+      "$ref": "#/$defs/identity"
+    },
+    "target": {
+      "$ref": "#/$defs/identity"
+    },
+    "targetFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/digest"
+      }
+    },
+    "folders": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      }
+    },
+    "changed": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      }
+    },
+    "removed": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      }
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packageId",
+        "manifestSha256",
+        "inventorySha256"
+      ],
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+        },
+        "manifestSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "inventorySha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "size",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    }
+  }
+}

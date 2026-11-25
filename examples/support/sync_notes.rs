@@ -18,14 +18,46 @@ fn failure(error: impl std::fmt::Display) -> Error {
 fn encoded(value: &impl Serialize) -> Result<String, Error> {
     String::from_utf8(canonical(value)?).map_err(failure)
 }
+/// The sync protocol this example and the shared tests use. A domain keeps
+/// its protocol forever: 1.1.0 needs common 1.6.0 packages, while
+/// `DARKBOX_SYNC_PROTOCOL=1.0.0` selects the protocol bound to common 1.5.0.
+pub fn protocol() -> SyncProtocol {
+    match std::env::var("DARKBOX_SYNC_PROTOCOL").as_deref() {
+        Ok("1.0.0") => SyncProtocol::V1_0,
+        Ok("1.1.0") | Err(_) => SyncProtocol::V1_1,
+        Ok(other) => panic!("Unsupported DARKBOX_SYNC_PROTOCOL: {other}"),
+    }
+}
+/// The common version of this protocol's packages.
+pub fn common_version() -> &'static str {
+    protocol().minimum_common()
+}
+/// Independent reference vectors of the selected protocol version.
+pub fn vectors_json() -> &'static str {
+    match protocol() {
+        SyncProtocol::V1_0 => {
+            include_str!("../../archive/1.5.0/docs/darkbox/sync/1.0.0.vectors.json")
+        }
+        _ => include_str!(
+            "../../extensions/studio.illegal.darkbox.sync/1.1.0/docs/darkbox/sync/1.1.0.vectors.json"
+        ),
+    }
+}
+/// JSON Schema of the selected protocol version.
+#[allow(dead_code)]
+pub fn schema_json() -> &'static str {
+    match protocol() {
+        SyncProtocol::V1_0 => {
+            include_str!("../../archive/1.5.0/docs/darkbox/sync/1.0.0.schema.json")
+        }
+        _ => include_str!(
+            "../../extensions/studio.illegal.darkbox.sync/1.1.0/docs/darkbox/sync/1.1.0.schema.json"
+        ),
+    }
+}
 fn reference() -> &'static Value {
     static DATA: OnceLock<Value> = OnceLock::new();
-    DATA.get_or_init(|| {
-        serde_json::from_str(include_str!(
-            "../../archive/1.5.0/docs/darkbox/sync/1.0.0.vectors.json"
-        ))
-        .expect("Included example profile")
-    })
+    DATA.get_or_init(|| serde_json::from_str(vectors_json()).expect("Included example profile"))
 }
 pub fn mapping() -> SyncMapping {
     serde_json::from_value(reference()["mapping"].clone()).expect("Included mapping")

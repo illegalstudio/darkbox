@@ -116,17 +116,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!([{"name":"notes","description":"Public labels and protected text"}]);
     manifest["folders"].as_array_mut().unwrap().extend([
         json!({"path":"assets","description":"Large public and protected resources"}),
+        // PackageWriter adds the bundle files; the manifest declares their folder.
+        json!({"path":"docs/darkbox/protection","description":"Official protection extension documentation"}),
         json!({"path":"extensions","description":"Extensions"}),
         json!({"path":format!("extensions/{NAMESPACE}"),"description":"Detached signature"}),
     ]);
     manifest["extensions"][NAMESPACE] = json!({"version":"1.0.0","required":true,"data":{"packageId":PACKAGE,"signature":{"algorithm":"Ed25519","signerId":"test-signer","path":SIGNATURE_PATH},"inventory":[],"files":[{"path":path,"keyId":"test-key"}],"sqlite":[{"database":"data/project.sqlite","table":"notes","column":"secret","recordIdColumn":"id","keyId":"test-key"}]}});
     let signer = TestSigner(SigningKey::from_bytes(&[7; 32]));
-    let options = VerificationOptions {
-        decryption_keys: Some(&TestKeys),
-        trusted_signers: BTreeMap::from([("test-signer".into(), signer.public_key())]),
-        require_protection: true,
-        ..Default::default()
-    };
+    let options = VerificationOptions::default()
+        .with_decryption_keys(&TestKeys)
+        .with_trusted_signers(BTreeMap::from([(
+            "test-signer".into(),
+            signer.public_key(),
+        )]))
+        .with_require_protection(true);
     let mut writer = PackageWriter::new(
         &output,
         manifest,

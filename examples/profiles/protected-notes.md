@@ -2,7 +2,7 @@
 
 Identifier: `org.example.protected-notes`. Data-format version: `1`.
 
-This fictional example contains `data/project.sqlite` with SQLite `user_version = 1` and one ordinary `notes` table. It requires `studio.illegal.darkbox.protection` version `1.0.0` and Darkbox `1.1.0`.
+This fictional example contains `data/project.sqlite` with SQLite `user_version = 1` and one ordinary `notes` table. It requires `studio.illegal.darkbox.protection` version `1.0.0` and Darkbox `1.6.0`.
 
 ```sql
 PRAGMA journal_mode = DELETE;

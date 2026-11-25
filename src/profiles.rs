@@ -3,11 +3,18 @@ use crate::{Error, Limits, VerificationOptions, extensions::EntryDigest};
 use serde_json::Value;
 use std::{collections::BTreeMap, fs::File, io::Read, path::PathBuf, time::Instant};
 
+#[non_exhaustive]
+/// What a registered application profile can read while validating a package.
 pub struct ProfileContext<'a> {
+    /// The parsed manifest.
     pub manifest: &'a Value,
+    /// Size and digest of every file in the package.
     pub inventory: &'a BTreeMap<String, EntryDigest>,
+    /// The limits in force.
     pub limits: &'a Limits,
+    /// When the analysis must stop.
     pub deadline: Instant,
+    /// The verification options in force.
     pub options: &'a VerificationOptions<'a>,
     pub(crate) staged: &'a BTreeMap<String, PathBuf>,
 }
@@ -31,6 +38,7 @@ impl ProfileContext<'_> {
             crate::protection::decrypt_block(&block, &key, &context)
         })
     }
+    /// Authenticate and decrypt one protected database value for semantic validation.
     pub fn decrypt_value(
         &self,
         address: crate::ValueAddress<'_>,
@@ -53,6 +61,7 @@ impl ProfileContext<'_> {
             crate::package::decrypt_value(db, &context, &id_column, keys)
         })
     }
+    /// Read one resource's raw bytes from private staging.
     pub fn with_resource<T>(
         &self,
         path: &str,
@@ -97,20 +106,26 @@ impl ProfileContext<'_> {
 /// Validation runs after successful common, SQLite and required-extension checks.
 /// Missing plaintext keys should be handled explicitly by the profile's own policy.
 pub trait ApplicationProfile {
+    /// The `application.id` this profile validates.
     fn id(&self) -> &str;
+    /// Whether this profile implements the given `application.formatVersion`.
     fn supports(&self, format_version: &str) -> bool;
+    /// Validate application semantics; an error marks application validation as failed.
     fn validate(&self, context: &ProfileContext<'_>) -> Result<(), Error>;
 }
 
 #[derive(Default)]
+/// Application profiles by identifier.
 pub struct ProfileRegistry {
     profiles: BTreeMap<String, Box<dyn ApplicationProfile>>,
 }
 
 impl ProfileRegistry {
+    /// Register a profile, replacing any earlier one with the same identifier.
     pub fn register(&mut self, profile: impl ApplicationProfile + 'static) {
         self.profiles.insert(profile.id().into(), Box::new(profile));
     }
+    /// The profile for an identifier, if it supports that data-format version.
     pub fn get(&self, id: &str, version: &str) -> Option<&dyn ApplicationProfile> {
         self.profiles
             .get(id)

@@ -20,15 +20,15 @@ fn sql(error: darkbox::rusqlite::Error) -> Error {
     Error::invalid("example.sql", error.to_string())
 }
 fn database() -> DatabaseDeclaration {
-    DatabaseDeclaration {
-        path: DATABASE.into(),
-        description: "Note records".into(),
-        user_version: Some(1),
-        tables: vec![TableDeclaration {
-            name: "notes".into(),
-            description: "Stable TEXT id, public TEXT label, NULL or encrypted UTF-8 secret".into(),
-        }],
-    }
+    DatabaseDeclaration::new(
+        DATABASE,
+        "Note records",
+        vec![TableDeclaration::new(
+            "notes",
+            "Stable TEXT id, public TEXT label, NULL or encrypted UTF-8 secret",
+        )],
+    )
+    .with_user_version(1)
 }
 struct NotesProfile;
 impl ApplicationProfile for NotesProfile {
@@ -103,17 +103,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut keys = KeyRing::default();
     keys.insert("test-key", Zeroizing::new([42; 32]));
     let signer = Ed25519Signer::from_seed("test-signer", Zeroizing::new([7; 32]));
-    let mut options = VerificationOptions {
-        require_protection: protected,
-        require_profile: true,
-        decryption_keys: Some(&keys),
-        ..Default::default()
-    };
+    let mut options = VerificationOptions::default()
+        .with_require_protection(protected)
+        .with_require_profile(true)
+        .with_decryption_keys(&keys);
     options
         .trusted_signers
         .insert("test-signer".into(), signer.public_key());
     options.profiles.register(NotesProfile);
-    let mut builder = ManifestBuilder::new("1.1.0", "org.example.sdk-notes", "1")?
+    let mut builder = ManifestBuilder::new("1.6.0", "org.example.sdk-notes", "1")?
         .folder("data", "Coherent SQLite snapshots")
         .folder("assets", "Public and private attachments")
         .database(database());

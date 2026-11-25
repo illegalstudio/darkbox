@@ -117,6 +117,14 @@ struct Input {
     staging_directory: Option<PathBuf>,
 }
 
+/// The library report with this tool's own version added.
+#[derive(serde::Serialize)]
+struct CliReport<'a> {
+    cli_version: &'static str,
+    #[serde(flatten)]
+    report: &'a Report,
+}
+
 struct KeyStore(BTreeMap<String, Zeroizing<[u8; 32]>>);
 
 impl darkbox::protection::DecryptionKeys for KeyStore {
@@ -298,24 +306,37 @@ fn run() -> io::Result<u8> {
         ),
         Command::Versions { json } => {
             let mut output = io::stdout().lock();
-            let versions: Vec<_> = darkbox::supported_versions().map(|(version, released)| serde_json::json!({"version": version, "released": released})).collect();
+            let state = |released: bool| {
+                if released {
+                    "released"
+                } else {
+                    "not yet released"
+                }
+            };
             if json {
+                let versions: Vec<_> = darkbox::supported_versions()
+                    .map(|v| serde_json::json!({"version": v.version, "released": v.released}))
+                    .collect();
+                let extensions: Vec<_> = darkbox::supported_extensions()
+                    .map(|e| serde_json::json!({"namespace": e.namespace, "version": e.version, "released": e.released, "minimum_common": e.minimum_common}))
+                    .collect();
                 writeln!(
                     output,
                     "{}",
-                    serde_json::json!({"cli_version": env!("CARGO_PKG_VERSION"), "versions": versions})
+                    serde_json::json!({"cli_version": env!("CARGO_PKG_VERSION"), "versions": versions, "extensions": extensions})
                 )?;
             } else {
-                for version in versions {
+                for version in darkbox::supported_versions() {
+                    writeln!(output, "{} ({})", version.version, state(version.released))?;
+                }
+                for extension in darkbox::supported_extensions() {
                     writeln!(
                         output,
-                        "{} ({})",
-                        version["version"].as_str().unwrap(),
-                        if version["released"].as_bool().unwrap() {
-                            "released"
-                        } else {
-                            "not yet released"
-                        }
+                        "extension {} {} for common {} and later ({})",
+                        extension.namespace,
+                        extension.version,
+                        extension.minimum_common,
+                        state(extension.released)
                     )?;
                 }
             }
@@ -346,11 +367,9 @@ fn run() -> io::Result<u8> {
     }
     limits.staging_directory = input.staging_directory.clone();
     let keys = input.decryption_keys.as_ref().map(load_keys).transpose()?;
-    let mut options = darkbox::VerificationOptions {
-        require_protection: input.require_protection,
-        require_profile,
-        ..Default::default()
-    };
+    let mut options = darkbox::VerificationOptions::default();
+    options.require_protection = input.require_protection;
+    options.require_profile = require_profile;
     options.decryption_keys = keys
         .as_ref()
         .map(|keys| keys as &dyn darkbox::protection::DecryptionKeys);
@@ -384,38 +403,24 @@ fn run() -> io::Result<u8> {
             darkbox::merge(&input.file, delta, destination, limits.clone(), &options)
         }
     };
-    let report = match result {
-        Ok(report) => report,
-        Err(mut error) => {
-            if let Some(report) = error.report.take() {
-                *report
-            } else {
-                let mut report = Report {
-                    report_version: 2,
-                    trusted_resources: Vec::new(),
-                    cli_version: env!("CARGO_PKG_VERSION"),
-                    command: mode,
-                    file: input.file.display().to_string(),
-                    status: error.status,
-                    scope: "transfer",
-                    application_validation: "not_performed",
-                    supported_versions: darkbox::supported_versions().map(|(v, _)| v).collect(),
-                    manifest: None,
-                    entries: vec![],
-                    databases: vec![],
-                    protection: None,
-                    checks: vec![],
-                    diagnostics: vec![],
-                    limits,
-                };
-                report.record(error);
-                report
-            }
+    let mut report = result.unwrap_or_else(|error| {
+        Report::from_failure(mode, input.file.display().to_string(), limits, error)
+    });
+    // The library reports limits neutrally; this tool names its own options.
+    for diagnostic in &mut report.diagnostics {
+        if diagnostic.code == "limits.exceeded" {
+            diagnostic.message.push_str("; select --limits large or raise --max-archive-bytes, --max-entry-bytes, --max-total-bytes, --max-entries, --max-metadata-bytes or --timeout-seconds as appropriate");
         }
-    };
+    }
     let mut output = io::stdout().lock();
     if input.json {
-        serde_json::to_writer_pretty(&mut output, &report)?;
+        serde_json::to_writer_pretty(
+            &mut output,
+            &CliReport {
+                cli_version: env!("CARGO_PKG_VERSION"),
+                report: &report,
+            },
+        )?;
         writeln!(output)?;
     } else {
         text_report(&report, &mut output)?;

@@ -1,8 +1,8 @@
-# Darkbox 1.5.0
+# Darkbox 1.6.0
 
-Specification identifier: `darkbox`. Date: 2026-11-10.
+Specification identifier: `darkbox`. Date: 2026-11-25.
 
-The authoritative versioned copy is `specification/1.5.0.md` in the Darkbox source distribution; `docs/specification.md` is a convenience copy of the current specification.
+The authoritative versioned copy is `specification/1.6.0.md` in the Darkbox source distribution; `docs/specification.md` is a convenience copy of the current specification.
 
 **MUST**, **MUST NOT**, **SHOULD** and **MAY** indicate a requirement, prohibition, recommendation and option within this specification.
 
@@ -13,7 +13,7 @@ Darkbox defines a universal project container and its metadata. An application p
 | Manifest field | Meaning | Fictional example |
 | --- | --- | --- |
 | `darkbox.id` | Stable common specification identifier | `darkbox` |
-| `darkbox.version` | Version of the container and metadata rules | `1.5.0` |
+| `darkbox.version` | Version of the container and metadata rules | `1.6.0` |
 | `application.id` | Stable application profile identifier | `org.example.notebook` |
 | `application.formatVersion` | Profile-specific data-format version | `"3"` |
 | `application.profilePath` | Archive-relative path to the included profile documentation | `docs/profile.md` |
@@ -26,7 +26,7 @@ The application keeps its own project filename extension. The common specificati
 
 ## 2. ZIP and directory structure
 
-A Darkbox ZIP file MUST be one complete ZIP archive with a readable central directory. ZIP encryption, split volumes and self-extracting wrappers are forbidden. STORE and DEFLATE compression methods are allowed; ZIP64 is allowed. Entry ordering, ZIP timestamps and stored permissions have no application meaning. CRC checks remain mandatory regardless of compression.
+A Darkbox package is one ZIP archive or, under section 10, a directory with exactly the same contents. A Darkbox ZIP file MUST be one complete ZIP archive with a readable central directory. ZIP encryption, split volumes and self-extracting wrappers are forbidden. STORE and DEFLATE compression methods are allowed; ZIP64 is allowed. Entry ordering, ZIP timestamps and stored permissions have no application meaning. CRC checks remain mandatory regardless of compression.
 
 These regular files MUST exist at the root, with exactly these names:
 
@@ -35,7 +35,7 @@ manifest.json
 README.md
 ```
 
-Every archive MUST also include the entire canonical documentation bundle for its declared version: all contents of `archive/<darkbox.version>/` are copied into the ZIP root, retaining relative paths and file bytes. This directory is a source distribution location, not an enclosing directory inside the ZIP. The bundle includes the root README and the original SQLite reference documentation described in section 5.
+Every archive MUST also include the entire canonical documentation bundle for its declared version: all contents of `archive/<darkbox.version>/` are copied into the ZIP root, retaining relative paths and file bytes. This directory is a source distribution location, not an enclosing directory inside the ZIP. The bundle includes the root README and the original SQLite reference documentation described in section 5. Documentation of official extensions is not part of this common bundle: section 9 defines a separate canonical bundle for each official extension version, included only when the manifest declares it.
 
 There MUST be at least one declared, self-contained SQLite database. Database names and paths belong to the profile; `data/project.sqlite` is a recommended convention, not a common requirement:
 
@@ -45,7 +45,7 @@ example.project
 ├── README.md
 ├── docs/
 │   ├── profile.md
-│   ├── darkbox/bundle.json
+│   ├── darkbox/           # canonical catalog and common Darkbox documents
 │   └── sqlite/            # complete canonical SQLite reference bundle
 ├── data/
 │   └── project.sqlite
@@ -53,7 +53,7 @@ example.project
     └── image-001.png
 ```
 
-There is no enclosing project directory. `folders` MUST list every expected directory, including ancestors of nested paths and all canonical bundle directories. Version 1.5.0 therefore requires `docs`, `docs/darkbox`, `docs/darkbox/protection`, `docs/darkbox/sync`, `docs/sqlite` and `docs/sqlite/images` in this inventory. A nonempty directory exists through its child entries; an expected empty directory MUST have a ZIP directory entry ending in `/`. Manifest directory paths do not end in `/`. An explicit directory entry cannot substitute for a regular file. Application profile documentation MUST also be inside declared folders; databases MAY still be at the root.
+There is no enclosing project directory. `folders` MUST list every expected directory, including ancestors of nested paths and all canonical bundle directories. Version 1.6.0 therefore requires the four common bundle directories `docs`, `docs/darkbox`, `docs/sqlite` and `docs/sqlite/images` in this inventory, together with every directory of each included extension bundle. A nonempty directory exists through its child entries; an expected empty directory MUST have a ZIP directory entry ending in `/`. Manifest directory paths do not end in `/`. An explicit directory entry cannot substitute for a regular file. Application profile documentation MUST also be inside declared folders; databases MAY still be at the root.
 
 Regular files at the root MUST be either the required metadata files or declared databases. Declared directories are also allowed at the root. Other regular files, including application profile documentation, MUST be inside declared folders and follow a profile or extension convention. Every standalone SQLite database, including extension databases, MUST be inventoried, regardless of its filename suffix. A file with the SQLite database header is a database for this purpose; a SQLite BLOB inside another database is not a standalone archive entry.
 
@@ -65,13 +65,13 @@ Readers MUST identify the ZIP or directory structure and manifest rather than re
 
 The manifest uses **JSON**: one object encoded as UTF-8 without a BOM. Comments, trailing commas, non-JSON numbers and duplicate object keys at any level are forbidden. Object member order is insignificant. Array order in the common inventory does not choose a primary database or table. Two-space indentation and a final newline are recommended.
 
-The [version-specific manifest schema](../schema/1.5.0/manifest.schema.json) uses [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/json-schema-core). Its `$schema` identifies the schema language, not the Darkbox version; its `$id` identifies this schema using an URN, not a download location. An archive does not require network access or an embedded schema. A reader selects its supported schema from `darkbox.version`. Schemas are retained under `schema/<version>/`; the root schema is a convenience copy for the current version.
+The [version-specific manifest schema](../schema/1.6.0/manifest.schema.json) uses [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/json-schema-core). Its `$schema` identifies the schema language, not the Darkbox version; its `$id` identifies this schema using an URN, not a download location. An archive does not require network access or an embedded schema. A reader selects its supported schema from `darkbox.version`. Schemas are retained under `schema/<version>/`; the root schema is a convenience copy for the current version.
 
 | Field | Required | Value |
 | --- | --- | --- |
-| `darkbox` | Yes | Object with `id = "darkbox"`, `version = "1.5.0"` |
+| `darkbox` | Yes | Object with `id = "darkbox"`, `version = "1.6.0"` |
 | `application` | Yes | Object with `id`, `formatVersion` and `profilePath` strings |
-| `folders` | Yes | Array of objects with `path` and short `description`, including the four canonical bundle directories |
+| `folders` | Yes | Array of objects with `path` and short `description`, including the four common bundle directories and the directories of every included extension bundle |
 | `databases` | Yes | Nonempty array of objects with `path`, short `description` and `tables` |
 | `databases[].tables` | Yes | Array of objects with exact SQL `name` and short `description`; may be empty when there are no application tables |
 | `databases[].userVersion` | No | Integer from 0 through 2147483647, compared with SQLite when present |
@@ -84,7 +84,7 @@ Application, creator and extension versions are nonblank strings of at most 128 
 
 Each database's `tables` MUST list all logical application tables, including virtual tables. SQLite internal tables named `sqlite_*` and module-managed shadow tables are excluded. Other tables MUST NOT be excluded solely because of a naming prefix. Views, indexes and triggers remain in SQLite and are not part of this table inventory. Table names are exact, nonblank SQL identifiers, may use Unicode and are at most 255 characters. A tool MUST quote SQL identifiers correctly rather than interpolate names as SQL text.
 
-Version 1.5.0 rejects unknown properties in common objects. Extensions are represented only through `extensions`; their `data` objects are open. JSON Schema checks the shape, constants, required canonical folder declarations and some syntax. It does not check resource existence, canonical bundle bytes, SQL schemas, path uniqueness by key or the full container. It cannot detect duplicate JSON keys after a parser has discarded them.
+Version 1.6.0 rejects unknown properties in common objects. Extensions are represented only through `extensions`; their `data` objects are open. JSON Schema checks the shape, constants, the four required common bundle folder declarations and some syntax. It does not check resource existence, canonical bundle bytes, SQL schemas, path uniqueness by key or the full container. It cannot detect duplicate JSON keys after a parser has discarded them.
 
 ## 4. Relative paths, encodings and resource names
 
@@ -94,7 +94,7 @@ Technical paths use ASCII. Each component matches `[A-Za-z0-9_-](?:[A-Za-z0-9._-
 
 ZIP entry names follow the same rules, allowing a final `/` only for a directory. Names use UTF-8; ASCII avoids dependence on legacy ZIP codepages. Exact paths are authoritative, but the archive MUST also avoid collisions after ASCII case folding, including implicit parent directories. Thus `media/A.png` and `media/a.png` cannot coexist, nor can `Data/a.png` and `data/b.png`. Duplicate entries, file/directory collisions, symbolic links and other special filesystem entries are forbidden. The root metadata names are reserved, including their case-folded equivalents.
 
-All canonical bundle file paths are reserved, including their case-folded equivalents. The `docs/sqlite/` and `docs/darkbox/` subtrees are reserved in their entirety and MUST contain only their canonical files and directories. Profiles and extensions MUST NOT add or replace resources there. The shared `docs/` directory MAY contain application documentation at other paths, such as `docs/profile.md`.
+All canonical bundle file paths are reserved, including their case-folded equivalents. The `docs/sqlite/` and `docs/darkbox/` subtrees are reserved in their entirety. They MUST contain only the files and directories of the common canonical bundle and of the extension bundles that section 9 requires for the declared official extensions. Profiles and extensions MUST NOT add or replace resources there. The shared `docs/` directory MAY contain application documentation at other paths, such as `docs/profile.md`.
 
 Folder paths and database paths MUST be unique within their inventories and cannot denote the same location. Table names within a database MUST be unique according to SQLite's ASCII case-insensitive identifier comparison. A database's parent folders MUST be declared, except for a root database.
 
@@ -106,17 +106,16 @@ Display names and original attachment filenames are data, not ZIP paths, and may
 
 ### Canonical documentation bundle
 
-The complete contents of `archive/<darkbox.version>/` are the canonical documentation bundle for that specification version. For `darkbox.version = "1.5.0"`, a writer MUST copy every file and directory from [archive/1.5.0/](../archive/1.5.0/) into the ZIP root, preserving relative paths and file bytes. The source directory itself is not copied as an enclosing directory. The manifest, application profile documentation, databases and other resources are added separately at their declared paths.
+The complete contents of `archive/<darkbox.version>/` are the canonical documentation bundle for that specification version. For `darkbox.version = "1.6.0"`, a writer MUST copy every file and directory from [archive/1.6.0/](../archive/1.6.0/) into the ZIP root, preserving relative paths and file bytes. The source directory itself is not copied as an enclosing directory. The manifest, application profile documentation, databases and other resources are added separately at their declared paths.
 
-The canonical files for version 1.5.0 are:
+The canonical files for version 1.6.0 are:
 
 | Archive path | Purpose |
 | --- | --- |
 | `README.md` | Canonical Darkbox guide and full MIT notice for Darkbox materials |
 | `docs/darkbox/bundle.json` | Canonical file and directory catalog with SHA-256 reference digests |
-| `docs/darkbox/large-libraries.md` | Offline directory, inventory and delta rules |
+| `docs/darkbox/large-libraries.md` | Offline copy of sections 10 through 14: directory, inventory, delta and live-storage rules |
 | `docs/darkbox/delta.schema.json` | Delta transfer descriptor schema |
-| `docs/darkbox/protection/` | Official protection extension specification, schema and test vectors |
 | `docs/sqlite/fileformat2.html` | Original SQLite on-disk database-format reference |
 | `docs/sqlite/copyright.html` | Original SQLite public-domain notice |
 | `docs/sqlite/sqlite.css` | Original local stylesheet for the captured HTML pages |
@@ -128,7 +127,7 @@ Writers MUST NOT edit, translate, prepend or append content, change line endings
 
 The canonical README uses English, UTF-8 without a BOM and LF line endings, and states the exact Darkbox version it documents. The manifest is authoritative for project identity, versions and inventory. The README explains the common format and points to the manifest for application details; it is not a second application-schema definition. The source directory is the complete list of static files to include. Writers generate project metadata and payload separately.
 
-The catalog at `docs/darkbox/bundle.json` is canonical metadata governed by the [bundle catalog schema](../schema/1.5.0/bundle.schema.json). It identifies the exact Darkbox version in `darkbox`, lists all canonical directories in `folders`, and lists every other canonical file in `files`. Each file record has its exact relative `path`, uncompressed byte `size` and lowercase 64-character `sha256` digest. File and directory paths are unique and sorted by ascending ASCII byte order. The catalog is excluded from its own digest list; it MUST itself be included unchanged and compared with the trusted version-specific reference. This avoids a self-referential checksum.
+The catalog at `docs/darkbox/bundle.json` is canonical metadata governed by the [bundle catalog schema](../schema/1.6.0/bundle.schema.json). It identifies the exact Darkbox version in `darkbox`, lists all common bundle directories in `folders`, and lists every other common bundle file in `files`. Extension bundles have their own catalogs (section 9) and are not listed here. Each file record has its exact relative `path`, uncompressed byte `size` and lowercase 64-character `sha256` digest. File and directory paths are unique and sorted by ascending ASCII byte order. The catalog is excluded from its own digest list; it MUST itself be included unchanged and compared with the trusted version-specific reference. This avoids a self-referential checksum.
 
 Reference data MUST come from a locally trusted Darkbox distribution for the supported version. An archive's own catalog MUST NOT be the sole source of expected hashes. SHA-256 is computed over uncompressed file bytes, independent of ZIP compression and timestamps. Catalog consistency, file hashes and exact-byte comparison do not establish authorship or authenticate user project data. The catalog does not inventory or hash the dynamic project manifest, application-profile document, databases or attachments.
 
@@ -173,23 +172,23 @@ A full validator MUST check:
 
 1. Complete ZIP structure, supported compression, successful decompression and CRC for every entry.
 2. Required metadata files, UTF-8 and strict JSON including duplicate-key detection, specification identity and supported version.
-3. The corresponding manifest schema, path rules, inventory, official catalog, canonical file sizes and SHA-256 digests, and byte-for-byte equality with every file in the canonical bundle for the declared specification version; no additional files or directories in the reserved documentation subtrees.
+3. The corresponding manifest schema, path rules, inventory, official catalog, canonical file sizes and SHA-256 digests, and byte-for-byte equality with every file in the canonical bundle for the declared specification version and in the bundle of every declared official extension version; no additional files or directories in the reserved documentation subtrees.
 4. Presence and type of every declared folder and database, declared parent folders, readable profile documentation at `application.profilePath`, no uninventoried standalone databases and no SQLite sidecars.
 5. Extracted SQLite databases opened read-only, without loadable extensions or SQL supplied by metadata; integrity, foreign keys, logical table inventory and declared `userVersion`. No trial writes or trigger execution. An unavailable required SQLite module is an unsupported-capability diagnosis, not proof of corruption.
 6. Application-profile requirements: supported data version, matching embedded documentation, SQL structure, application invariants, reference resolution, required resources and required extensions.
 
 A generic tool MAY inventory metadata without implementing a profile. It MUST distinguish that from full application validation. Manifest validation, CRC success and database integrity each cover only one layer.
 
-The Darkbox CLI's `verify` command reports machine-checkable common rules separately from application validation. Presence and text encoding of an application-profile document do not prove the accuracy or completeness of its contents. A successful common-check report MUST NOT be presented as full application conformance. `inspect` exposes metadata and diagnostics without certifying conformance. The CLI software version is independent of every specification version it supports.
+A generic verification tool MUST report machine-checkable common rules separately from application validation. Presence and text encoding of an application-profile document do not prove the accuracy or completeness of its contents. A successful common-check report MUST NOT be presented as full application conformance. An inspection mode MAY expose metadata and diagnostics without certifying conformance. The version of a tool is independent of every specification version it supports.
 
 A truncated ZIP, CRC failure, malformed manifest, missing declared resource or corrupt database prevents ordinary writable opening. The original MUST remain unchanged. Recovery MAY write verified data to a new destination, reporting what is missing; it MUST NOT overwrite the source or certify a partial result as valid. Missing optional external references explicitly permitted by a profile are warnings, not container corruption.
 
 ### Saving
 
-A writer publishing a ZIP snapshot MUST create a complete replacement ZIP, never update entries in the opened archive in place. Quiescent directory boundaries follow section 13:
+A writer publishing a ZIP snapshot MUST create a complete replacement ZIP, never update entries in the opened archive in place. Quiescent directory boundaries follow section 10. Saving a ZIP proceeds as follows:
 
 1. Flush pending changes and capture coherent database and resource snapshots as specified in section 6.
-2. Copy the complete matching canonical bundle into the archive root and prepare application profile documentation for the packaged data-format version, the updated manifest and all preserved resources, including unknown optional-extension resources. Never refresh individual canonical files from the live website.
+2. Copy the complete matching canonical bundle and the bundle of every declared official extension version into the archive root, and prepare application profile documentation for the packaged data-format version, the updated manifest and all preserved resources, including unknown optional-extension resources. Never refresh individual canonical files from the live website.
 3. Create and close a temporary ZIP in the destination directory, then fully validate the candidate before publication.
 4. Coordinate concurrent writers and check that the opened source has not changed, using a shared writer lock and a reliable source identity such as a complete hash. A pre-rename check without writer coordination leaves a race. A conflict MUST preserve the source and lead to a separate-copy workflow.
 5. Sync the candidate file, atomically replace the destination using the platform's supported primitives, and sync the parent directory where supported. For a new file, publish without overwriting an existing file. If the filesystem cannot meet the required guarantee, fail or save a separate copy rather than silently weaken it.
@@ -210,7 +209,7 @@ Patch changes clarify existing rules without changing allowed structures or requ
 | --- | --- |
 | Unknown common specification identifier | Reject application opening; generic ZIP inventory may remain available |
 | Unimplemented common version | Report unsupported version, preserve source; only generic inspection or an explicitly uncertified read-only view |
-| Unknown common field under version 1.5.0 | Report schema nonconformance rather than silently ignore it |
+| Unknown common field under version 1.6.0 | Report schema nonconformance rather than silently ignore it |
 | Unknown application or application data version | Generic inspection allowed; no application-data modification without a supported profile or migration |
 | Unknown required extension or unsupported extension version | Block ordinary application opening and saving; generic inventory allowed |
 | Unknown optional extension or unsupported extension version | Skip the feature but preserve its descriptor and resources, or refuse saving if preservation cannot be guaranteed |
@@ -233,288 +232,121 @@ An extension MUST NOT reinterpret common fields. Each member of `extensions` has
 }
 ```
 
-This is a fragment to insert into a complete manifest. If files exist, the common inventory MUST declare both `extensions` and `extensions/org.example.analysis`. Extension files MUST be under `extensions/<namespace>/`; its databases MUST also appear in `databases`. Path-valued extension data follows the common path rules, and the extension specification defines its meaning. An extension cannot replace canonical files, write into the reserved `docs/sqlite/` or `docs/darkbox/` subtrees or replace another namespace's resources.
+This is a fragment to insert into a complete manifest. If files exist, the common inventory MUST declare both `extensions` and `extensions/org.example.analysis`. Extension files MUST be under `extensions/<namespace>/`; its databases MUST also appear in `databases`. Path-valued extension data follows the common path rules, and the extension specification defines its meaning. An extension cannot replace canonical files, write into the reserved `docs/sqlite/` or `docs/darkbox/` subtrees or replace another namespace's resources. The only extension content in `docs/darkbox/` is the canonical bundle of a declared official extension (section 9).
 
 Namespace ownership and version interpretation belong to the extension publisher. `required = false` promises the base project remains interpretable and editable without the feature and opaque preservation remains safe after base-data edits. An extension that changes data meaning or requires synchronization with base data MUST be required.
 
 An unaware writer MUST preserve an optional extension descriptor as a JSON value and its uncompressed resource bytes. It need not preserve JSON whitespace, ZIP compression or timestamps. It must also preserve other declared resources it cannot regenerate. If preservation is impossible, it MUST NOT overwrite the source. Permanent changes to application data conventions belong to a new profile data version, not arbitrary common fields.
 
-Integrity validation uses ZIP CRC and the SQLite checks in sections 6 and 7. The canonical catalog additionally uses SHA-256 for comparison with official static documentation. This version defines the official `studio.illegal.darkbox.protection` extension, independently versioned as 1.0.0, for selective encryption, a signed complete payload inventory and application-supplied trust. Its normative [specification](../archive/1.5.0/docs/darkbox/protection/1.0.0.md), [schema](../archive/1.5.0/docs/darkbox/protection/1.0.0.schema.json) and [test vectors](../archive/1.5.0/docs/darkbox/protection/1.0.0.vectors.json) travel in the canonical bundle. The extension MUST be required when present, MUST NOT be used with a common version earlier than 1.1.0, and does not change the SQLite physical format. Public metadata and required documentation MUST remain readable. Without this extension no payload authentication is claimed. There is no general public extension registry. ZIP CRC detects accidental errors, not authenticity. Additional algorithms and block or extension versions require an explicit versioned specification. Ordinary readers MUST verify required extension semantics, including signature trust, before opening; absent decryption keys allow a public or locked view. Writers MUST refuse a save that cannot retain required protection and produce its updated authenticated inventory and signature. Diagnostic inspection does not authorize saving.
+Integrity validation uses ZIP CRC and the SQLite checks in sections 6 and 7. The canonical catalogs additionally use SHA-256 for comparison with official static documentation. ZIP CRC detects accidental errors, not authenticity. Without the protection extension of section 9, no payload authentication is claimed.
 
-## 13. Quiescent directory representation
+## 9. Official extensions and their canonical bundles
 
-A Darkbox 1.5.0 package MAY be a directory containing exactly the same files,
-relative paths and canonical bytes as its ZIP representation. The root contains
-manifest.json and README.md, without an enclosing version directory. All folder,
-path, inventory, profile, SQLite, extension and protection rules apply. ZIP header,
-compression and CRC requirements apply only to ZIP representations. Directory
-readers MUST read every file for full verification; absence of a ZIP CRC does not
-permit skipping SQLite, canonical or cryptographic checks. Symbolic links and
-special entries are forbidden, including at the root. Empty declared folders
-MUST exist. Filesystem timestamps and permissions have no project meaning.
+### Extension bundles
 
-A directory is conformant only at a quiescent boundary: all application writers
-and workers have stopped, every database is a closed self-contained DELETE-mode
-snapshot without journal/WAL/shared-memory sidecars, and metadata, inventories
-and signatures describe those exact bytes. An active directory is working
-storage and makes no conformance claim. Applications MAY use WAL and temporary
-working data while active. They MUST coordinate exclusive access while preparing,
-verifying, packing or unpacking a snapshot. Tools MUST NOT delete sidecars or
-silently checkpoint application databases. A snapshot of a running database MUST
-use SQLite's backup API or equivalent application-coordinated snapshot facilities.
-Copying a WAL database's main file alone is insufficient.
+Official Darkbox extensions use namespaces of the form `studio.illegal.darkbox.<name>`, where `<name>` is one identifier segment. Each official extension is versioned independently of the common specification. This common version does not enumerate the extension versions that may be used with it: an extension version states the common versions it supports, and a reader states the extension versions it implements. There is no general public extension registry. Extensions in other namespaces follow section 8 and have no canonical bundle.
 
-Packing and unpacking MUST preserve the relative file inventory and every file's
-bytes, including the exact manifest, unknown optional data and signatures.
-Compression, entry order, explicit nonempty ZIP directory entries, permissions
-and timestamps need not round-trip. Conversion does not migrate common or
-application versions and does not require signing keys. Tools MUST validate a
-candidate before publication and MUST NOT overwrite an existing destination
-without a separately authorized replacement operation. Parent directories and
-input quiescence remain caller-controlled.
+The documentation of one official extension version is a canonical extension bundle, separate from the common bundle of section 5. Its source distribution location is `extensions/<namespace>/<extension version>/`. As with the common bundle, the contents of that directory are copied into the package root, retaining relative paths and file bytes, without an enclosing directory. Every file and directory of the bundle is inside the reserved directory `docs/darkbox/<name>/`, which belongs to that namespace. The shared ancestors `docs` and `docs/darkbox` belong to the common bundle.
 
-## 14. Library identity and optional unsigned inventory
+A package MUST include the complete canonical bundle of every official extension version its manifest declares. It MUST NOT contain the directory `docs/darkbox/<name>/`, or anything inside it, for an official extension its manifest does not declare, and for a declared extension that directory MUST contain only the bundle of the declared version. `folders` MUST list every directory of each included bundle. A package that declares no official extension therefore contains only the common bundle files in `docs/darkbox/`.
 
-The optional root manifest `packageId` is a stable, application-assigned library
-identity, matching `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`. Producers SHOULD use a random
-UUID. Different independent libraries MUST have different identities. An edition
-retains its library identity; an independent copy MAY receive a new identity via
-an explicit application operation. This identifier is not a signature, content
-hash or proof of ownership. A delta participant MUST declare it. A protected
-package that also declares this root field MUST use the same value for the
-protection extension's `data.packageId`.
+Each extension bundle contains a catalog at `docs/darkbox/<name>/<extension version>.bundle.json`, governed by the [extension bundle catalog schema](../schema/1.6.0/extension-bundle.schema.json). It names the extension in `extension.namespace` and `extension.version`, lists the bundle's directories in `folders` and lists every other bundle file in `files`, using the record shape, ordering and digest rules of the common catalog. The catalog is excluded from its own file list. It MUST be included unchanged and compared with the trusted reference for that extension version.
 
-The optional root `resourceInventory` array contains objects with exactly `path`,
-`size` (nonnegative byte length) and `sha256` (64 lowercase hexadecimal digits).
-When present, it MUST cover every dynamic regular file exactly once, including
-databases, profile documents, application resources and extension resources.
-It MUST exclude manifest.json, the canonical catalog, all canonical bundle files
-and the official detached protection signature. These exclusions avoid circular
-hash dependencies. Producers MUST update it whenever covered bytes change.
-The signed protection extension retains its separate complete payload inventory
-and signature requirements. Unsigned inventory is optional; full verification
-MUST compare every declared digest and size with actual bytes if it is present.
+Every rule of section 5 for canonical files applies to extension bundle files. Writers MUST NOT edit, translate, omit or add files. A validator MUST compare every included extension bundle file with a locally trusted reference for that exact extension version, without network access, and an archive's own catalog MUST NOT be the sole source of expected hashes. A published extension bundle is immutable: any change to its rules or files requires a distinct extension version. Publishing a new extension version does not require a new common version. Extension bundle files are canonical files wherever this specification uses that term: they are excluded from `resourceInventory` (section 11) and listed in delta `targetFiles` (section 12).
 
-A tool MAY expose a quick inventory inspection that checks structure, schema,
-path coverage and declared sizes without reading all payload bytes. Such a report
-MUST explicitly state that CRC, hashes, canonical bytes, SQLite, signatures and
-application semantics were not verified, and MUST NOT report a verified package.
-The inventory itself is untrusted. Matching path, size or modification time does
-not prove bytes unchanged. Incremental re-verification MAY reuse trusted cached
-results only if the application can independently guarantee unchanged bytes, for
-example through immutable, application-controlled objects. Full common verification
-remains a complete byte pass. Unsigned hashes provide no authenticity.
+A reader without a trusted reference for a declared official extension version cannot verify that bundle. It MUST treat the extension as unsupported under section 8, which blocks ordinary opening and saving when the extension is required. It MUST NOT report that documentation as verified, and it MUST preserve the bundle's bytes whenever section 8 permits it to save.
 
-## 15. Delta transfers
+### Protection
 
-A delta is a separate ZIP transfer envelope, not a conformant standalone project.
-It applies one exact complete base edition to produce one exact complete target
-edition. Both editions MUST conform to an explicitly supported delta-capable common
-version (1.2.0, 1.3.0, 1.4.0 or 1.5.0) with the same
-`packageId`. Delta envelope version `1.0.0` is independent of software and common
-specification versions. A delta MUST NOT remove or change the version of a
-required extension present in its base. Application migrations that produce the
-target remain application responsibilities.
+The official `studio.illegal.darkbox.protection` extension provides selective encryption, a signed complete payload inventory and application-supplied trust. Its version 1.0.0 supports this common version; the normative specification, schema and test vectors are the extension bundle at [extensions/studio.illegal.darkbox.protection/1.0.0/](../extensions/studio.illegal.darkbox.protection/1.0.0/). The extension MUST be required when present and does not change the SQLite physical format. Public metadata and required documentation MUST remain readable. Additional algorithms and block or extension versions require an explicit versioned specification.
 
-The envelope MUST obey the common safe ZIP/path rules, including STORE/DEFLATE,
-ZIP64 support, unique names, no aliases, no encryption, no links and CRC checks
-for every entry. Its regular files are exactly root `delta.json` and
-`files/0`, `files/1`, ... for each changed path. The optional explicit `files/`
-directory is its only permitted directory entry and MUST be absent when there
-are no changed files. No canonical bundle is required inside this transfer
-because unchanged canonical bytes are inherited from the verified base.
+Ordinary readers MUST verify required extension semantics, including signature trust, before opening; absent decryption keys allow a public or locked view. Writers MUST refuse a save that cannot retain required protection and produce its updated authenticated inventory and signature. Diagnostic inspection does not authorize saving. A protected package that declares the root `packageId` of section 11 MUST use the same value for the extension's `data.packageId`.
 
-`delta.json` is UTF-8 JSON without a BOM or duplicate keys. It has exactly these
-fields, with no unrecognized members:
+### Offline causal synchronization
 
-- `darkboxDelta`: the string `1.0.0`.
-- `base`, `target`: objects with exactly `packageId`, `manifestSha256` and
-  `inventorySha256`, identifying the corresponding complete edition.
-- `targetFiles`: all target regular files, sorted by bytewise ASCII path, each
-  with exactly `path`, `size` and `sha256` as in section 14. This list includes
-  manifest.json, canonical files and detached signatures. Paths are unique,
-  case-unambiguous and valid under the common rules.
-- `folders`: every target manifest folder path, sorted by bytewise ASCII path,
-  without duplicates, including empty directories.
-- `changed`: target paths whose size or SHA-256 differs from the base, or which
-  are absent from the base, sorted by bytewise ASCII path, without duplicates.
-  `files/N` contains the complete raw target file for `changed[N]`.
-- `removed`: base file paths absent from the target, sorted by bytewise ASCII
-  path, without duplicates. Replacements are represented by `changed`.
+The official `studio.illegal.darkbox.sync` extension lets applications maintain a local working library and exchange immutable causal transactions and content-addressed resources through a separately synchronized directory. It is optional to adopt and MUST be required when present. It binds the root `packageId`, the exact application profile, the data-format version and an immutable domain identity. Operating-system directory locks never act as distributed locks. Deltas retain their exact-base transfer semantics and do not merge concurrent changes.
 
-Each edition identity hashes the exact manifest bytes with SHA-256. Its
-`inventorySha256` hashes a canonical logical file inventory: build an array of
-all regular files sorted by bytewise ASCII path, with each object serialized in
-key order `path`, `size`, `sha256`. Serialize compact UTF-8 JSON without whitespace,
-BOM or trailing newline; sizes are ordinary base-10 integers without leading
-zeroes, paths are unescaped ASCII under section 4, and hashes are lowercase hex.
-Hash those exact JSON bytes with SHA-256. This binds base resources even if the
-manifest is unchanged. Directory entries, timestamps and compression are excluded.
-The inventory itself is not a signer authentication mechanism.
-
-Reconstruction MUST fully verify the base, compare both base identity hashes,
-validate the complete transfer and its exact changed/removed lists, and bound
-both transport and reconstructed sizes using reader-owned limits. It MUST copy
-unchanged files from that verified base, copy changed files from their indexed
-payloads and omit removed files. It MUST then fully verify the reconstructed
-target, its complete targetFiles inventory, folders and both target identity
-hashes before publication. Signed targets require externally trusted signer
-keys, but no new signature or private signing key. Exact signed bytes MUST survive.
-A rejected link MUST leave base and existing destinations unchanged.
-
-Chains MUST be applied in order, with each fully verified reconstructed target
-serving as the next base. A missing or mismatched base blocks reconstruction;
-readers MUST NOT guess or fetch one from the network. Tools SHOULD retain periodic
-complete editions and bound chain depth under application policy. SQLite changes
-transfer the whole database; this version does not define page patches. Deltas
-reduce retained/transmitted bytes. Section 17 additionally permits conditional
-resource checks for application-controlled live targets; full verification still
-reads all bytes. Appended ZIP
-updates with duplicate entry names remain forbidden.
-
-## 16. Direct media access and reader storage policy
-
-Producers SHOULD use STORE for already compressed media, including JPEG, PNG,
-WebP and MP4, and SHOULD align each such entry's data start to a 4096-byte boundary
-using valid local ZIP extra fields. Alignment is an optimization, not a conformance
-requirement; readers MUST accept unaligned valid STORE and DEFLATE entries.
-Readers MAY serve bounded byte ranges from STORE entries in a fully verified,
-immutable ZIP without extracting media. Range offsets MUST use verified local
-header/data boundaries, remain inside the selected entry and support ZIP64.
-Protected entries expose ciphertext; range access does not bypass authentication.
-Readers and applications MUST exclude concurrent mutation while direct handles
-are in use. DEFLATE entries require decompression before random byte access.
-
-Applications SHOULD select private staging storage explicitly rather than modify
-process-global temporary-directory environment variables. Atomic output candidates
-SHOULD remain beside the destination to support same-filesystem publication.
-Reader limits are external policy and MUST NOT be increased by manifest claims,
-a delta or an extension. Tools SHOULD provide named large-library presets and
-actionable limit errors, while retaining bounded entry counts, metadata, total
-sizes and deadlines. A limit increase never establishes conformance by itself.
-
-## 17. Coordinated live directory storage
-
-A 1.5.0 directory MAY serve as live application working storage. Its databases
-MAY use WAL while active. Working state is not a conforming snapshot: ordinary
-readers MUST refuse it until the application has recovered and sealed it.
-Published 1.0.0, 1.1.0 and 1.2.0 references remain unchanged.
-
-### Stable interoperable lock
-
-A participating application MUST hold an exclusive advisory lock for the whole
-working session, including all background writers and recovery. Readers MUST
-hold a shared lock throughout directory inspection, verification, packing or
-use as a delta input. Several readers MAY coexist; any exclusive holder blocks
-them. Publication into an absent directory MUST hold the exclusive destination
-lock through publication. Locks are nonblocking: contention is not corruption.
-
-The lock is a regular sibling file named `.darkbox-<digest>.lock`. Resolve the
-parent directory's filesystem aliases, take the library's final filename, apply
-Unicode default lowercase (no normalization), encode it as UTF-8 and compute
-SHA-256. `<digest>` is the 64 lowercase hexadecimal digits of that hash. Use the
-same canonical filename spelling for Unicode aliases on filesystems with
-additional case equivalences. On Unix use whole-file `flock(2)` shared/exclusive
-locks on the open lock descriptor, compatible with the Rust SDK's fs2 locks.
-The parent directory and lock location MUST be application-controlled. A symlink
-or nonregular lock file MUST be rejected. If a filesystem cannot provide these
-locks, fail rather than silently proceed. Initialize the lock on writable
-storage; an existing readable lock permits shared reads of read-only storage.
-
-The lock inode MUST NOT be deleted or replaced, including after release or a
-crash. Hold its descriptor until the operation ends, and explicitly unlock on
-normal release. Set close-on-exec and prevent unintended descriptor inheritance;
-duplicated descriptors refer to the same lock. Process termination releases
-the kernel lock; the remaining file does not mean the library is busy. PID files,
-PID liveness guesses and stale-lock deletion MUST NOT substitute for this
-primitive. Do not move or rename an active library. The sibling file is local
-coordination state: it is outside package inventory, resourceInventory and ZIP
-content, and its existence does not affect package conformance. Legacy writers
-that ignore this protocol still require external coordination.
-
-### Not-quiescent outcome and sealing
-
-Lock contention, sidecars associated with declared databases (`-wal`, `-shm`,
-`-journal`, or `-mj...`), and a SQLite main-file header still in WAL mode MUST
-produce `not_quiescent` with diagnostic `directory.not_quiescent`, rather than a
-corruption finding. The CLI uses exit code 6. This outcome certifies neither
-validity nor invalidity: reopen the owning application to recover its working
-state and seal it. Readers MUST NOT checkpoint, delete sidecars or alter source
-databases. ZIP snapshots retain their existing invalid-sidecar rules.
-
-To seal, stop all application writes, finish transactions, recover/checkpoint
-through SQLite as needed, verify DELETE mode, close every connection and confirm
-absence of sidecars. While retaining the exclusive lock, synchronize the manifest
-with the profile and payload, refresh any resourceInventory, and validate the
-result. Publish manifest changes atomically and release the lock only after all
-writers have stopped. A seal MUST NOT hide corruption or silently remove
-protection. A failed validation MUST preserve the previous manifest. Closed
-WAL-header databases are not accepted in this version, even without sidecars.
-
-Initialization MAY create the canonical bundle, declared directories, profile
-and a manifest with packageId directly, without an intermediate ZIP. Until its
-databases/resources exist and sealing succeeds, this is working storage only.
-Existing directories MUST NOT be overwritten by initialization.
-
-### Hot snapshots and direct deltas
-
-An application holding the exclusive lock MAY capture a complete edition without
-closing live database connections. Capture has two phases. Under a coherent write
-barrier, snapshot every declared database using the SQLite online backup API,
-copy the manifest and profile revision, and freeze the complete resource listing,
-including paths, sizes and filesystem identity where available. Use private closed
-DELETE-mode database copies; omit only associated live sidecars from the view.
-The original databases and sidecars remain untouched.
-
-Once a capture handle has been returned, the application MAY release its write
-barrier and resume database writes, metadata edits and resource additions. Newly
-added files belong to later editions and MUST NOT enter this capture through
-re-enumeration. Retain every captured external resource unchanged and undeleted
-until streaming finishes or the handle is dropped. Applications MAY defer deletes
-until all captures referencing those resources have finished. The capture handle
-retains database/profile/manifest snapshots separately from those live paths.
-
-Streaming MUST check captured size/type and file identity where available, and
-reject missing, replaced or modified retained resources. Changed output bytes
-MUST still be hashed while copying, including when comparison used trusted hashes.
-Failure MUST discard the output candidate. A capture is not a filesystem snapshot:
-applications remain responsible for immutability and retention across streaming.
-An advisory lock alone does not pause threads in the owning application.
-
-A delta MAY be constructed from a verified base edition and this captured target
-view without writing a complete target ZIP. Hash the exact target manifest and
-complete logical target inventory as in section 15; write only changed whole
-files, including complete changed databases. Changed bytes MUST be compared
-against their selected hashes while copying. Reconstruction still requires the
-exact base and full target verification. No page-level database delta is implied.
-
-### Application-trusted cached digests
-
-Applications MAY explicitly supply SHA-256 results for immutable resources whose
-identity and unchanged bytes they independently guarantee. Archive-provided
-inventories, matching sizes and timestamps alone MUST NOT authorize this trust.
-Metadata, canonical documents, SQLite snapshots, protected resources and resources
-needed by application verification callbacks remain fully checked. Readers MUST
-still bound inventories/sizes and check paths, types and database-file signatures.
-
-Reports MUST list every resource accepted through a cached digest, including path,
-size and hash, and distinguish conditional validation from a full byte pass. The
-SDK uses `trusted_resources`, scope `common_checks_with_trusted_resources` and
-check `directory.incremental`. `passed` in that scope means that the common
-checks passed conditional on the application's trust assertion. A delta report
-retains this list even when its scope describes delta creation. Ordinary CLI
-verification supplies no cache and remains a complete byte pass. A cache does not
-authenticate unsigned data, bypass signer policy or authorize skipping changed
-output-byte checks. Applications MUST provide a full-verification option.
-
-## 19. Offline causal synchronization (1.5.0)
-
-The official required extension `studio.illegal.darkbox.sync` version `1.0.0` is defined by the canonical `docs/darkbox/sync/1.0.0.md`, its JSON Schema and interoperable vectors. The extension is optional to adopt and MUST be required when present. It binds the root `packageId`, exact application profile, data-format version and immutable domain identity. Published common references remain unchanged.
-
-Applications maintain a local working library and exchange immutable causal transactions and content-addressed resources through a separately synchronized directory. OS directory locks never act as distributed locks. Deltas retain their exact-base transfer semantics and do not merge concurrent changes.
+Sync extension version 1.1.0 supports this common version; its normative specification, schema and interoperable vectors are the extension bundle at [extensions/studio.illegal.darkbox.sync/1.1.0/](../extensions/studio.illegal.darkbox.sync/1.1.0/). Sync extension version 1.0.0 is bound to common version 1.5.0 and MUST NOT be declared with this version.
 
 A sealed synchronization checkpoint MUST contain its root-bound compact baseline when present, complete replayable subsequent history, its exact causal frontier, deterministic logical state, and all resources referenced by that baseline or retained history. Generic validation checks core semantics and byte closure; application materialization requires a registered application profile. Identical physical SQLite bytes are not required for convergence.
 
-A `working` sync descriptor identifies application-owned runtime storage rather than a sealed checkpoint, even if its SQLite connections are closed. Generic ordinary opening/packing returns NotQuiescent and MUST NOT recover its journal. The owning application produces a fresh `sealed` checkpoint for portable transfer. New checkpoint packages use atomic no-clobber publication.
+A `working` sync descriptor identifies application-owned runtime storage rather than a sealed checkpoint, even if its SQLite connections are closed. Generic ordinary opening and packing MUST report the not-quiescent outcome of section 14 and MUST NOT recover its journal. The owning application produces a fresh `sealed` checkpoint for portable transfer. New checkpoint packages use atomic no-clobber publication.
 
-Protocol 1.0.0 has a trusted-folder plaintext security mode, fixed profile/format per domain and membership-free bounded retention through independently complete generations. It MUST refuse coexistence with the protection extension rather than removing protection. Both clock-independent causal conflict handling and the prescribed profile projection are required for writable application integration.
+## 10. Quiescent directory representation
+
+A Darkbox 1.6.0 package MAY be a directory containing exactly the same files, relative paths and canonical bytes as its ZIP representation. The root contains manifest.json and README.md, without an enclosing version directory. All folder, path, inventory, profile, SQLite, extension and protection rules apply. ZIP header, compression and CRC requirements apply only to ZIP representations. Directory readers MUST read every file for full verification; absence of a ZIP CRC does not permit skipping SQLite, canonical or cryptographic checks. Symbolic links and special entries are forbidden, including at the root. Empty declared folders MUST exist. Filesystem timestamps and permissions have no project meaning.
+
+A directory is conformant only at a quiescent boundary: all application writers and workers have stopped, every database is a closed self-contained DELETE-mode snapshot without journal/WAL/shared-memory sidecars, and metadata, inventories and signatures describe those exact bytes. An active directory is working storage and makes no conformance claim. Applications MAY use WAL and temporary working data while active. They MUST coordinate exclusive access while preparing, verifying, packing or unpacking a snapshot. Tools MUST NOT delete sidecars or silently checkpoint application databases. A snapshot of a running database MUST use SQLite's backup API or equivalent application-coordinated snapshot facilities. Copying a WAL database's main file alone is insufficient.
+
+Packing and unpacking MUST preserve the relative file inventory and every file's bytes, including the exact manifest, unknown optional data and signatures. Compression, entry order, explicit nonempty ZIP directory entries, permissions and timestamps need not round-trip. Conversion does not migrate common or application versions and does not require signing keys. Tools MUST validate a candidate before publication and MUST NOT overwrite an existing destination without a separately authorized replacement operation. Parent directories and input quiescence remain caller-controlled.
+
+## 11. Library identity and optional unsigned inventory
+
+The optional root manifest `packageId` is a stable, application-assigned library identity, matching `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`. Producers SHOULD use a random UUID. Different independent libraries MUST have different identities. An edition retains its library identity; an independent copy MAY receive a new identity via an explicit application operation. This identifier is not a signature, content hash or proof of ownership. A delta participant MUST declare it. A protected package that also declares this root field MUST use the same value for the protection extension's `data.packageId` (section 9).
+
+The optional root `resourceInventory` array contains objects with exactly `path`, `size` (nonnegative byte length) and `sha256` (64 lowercase hexadecimal digits). When present, it MUST cover every dynamic regular file exactly once, including databases, profile documents, application resources and extension resources. It MUST exclude manifest.json, the canonical catalog, all canonical bundle files, all extension bundle files and the official detached protection signature. These exclusions avoid circular hash dependencies. Producers MUST update it whenever covered bytes change. The signed protection extension retains its separate complete payload inventory and signature requirements. Unsigned inventory is optional; full verification MUST compare every declared digest and size with actual bytes if it is present.
+
+A tool MAY expose a quick inventory inspection that checks structure, schema, path coverage and declared sizes without reading all payload bytes. Such a report MUST explicitly state that CRC, hashes, canonical bytes, SQLite, signatures and application semantics were not verified, and MUST NOT report a verified package. The inventory itself is untrusted. Matching path, size or modification time does not prove bytes unchanged. Incremental re-verification MAY reuse trusted cached results only if the application can independently guarantee unchanged bytes, for example through immutable, application-controlled objects. Full common verification remains a complete byte pass. Unsigned hashes provide no authenticity.
+
+## 12. Delta transfers
+
+A delta is a separate ZIP transfer envelope, not a conformant standalone project. It applies one exact complete base edition to produce one exact complete target edition. Each edition MUST conform to an explicitly supported common version that defines delta transfers (1.2.0 or later), and both MUST declare the same `packageId`. Delta envelope version `1.0.0` is independent of software and common specification versions. A delta MUST NOT remove or change the version of a required extension present in its base. Application migrations that produce the target remain application responsibilities.
+
+The envelope MUST obey the common safe ZIP/path rules, including STORE/DEFLATE, ZIP64 support, unique names, no aliases, no encryption, no links and CRC checks for every entry. Its regular files are exactly root `delta.json` and `files/0`, `files/1`, ... for each changed path. The optional explicit `files/` directory is its only permitted directory entry and MUST be absent when there are no changed files. No canonical bundle is required inside this transfer because unchanged canonical bytes are inherited from the verified base. A target that declares an official extension absent from its base carries that extension bundle as changed files.
+
+`delta.json` is UTF-8 JSON without a BOM or duplicate keys. It has exactly these fields, with no unrecognized members:
+
+- `darkboxDelta`: the string `1.0.0`.
+- `base`, `target`: objects with exactly `packageId`, `manifestSha256` and `inventorySha256`, identifying the corresponding complete edition.
+- `targetFiles`: all target regular files, sorted by bytewise ASCII path, each with exactly `path`, `size` and `sha256` as in section 11. This list includes manifest.json, canonical files of the common and extension bundles, and detached signatures. Paths are unique, case-unambiguous and valid under the common rules.
+- `folders`: every target manifest folder path, sorted by bytewise ASCII path, without duplicates, including empty directories.
+- `changed`: target paths whose size or SHA-256 differs from the base, or which are absent from the base, sorted by bytewise ASCII path, without duplicates. `files/N` contains the complete raw target file for `changed[N]`.
+- `removed`: base file paths absent from the target, sorted by bytewise ASCII path, without duplicates. Replacements are represented by `changed`.
+
+Each edition identity hashes the exact manifest bytes with SHA-256. Its `inventorySha256` hashes a canonical logical file inventory: build an array of all regular files sorted by bytewise ASCII path, with each object serialized in key order `path`, `size`, `sha256`. Serialize compact UTF-8 JSON without whitespace, BOM or trailing newline; sizes are ordinary base-10 integers without leading zeroes, paths are unescaped ASCII under section 4, and hashes are lowercase hex. Hash those exact JSON bytes with SHA-256. This binds base resources even if the manifest is unchanged. Directory entries, timestamps and compression are excluded. The inventory itself is not a signer authentication mechanism.
+
+Reconstruction MUST fully verify the base, compare both base identity hashes, validate the complete transfer and its exact changed/removed lists, and bound both transport and reconstructed sizes using reader-owned limits. It MUST copy unchanged files from that verified base, copy changed files from their indexed payloads and omit removed files. It MUST then fully verify the reconstructed target, its complete targetFiles inventory, folders and both target identity hashes before publication. Signed targets require externally trusted signer keys, but no new signature or private signing key. Exact signed bytes MUST survive. A rejected link MUST leave base and existing destinations unchanged.
+
+Chains MUST be applied in order, with each fully verified reconstructed target serving as the next base. A missing or mismatched base blocks reconstruction; readers MUST NOT guess or fetch one from the network. Tools SHOULD retain periodic complete editions and bound chain depth under application policy. SQLite changes transfer the whole database; this version does not define page patches. Deltas reduce retained/transmitted bytes. Section 14 additionally permits conditional resource checks for application-controlled live targets; full verification still reads all bytes. Appended ZIP updates with duplicate entry names remain forbidden.
+
+## 13. Direct media access and reader storage policy
+
+Producers SHOULD use STORE for already compressed media, including JPEG, PNG, WebP and MP4, and SHOULD align each such entry's data start to a 4096-byte boundary using valid local ZIP extra fields. Alignment is an optimization, not a conformance requirement; readers MUST accept unaligned valid STORE and DEFLATE entries. Readers MAY serve bounded byte ranges from STORE entries in a fully verified, immutable ZIP without extracting media. Range offsets MUST use verified local header/data boundaries, remain inside the selected entry and support ZIP64. Protected entries expose ciphertext; range access does not bypass authentication. Readers and applications MUST exclude concurrent mutation while direct handles are in use. DEFLATE entries require decompression before random byte access.
+
+Applications SHOULD select private staging storage explicitly rather than modify process-global temporary-directory environment variables. Atomic output candidates SHOULD remain beside the destination to support same-filesystem publication. Reader limits are external policy and MUST NOT be increased by manifest claims, a delta or an extension. Tools SHOULD provide named large-library presets and actionable limit errors, while retaining bounded entry counts, metadata, total sizes and deadlines. A limit increase never establishes conformance by itself.
+
+## 14. Coordinated live directory storage
+
+A 1.6.0 directory MAY serve as live application working storage. Its databases MAY use WAL while active. Working state is not a conforming snapshot: ordinary readers MUST refuse it until the application has recovered and sealed it.
+
+### Stable interoperable lock
+
+A participating application MUST hold an exclusive advisory lock for the whole working session, including all background writers and recovery. Readers MUST hold a shared lock throughout directory inspection, verification, packing or use as a delta input. Several readers MAY coexist; any exclusive holder blocks them. Publication into an absent directory MUST hold the exclusive destination lock through publication. Locks are nonblocking: contention is not corruption.
+
+The lock is a regular sibling file named `.darkbox-<digest>.lock`. Resolve the parent directory's filesystem aliases, take the library's final filename, apply Unicode default lowercase (no normalization), encode it as UTF-8 and compute SHA-256. `<digest>` is the 64 lowercase hexadecimal digits of that hash. Use the same canonical filename spelling for Unicode aliases on filesystems with additional case equivalences. On Unix-like systems use whole-file `flock(2)` shared and exclusive locks on the open lock descriptor, requested with `LOCK_NB`; `fcntl` record locks do not interoperate with them and MUST NOT be substituted. On Windows use `LockFileEx` on the open lock handle over the byte range that starts at offset 0 and has the maximum length (both length words `0xFFFFFFFF`), with `LOCKFILE_FAIL_IMMEDIATELY`, adding `LOCKFILE_EXCLUSIVE_LOCK` for an exclusive lock and omitting it for a shared lock. Open that handle with read, write and delete sharing so that other participants can open the same file. Release it with `UnlockFileEx` over the same range. The parent directory and lock location MUST be application-controlled. A symlink or nonregular lock file MUST be rejected. If a filesystem cannot provide these locks, fail rather than silently proceed. Initialize the lock on writable storage; an existing readable lock permits shared reads of read-only storage.
+
+The lock inode MUST NOT be deleted or replaced, including after release or a crash. Hold its descriptor until the operation ends, and explicitly unlock on normal release. Set close-on-exec, or on Windows keep the handle noninheritable, and prevent unintended descriptor inheritance; duplicated descriptors refer to the same lock. Process termination releases the kernel lock; the remaining file does not mean the library is busy. PID files, PID liveness guesses and stale-lock deletion MUST NOT substitute for this primitive. Do not move or rename an active library. The sibling file is local coordination state: it is outside package inventory, resourceInventory and ZIP content, and its existence does not affect package conformance. Legacy writers that ignore this protocol still require external coordination.
+
+### Not-quiescent outcome and sealing
+
+Lock contention, sidecars associated with declared databases (`-wal`, `-shm`, `-journal`, or `-mj...`), and a SQLite main-file header still in WAL mode MUST produce a distinct not-quiescent outcome, rather than a corruption finding. Machine-readable reports name that outcome `not_quiescent`, and command-line tools SHOULD give it its own exit status. This outcome certifies neither validity nor invalidity: reopen the owning application to recover its working state and seal it. Readers MUST NOT checkpoint, delete sidecars or alter source databases. ZIP snapshots retain their existing invalid-sidecar rules.
+
+To seal, stop all application writes, finish transactions, recover/checkpoint through SQLite as needed, verify DELETE mode, close every connection and confirm absence of sidecars. While retaining the exclusive lock, synchronize the manifest with the profile and payload, refresh any resourceInventory, and validate the result. Publish manifest changes atomically and release the lock only after all writers have stopped. A seal MUST NOT hide corruption or silently remove protection. A failed validation MUST preserve the previous manifest. Closed WAL-header databases are not accepted in this version, even without sidecars.
+
+Initialization MAY create the canonical bundle, declared directories, profile and a manifest with packageId directly, without an intermediate ZIP. Until its databases/resources exist and sealing succeeds, this is working storage only. Existing directories MUST NOT be overwritten by initialization.
+
+### Hot snapshots and direct deltas
+
+An application holding the exclusive lock MAY capture a complete edition without closing live database connections. Capture has two phases. Under a coherent write barrier, snapshot every declared database using the SQLite online backup API, copy the manifest and profile revision, and freeze the complete resource listing, including paths, sizes and filesystem identity where available. Use private closed DELETE-mode database copies; omit only associated live sidecars from the view. The original databases and sidecars remain untouched.
+
+Once a capture handle has been returned, the application MAY release its write barrier and resume database writes, metadata edits and resource additions. Newly added files belong to later editions and MUST NOT enter this capture through re-enumeration. Retain every captured external resource unchanged and undeleted until streaming finishes or the handle is dropped. Applications MAY defer deletes until all captures referencing those resources have finished. The capture handle retains database/profile/manifest snapshots separately from those live paths.
+
+Streaming MUST check captured size/type and file identity where available, and reject missing, replaced or modified retained resources. Changed output bytes MUST still be hashed while copying, including when comparison used trusted hashes. Failure MUST discard the output candidate. A capture is not a filesystem snapshot: applications remain responsible for immutability and retention across streaming. An advisory lock alone does not pause threads in the owning application.
+
+A delta MAY be constructed from a verified base edition and this captured target view without writing a complete target ZIP. Hash the exact target manifest and complete logical target inventory as in section 12; write only changed whole files, including complete changed databases. Changed bytes MUST be compared against their selected hashes while copying. Reconstruction still requires the exact base and full target verification. No page-level database delta is implied.
+
+### Application-trusted cached digests
+
+Applications MAY explicitly supply SHA-256 results for immutable resources whose identity and unchanged bytes they independently guarantee. Archive-provided inventories, matching sizes and timestamps alone MUST NOT authorize this trust. Metadata, canonical documents, SQLite snapshots, protected resources and resources needed by application verification callbacks remain fully checked. Readers MUST still bound inventories/sizes and check paths, types and database-file signatures.
+
+Reports MUST list every resource accepted through a cached digest, including path, size and hash, and distinguish conditional validation from a full byte pass. A passing result of such a validation means that the common checks passed conditional on the application's trust assertion. A delta report retains this list even when its scope describes delta creation. Ordinary command-line verification supplies no cache and remains a complete byte pass. A cache does not authenticate unsigned data, bypass signer policy or authorize skipping changed output-byte checks. Applications MUST provide a full-verification option.

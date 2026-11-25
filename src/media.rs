@@ -100,21 +100,32 @@ impl StoredResource {
         }
         Ok(Self {
             file,
-            offset: entry.data_start(),
+            offset: entry.data_start().ok_or_else(|| {
+                Error::new(
+                    Status::OperationalError,
+                    "media.offset",
+                    "The archive reader did not locate the entry data",
+                )
+                .at(resource)
+            })?,
             length: entry.size(),
             position: 0,
             report,
         })
     }
+    /// The verification report of the archive this resource belongs to.
     pub fn report(&self) -> &Report {
         &self.report
     }
+    /// Byte offset of the entry's data inside the archive file.
     pub fn data_offset(&self) -> u64 {
         self.offset
     }
+    /// Length of the entry's data in bytes.
     pub fn len(&self) -> u64 {
         self.length
     }
+    /// Whether the entry holds no bytes.
     pub fn is_empty(&self) -> bool {
         self.length == 0
     }

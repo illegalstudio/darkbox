@@ -48,7 +48,9 @@ def propose(current, latest):
     return f"{major}.{minor}.{patch + 1}"
 
 
-def publication_versions(registry, selected):
+def publication_versions(registry, selected, extensions=False):
+    """Freeze the selected specifications and, on request, every pending
+    extension bundle whose minimum common version is then published."""
     rows = {row["version"]: row for row in registry["versions"]}
     for version in selected:
         version_tuple(version)
@@ -59,9 +61,21 @@ def publication_versions(registry, selected):
         rows[version]["released"] = True
     if not any(row["released"] for row in rows.values()):
         raise ValueError("A public binary release must support at least one published specification")
+    frozen = []
+    for row in registry.get("extensions", []):
+        version_tuple(row["version"])
+        minimum = rows.get(row["minCommon"])
+        if minimum is None:
+            raise ValueError(f"Extension {row['namespace']} {row['version']} names an unregistered common version")
+        if row["released"] and not minimum["released"]:
+            raise ValueError(f"Published extension {row['namespace']} {row['version']} needs a published common version")
+        if extensions and not row["released"] and minimum["released"]:
+            row["released"] = True
+            frozen.append(f"{row['namespace']} {row['version']}")
+    return frozen
 
 
-def prepare(version, selected):
+def prepare(version, selected, extensions=True):
     version_tuple(version)
     manifest = ROOT / "Cargo.toml"
     text = manifest.read_text()
@@ -75,7 +89,7 @@ def prepare(version, selected):
     if count != 1:
         raise ValueError("Cannot locate the Darkbox package in Cargo.lock")
     registry = json.loads((ROOT / "versions.json").read_bytes())
-    publication_versions(registry, selected)
+    publication_versions(registry, selected, extensions)
     manifest.write_text(text)
     lock.write_text(lock_text)
     (ROOT / "versions.json").write_text(json.dumps(registry, indent=2) + "\n")
@@ -128,12 +142,15 @@ def release(args):
         raise ValueError("The software version cannot decrease")
     registry = json.loads((ROOT / "versions.json").read_bytes())
     selected = args.publish_spec
+    # --no-publish-spec releases software only: no reference is frozen.
+    extensions = selected != []
     if selected is None:
         selected = [row["version"] for row in registry["versions"] if not row["released"]]
         print(f"Unpublished specifications: {', '.join(selected) or 'none'}")
-    publication_versions(registry, selected)
+    frozen = publication_versions(registry, selected, extensions)
     print(f"Software release: {tag}")
     print(f"Specification versions to freeze: {', '.join(selected) or 'none'}")
+    print(f"Extension bundles to freeze: {', '.join(frozen) or 'none'}")
     print("Preparation files: Cargo.toml, Cargo.lock, versions.json")
     print("Publish: release commit and annotated tag to origin/main (one atomic push)")
     if args.dry_run:
@@ -142,7 +159,7 @@ def release(args):
     original = {name: (ROOT / name).read_bytes() for name in OWNED}
     committed = False
     try:
-        prepare(version, selected)
+        prepare(version, selected, extensions)
         run(sys.executable, "scripts/check_releases.py", "--base", previous or "HEAD")
         run("make", "check")
         changed = run("git", "diff", "--name-only", capture=True).splitlines()

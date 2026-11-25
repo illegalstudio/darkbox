@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Selected per generated reference by generate().
+PROTOCOL, COMMON = "1.0.0", "1.5.0"
 
 
 def canonical(value):
@@ -82,7 +84,7 @@ def materialize(root, transactions):
                 if op["op"] == "place":
                     nodes.append({"id": event_dot(tx, i), "record": record, "field": field, "sequence": op["sequence"], "owner": op["owner"], "after": op["after"], "lamport": tx["lamport"]})
         records.append(row)
-    return {"kind": "darkbox-sync-state", "protocolVersion": "1.0.0", "syncId": root["syncId"], "rootSha256": digest(root), "frontier": frontier(transactions), "records": records, "nodes": sorted(nodes, key=lambda n: dot_key(n["id"]))}
+    return {"kind": "darkbox-sync-state", "protocolVersion": PROTOCOL, "syncId": root["syncId"], "rootSha256": digest(root), "frontier": frontier(transactions), "records": records, "nodes": sorted(nodes, key=lambda n: dot_key(n["id"]))}
 
 
 def sequence(state):
@@ -160,10 +162,12 @@ def compact_state(state):
         for field in record["registers"] + record["positions"]:
             for candidate in field["candidates"]: candidate["lamport"] = ranks[(int(candidate["lamport"]), dot_key(candidate["dot"]))]
     for node in nodes: node["lamport"] = ranks[(int(node["lamport"]), dot_key(node["id"]))]
-    return {"kind": "darkbox-sync-baseline", "protocolVersion": "1.0.0", "sourceRootSha256": state["rootSha256"], "sourceFrontier": state["frontier"], "records": sorted(records, key=lambda record: dot_key(record["id"])), "nodes": sorted(nodes, key=lambda node: dot_key(node["id"]))}
+    return {"kind": "darkbox-sync-baseline", "protocolVersion": PROTOCOL, "sourceRootSha256": state["rootSha256"], "sourceFrontier": state["frontier"], "records": sorted(records, key=lambda record: dot_key(record["id"])), "nodes": sorted(nodes, key=lambda node: dot_key(node["id"]))}
 
 
-def generate():
+def generate(protocol="1.0.0", common="1.5.0"):
+    global PROTOCOL, COMMON
+    PROTOCOL, COMMON = protocol, common
     app = {"profile": "org.example.sync-notes", "formatVersion": "1"}
     def field(name, kind, types): return {"name": name, "kind": kind, "columns": [name], "codec": "typed", "valueTypes": types}
     position = field("position", "position", [])
@@ -176,7 +180,7 @@ def generate():
     profile = """# Example synchronized notes profile 1
 
 Profile identifier: org.example.sync-notes. Application format version: 1.
-This fictional profile uses the sync 1.0.0 typed-value codecs. The items collection
+This fictional profile uses the sync PROTOCOL_VERSION typed-value codecs. The items collection
 is stored in items(id TEXT PRIMARY KEY, asset TEXT, data TEXT, position TEXT,
 tags TEXT, title TEXT, local_note TEXT). IDs are create-operation dots. Synchronized
 columns asset, data and title contain the canonical selected typed value, or SQL
@@ -199,15 +203,15 @@ not applicable because this profile uses the trusted-folder plaintext sync mode.
 The _darkbox_sync_ tables are reserved for the causal journal, pending input,
 outbox, immutable domain/session metadata and retained fork evidence. Their exact
 protocol interpretation is in the included Darkbox synchronization reference.
-"""
-    root = {"kind": "darkbox-sync-domain", "protocolVersion": "1.0.0", "syncId": "0" * 31 + "1", "packageId": "0" * 31 + "2", "commonVersion": "1.5.0", "application": app,
+""".replace("PROTOCOL_VERSION", PROTOCOL)
+    root = {"kind": "darkbox-sync-domain", "protocolVersion": PROTOCOL, "syncId": "0" * 31 + "1", "packageId": "0" * 31 + "2", "commonVersion": COMMON, "application": app,
         "profile": {"path": "profile/profile.md", "size": str(len(profile.encode())), "sha256": hashlib.sha256(profile.encode()).hexdigest()},
         "mapping": {"path": "profile/mapping.json", "size": str(len(canonical(mapping))), "sha256": digest(mapping)}, "encoding": "jcs-strings-v1", "merge": "causal-records-v1", "security": "trusted-folder-plaintext"}
     actors = {name: f'{i:032x}' for i, name in enumerate("gabcde", 16)}
     def transaction(actor, known, ops):
         deps = frontier(known)
         own = next((tip for tip in deps if tip["replicaId"] == actors[actor]), None)
-        return {"kind": "darkbox-sync-transaction", "protocolVersion": "1.0.0", "syncId": root["syncId"], "rootSha256": digest(root), "replicaId": actors[actor], "sequence": str(int(own["sequence"]) + 1 if own else 1), "previous": own["sha256"] if own else None, "dependencies": deps, "lamport": str(1 + max([int(tx["lamport"]) for tx in known] or [0])), "operations": ops}
+        return {"kind": "darkbox-sync-transaction", "protocolVersion": PROTOCOL, "syncId": root["syncId"], "rootSha256": digest(root), "replicaId": actors[actor], "sequence": str(int(own["sequence"]) + 1 if own else 1), "previous": own["sha256"] if own else None, "dependencies": deps, "lamport": str(1 + max([int(tx["lamport"]) for tx in known] or [0])), "operations": ops}
     def text(s): return {"type": "text", "value": s}
     def assign(record, value, field="title"): return {"op": "assign", "record": record, "field": field, "present": True, "value": value}
     def place(record, after): return {"op": "place", "record": record, "field": "position", "sequence": "items", "owner": None, "after": after}
@@ -244,23 +248,28 @@ protocol interpretation is in the included Darkbox synchronization reference.
     bad = copy.deepcopy(a1); bad["operations"][2]["after"] = event_dot(b1, 2)
     rejects.append({"name": "anchor-only-known-to-receiver", "transactions": [g, b1, bad]})
     compact_vectors = [{"name": vector["name"], "baseline": compact_state(vector["state"]), "baselineSha256": digest(compact_state(vector["state"]))} for vector in vectors]
-    return {"extension": "studio.illegal.darkbox.sync", "version": "1.0.0", "generator": "Independent Python set-based materializer; no Rust output is used", "profile": profile, "mapping": mapping, "root": root, "rootSha256": digest(root), "objects": [{"sha256": blob["sha256"], "size": blob["size"], "hex": payload.hex()}], "vectors": vectors, "compactVectors": compact_vectors, "rejections": rejects, "canonicalExample": {"transaction": a1, "utf8": canonical(a1).decode(), "sha256": digest(a1)}}
+    return {"extension": "studio.illegal.darkbox.sync", "version": PROTOCOL, "generator": "Independent Python set-based materializer; no Rust output is used", "profile": profile, "mapping": mapping, "root": root, "rootSha256": digest(root), "objects": [{"sha256": blob["sha256"], "size": blob["size"], "hex": payload.hex()}], "vectors": vectors, "compactVectors": compact_vectors, "rejections": rejects, "canonicalExample": {"transaction": a1, "utf8": canonical(a1).decode(), "sha256": digest(a1)}}
 
 
 def main():
+    from sync_schema import TARGETS, released
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    path = ROOT / "archive/1.5.0/docs/darkbox/sync/1.0.0.vectors.json"
-    expected = (json.dumps(generate(), ensure_ascii=True, indent=2) + "\n").encode()
-    if path.exists() and path.read_bytes() == expected:
-        print("sync 1.0.0: independent vectors match")
-        return
-    if args.check: raise SystemExit("Sync vectors differ from independent generator")
-    released = next(v["released"] for v in json.loads((ROOT / "versions.json").read_text())["versions"] if v["version"] == "1.5.0")
-    if released: raise SystemExit("Published canonical vectors cannot be rewritten")
-    path.write_bytes(expected)
-    print("sync 1.0.0: independent vectors generated")
+    for target in TARGETS:
+        protocol = target["protocol"]
+        # The vector domain uses the lowest common version its protocol supports.
+        common = "1.5.0" if protocol == "1.0.0" else "1.6.0"
+        path = ROOT / target["directory"] / f"{protocol}.vectors.json"
+        expected = (json.dumps(generate(protocol, common), ensure_ascii=True, indent=2) + "\n").encode()
+        if path.exists() and path.read_bytes() == expected:
+            print(f"sync {protocol}: independent vectors match")
+            continue
+        if args.check: raise SystemExit(f"Sync {protocol} vectors differ from independent generator")
+        if released(protocol): raise SystemExit("Published canonical vectors cannot be rewritten")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(expected)
+        print(f"sync {protocol}: independent vectors generated")
 
 
 if __name__ == "__main__":

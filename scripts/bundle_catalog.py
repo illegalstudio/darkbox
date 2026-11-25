@@ -32,6 +32,54 @@ def render(version):
     return (json.dumps(data, indent=2, ensure_ascii=True) + "\n").encode()
 
 
+def render_extension(namespace, version):
+    """Catalog of one official extension bundle, excluding the catalog itself."""
+    prefix = "studio.illegal.darkbox."
+    name = namespace.removeprefix(prefix)
+    if not namespace.startswith(prefix) or not name or "." in name:
+        raise ValueError(f"Only official single-segment extension names have bundles: {namespace}")
+    directory = f"docs/darkbox/{name}"
+    catalog = f"{directory}/{version}.bundle.json"
+    base = ROOT / "extensions" / namespace / version
+    folders = set()
+    files = []
+    for path in sorted(base.rglob("*"), key=lambda p: p.relative_to(base).as_posix()):
+        if path.is_symlink():
+            raise ValueError(f"Symlinks are forbidden in an extension bundle: {path}")
+        relative = path.relative_to(base).as_posix()
+        if path.is_dir():
+            if relative not in ("docs", "docs/darkbox"):
+                folders.add(relative)
+        elif path.is_file() and relative != catalog:
+            if not relative.startswith(directory + "/"):
+                raise ValueError(f"Extension bundle files must stay inside {directory}: {relative}")
+            content = path.read_bytes()
+            files.append({"path": relative, "size": len(content), "sha256": hashlib.sha256(content).hexdigest()})
+    if not files:
+        raise ValueError(f"Missing extension bundle files for {namespace} {version}")
+    data = {"extension": {"namespace": namespace, "version": version}, "folders": sorted(folders), "files": files}
+    return base / catalog, (json.dumps(data, indent=2, ensure_ascii=True) + "\n").encode()
+
+
+def extensions(args, registry):
+    for row in registry.get("extensions", []):
+        namespace, version = row["namespace"], row["version"]
+        if not re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", version):
+            raise ValueError(f"Invalid extension version: {version}")
+        path, expected = render_extension(namespace, version)
+        actual = path.read_bytes() if path.exists() else None
+        if actual != expected:
+            if args.check or row["released"]:
+                raise ValueError(f"Extension catalog differs from its sources for {namespace} {version}; published bundles cannot be rewritten")
+            path.write_bytes(expected)
+        print(f"{namespace} {version}: catalog matches extension bundle sources")
+    registered = {(row["namespace"], row["version"]) for row in registry.get("extensions", [])}
+    base = ROOT / "extensions"
+    present = {(n.name, v.name) for n in base.iterdir() if n.is_dir() for v in n.iterdir() if v.is_dir()} if base.is_dir() else set()
+    if present != registered:
+        raise ValueError("Every extension bundle directory must have a registry entry")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group(required=True)
@@ -39,7 +87,10 @@ def main():
     mode.add_argument("--write", action="store_true")
     parser.add_argument("--version", help="Limit the operation to one registered version")
     args = parser.parse_args()
-    versions = json.loads((ROOT / "versions.json").read_text())["versions"]
+    registry = json.loads((ROOT / "versions.json").read_text())
+    versions = registry["versions"]
+    if not args.version:
+        extensions(args, registry)
     if args.version:
         versions = [row for row in versions if row["version"] == args.version]
         if not versions:

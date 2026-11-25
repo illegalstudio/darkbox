@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:darkbox:protection-schema:1.0.0",
+  "title": "Darkbox protection extension 1.0.0",
+  "type": "object",
+  "required": [
+    "version",
+    "required",
+    "data"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": "1.0.0"
+    },
+    "required": {
+      "const": true
+    },
+    "data": {
+      "type": "object",
+      "required": [
+        "packageId",
+        "signature",
+        "inventory",
+        "files",
+        "sqlite"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "packageId": {
+          "type": "string",
+          "minLength": 32,
+          "maxLength": 32,
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "signature": {
+          "type": "object",
+          "required": [
+            "algorithm",
+            "signerId",
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": {
+              "const": "Ed25519"
+            },
+            "signerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[A-Za-z0-9._-]+$",
+              "not": {
+                "pattern": "[^A-Za-z0-9._-]"
+              }
+            },
+            "path": {
+              "const": "extensions/studio.illegal.darkbox.protection/manifest.ed25519"
+            }
+          }
+        },
+        "inventory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "size",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "pattern": "^[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)*$",
+                "not": {
+                  "pattern": "[^A-Za-z0-9_./-]"
+                },
+                "$comment": "Also check component byte length, device names, declared parents and case-folded collisions. These semantic checks are outside this schema."
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sha256": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64,
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "keyId"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "pattern": "^[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)*$",
+                "not": {
+                  "pattern": "[^A-Za-z0-9_./-]"
+                },
+                "$comment": "Also check component byte length, device names, declared parents and case-folded collisions. These semantic checks are outside this schema."
+              },
+              "keyId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[A-Za-z0-9._-]+$",
+                "not": {
+                  "pattern": "[^A-Za-z0-9._-]"
+                }
+              }
+            }
+          }
+        },
+        "sqlite": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "database",
+              "table",
+              "column",
+              "recordIdColumn",
+              "keyId"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "database": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "pattern": "^[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/[A-Za-z0-9_-](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)*$",
+                "not": {
+                  "pattern": "[^A-Za-z0-9_./-]"
+                },
+                "$comment": "Also check component byte length, device names, declared parents and case-folded collisions. These semantic checks are outside this schema."
+              },
+              "table": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "not": {
+                  "pattern": "\u0000"
+                }
+              },
+              "column": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "not": {
+                  "pattern": "\u0000"
+                }
+              },
+              "recordIdColumn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "not": {
+                  "pattern": "\u0000"
+                }
+              },
+              "keyId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "pattern": "^[A-Za-z0-9._-]+$",
+                "not": {
+                  "pattern": "[^A-Za-z0-9._-]"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

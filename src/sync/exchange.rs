@@ -271,6 +271,7 @@ impl VerifiedObjects {
     }
 }
 impl ObjectStore {
+    /// Open or create a private store of immutable, content-addressed objects.
     pub fn open(path: impl AsRef<Path>, limits: SyncLimits) -> Result<Self> {
         Ok(Self {
             root: directory(path.as_ref())?,
@@ -306,12 +307,15 @@ impl ObjectStore {
     pub fn verify(&self, blob: &Blob) -> Result<bool> {
         Ok(self.full_witness(blob)?.is_some())
     }
+    /// The store's directory.
     pub fn path(&self) -> &Path {
         &self.root
     }
+    /// Store bytes and return their identity.
     pub fn put(&self, reader: &mut dyn Read) -> Result<Blob> {
         self.put_inner(reader, None)
     }
+    /// Store bytes that must match an expected identity.
     pub fn put_expected(&self, reader: &mut dyn Read, expected: &Blob) -> Result<Blob> {
         expected.validate()?;
         self.put_inner(reader, Some(expected))
@@ -422,9 +426,11 @@ impl ObjectStore {
             Err(e) => Err(crate::io_failure(e)),
         }
     }
+    /// Whether the store holds an intact copy of this object.
     pub fn contains(&self, blob: &Blob) -> Result<bool> {
         Ok(self.witness(blob)?.is_some())
     }
+    /// Read one stored object.
     pub fn with_blob<T>(
         &self,
         blob: &Blob,
@@ -449,6 +455,7 @@ impl ObjectStore {
         }
         Ok(result)
     }
+    /// Copy an object from an exchange; returns false while it has not arrived there yet.
     pub fn import(&self, exchange: &Exchange, blob: &Blob) -> Result<bool> {
         if self.root.starts_with(&exchange.root) || exchange.root.starts_with(&self.root) {
             return Err(invalid("Local objects and exchange must be separate"));
@@ -514,6 +521,8 @@ fn verify_blob(root: &Path, blob: &Blob, limits: &SyncLimits) -> Result<Option<M
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// Identifies one writing incarnation of an installation in a domain.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct ReplicaDescriptor {
     pub kind: String,
     pub protocol_version: String,
@@ -524,14 +533,21 @@ pub struct ReplicaDescriptor {
     pub label: String,
 }
 impl ReplicaDescriptor {
+    /// Check the descriptor against its domain.
     pub fn validate(&self, domain: &Domain) -> Result<()> {
-        version(&self.kind, &self.protocol_version, "darkbox-sync-replica")?;
-        domain.bind(&self.sync_id, &self.root_sha256)?;
+        domain.record(
+            &self.kind,
+            "darkbox-sync-replica",
+            &self.protocol_version,
+            &self.sync_id,
+            &self.root_sha256,
+        )?;
         if !hex(&self.replica_id, 32) || !hex(&self.device_id, 32) || self.label.len() > 1024 {
             return Err(invalid("Replica descriptor"));
         }
         Ok(())
     }
+    /// The exchange path this descriptor is published at.
     pub fn relative_path(&self) -> Result<String> {
         let bytes = canonical(self)?;
         Ok(format!(
@@ -544,6 +560,8 @@ impl ReplicaDescriptor {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// A contiguous run of one replica's transactions, as published to an exchange.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Segment {
     pub kind: String,
     pub protocol_version: String,
@@ -555,13 +573,14 @@ pub struct Segment {
     pub transactions: Vec<SyncTransaction>,
 }
 impl Segment {
+    /// Build a segment from a contiguous, nonempty run of one replica's transactions.
     pub fn new(domain: &Domain, transactions: Vec<SyncTransaction>) -> Result<Self> {
         let first = transactions
             .first()
             .ok_or_else(|| invalid("Empty segment"))?;
         let segment = Self {
             kind: "darkbox-sync-segment".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: domain.root().protocol_version.clone(),
             sync_id: domain.root().sync_id.clone(),
             root_sha256: domain.root_hash().into(),
             replica_id: first.replica_id.clone(),
@@ -572,9 +591,15 @@ impl Segment {
         segment.validate(domain)?;
         Ok(segment)
     }
+    /// Check the segment and every transaction in it against the domain.
     pub fn validate(&self, domain: &Domain) -> Result<()> {
-        version(&self.kind, &self.protocol_version, "darkbox-sync-segment")?;
-        domain.bind(&self.sync_id, &self.root_sha256)?;
+        domain.record(
+            &self.kind,
+            "darkbox-sync-segment",
+            &self.protocol_version,
+            &self.sync_id,
+            &self.root_sha256,
+        )?;
         if !hex(&self.replica_id, 32)
             || self.transactions.is_empty()
             || self.transactions.len() > MAX_SEGMENT_TRANSACTIONS
@@ -604,6 +629,7 @@ impl Segment {
         }
         Ok(())
     }
+    /// The exchange path this segment is published at.
     pub fn relative_path(&self) -> Result<String> {
         let bytes = canonical(self)?;
         Ok(format!(
@@ -618,6 +644,8 @@ impl Segment {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// An advisory record that a replica durably applied a frontier.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct Receipt {
     pub kind: String,
     pub protocol_version: String,
@@ -628,15 +656,22 @@ pub struct Receipt {
     pub frontier: Frontier,
 }
 impl Receipt {
+    /// Check the receipt against its domain.
     pub fn validate(&self, domain: &Domain) -> Result<()> {
-        version(&self.kind, &self.protocol_version, "darkbox-sync-receipt")?;
-        domain.bind(&self.sync_id, &self.root_sha256)?;
+        domain.record(
+            &self.kind,
+            "darkbox-sync-receipt",
+            &self.protocol_version,
+            &self.sync_id,
+            &self.root_sha256,
+        )?;
         validate_frontier(&self.frontier)?;
         if !hex(&self.replica_id, 32) || self.serial.0 == 0 {
             return Err(invalid("Receipt identity"));
         }
         Ok(())
     }
+    /// The exchange path this receipt is published at.
     pub fn relative_path(&self) -> Result<String> {
         let bytes = canonical(self)?;
         Ok(format!(
@@ -649,17 +684,29 @@ impl Receipt {
     }
 }
 #[derive(Clone, Debug, Serialize)]
+#[non_exhaustive]
+/// A file in an exchange that could not be used, and why.
 pub struct ScanDiagnostic {
+    /// Exchange-relative path of the file.
     pub path: String,
+    /// Stable identifier of the problem.
     pub code: &'static str,
+    /// Human-readable explanation in English.
     pub message: String,
 }
 #[derive(Clone, Debug, Default)]
+#[non_exhaustive]
+/// Everything usable found by one scan of an exchange.
 pub struct ExchangeScan {
+    /// Replica descriptors by replica identifier.
     pub replicas: BTreeMap<String, ReplicaDescriptor>,
+    /// Every transaction that could be validated.
     pub transactions: Vec<SyncTransaction>,
+    /// Published receipts.
     pub receipts: Vec<Receipt>,
+    /// Published checkpoint descriptors.
     pub snapshots: Vec<SnapshotDescriptor>,
+    /// Files that could not be used.
     pub diagnostics: Vec<ScanDiagnostic>,
 }
 
@@ -677,6 +724,7 @@ pub struct Exchange {
     pub(crate) generation_guard: Option<(SyncRepository, String)>,
 }
 impl Exchange {
+    /// Create an exchange directory for a domain and publish its immutable root, mapping and profile.
     pub fn create(path: impl AsRef<Path>, domain: Domain, limits: SyncLimits) -> Result<Self> {
         let root = directory(path.as_ref())?;
         publish_bytes(&root, "profile/profile.md", domain.profile(), &limits.io)?;
@@ -702,6 +750,7 @@ impl Exchange {
             generation_guard: None,
         })
     }
+    /// Open an existing exchange, checking that its root matches the hash the installation pinned.
     pub fn open(path: impl AsRef<Path>, pinned_root: &str, limits: SyncLimits) -> Result<Self> {
         let root = fs::canonicalize(path.as_ref()).map_err(crate::io_failure)?;
         if !fs::symlink_metadata(path.as_ref())
@@ -731,9 +780,11 @@ impl Exchange {
             generation_guard: None,
         })
     }
+    /// The exchange directory.
     pub fn path(&self) -> &Path {
         &self.root
     }
+    /// The domain this exchange belongs to.
     pub fn domain(&self) -> &Domain {
         &self.domain
     }
@@ -773,6 +824,7 @@ impl Exchange {
         }
         Ok(())
     }
+    /// Publish a replica descriptor.
     pub fn publish_replica(&self, replica: &ReplicaDescriptor) -> Result<()> {
         self.check_root()?;
         replica.validate(&self.domain)?;
@@ -783,6 +835,7 @@ impl Exchange {
             &self.limits.io,
         )
     }
+    /// Publish a segment of transactions.
     pub fn publish_segment(&self, segment: &Segment) -> Result<()> {
         self.check_root()?;
         segment.validate(&self.domain)?;
@@ -793,6 +846,7 @@ impl Exchange {
             &self.limits.io,
         )
     }
+    /// Publish a receipt.
     pub fn publish_receipt(&self, receipt: &Receipt) -> Result<()> {
         self.check_root()?;
         receipt.validate(&self.domain)?;
@@ -803,6 +857,7 @@ impl Exchange {
             &self.limits.io,
         )
     }
+    /// Publish one object from a local store.
     pub fn publish_object(&self, store: &ObjectStore, blob: &Blob) -> Result<()> {
         self.check_root()?;
         if store.root.starts_with(&self.root) || self.root.starts_with(&store.root) {
@@ -817,6 +872,7 @@ impl Exchange {
             if error.code=="sync.object_conflict"{super::pending_bytes("Existing exchange object is incomplete or mismatched; retry without replacing it")}else{error}
         })
     }
+    /// Read and validate every record currently present in the exchange.
     pub fn scan(&self) -> Result<ExchangeScan> {
         self.scan_with_evidence(&mut ScanEvidence::default())
     }

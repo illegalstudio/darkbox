@@ -174,7 +174,7 @@ fn copy_checked(
             .checked_add(count as u64)
             .filter(|size| *size <= limits.max_entry_bytes && *size <= expected.size)
             .ok_or_else(|| {
-                Error::limit("Resource grew beyond its verified size or --max-entry-bytes")
+                Error::limit("Resource grew beyond its verified size or the entry size limit")
             })?;
         output
             .write_all(&buffer[..count])
@@ -227,7 +227,7 @@ fn write_zip(
         .checked_add(names.len())
         .is_none_or(|n| n > limits.max_entries)
     {
-        return Err(Error::limit("Output exceeds --max-entries"));
+        return Err(Error::limit("Output exceeds the entry count limit"));
     }
     let candidate = tempfile::Builder::new()
         .prefix(".darkbox-transfer-")
@@ -300,14 +300,10 @@ fn sync_parent(destination: &Path, report: &mut Report) {
         .and_then(|p| p.sync_all())
         .is_err()
     {
-        report.diagnostics.push(crate::Diagnostic {
-            severity: "warning",
-            code: "transfer.durability".into(),
-            path: None,
-            message:
-                "Published output but parent synchronization failed; crash durability is uncertain"
-                    .into(),
-        });
+        report.warn(
+            "transfer.durability",
+            "Published output but parent synchronization failed; crash durability is uncertain",
+        );
     }
     #[cfg(not(unix))]
     let _ = (destination, report);
@@ -371,12 +367,7 @@ pub fn unpack(
     let destination_lock = crate::live::destination_lock(&destination)?;
     let end = deadline(&limits)?;
     let mut input = Verified::open(source, &limits, options, end)?;
-    if input.source.is_directory()
-        || !matches!(
-            input.manifest()["darkbox"]["version"].as_str(),
-            Some("1.2.0" | "1.3.0" | "1.4.0" | "1.5.0")
-        )
-    {
+    if input.source.is_directory() || !crate::versions::capabilities(input.manifest()).directory {
         return Err(Error::new(
             Status::Unsupported,
             "unpack.version",
@@ -450,10 +441,7 @@ struct Delta {
     removed: Vec<String>,
 }
 fn identity(input: &Verified) -> Result<Identity, Error> {
-    if !matches!(
-        input.manifest()["darkbox"]["version"].as_str(),
-        Some("1.2.0" | "1.3.0" | "1.4.0" | "1.5.0")
-    ) {
+    if !crate::versions::capabilities(input.manifest()).directory {
         return Err(Error::new(
             Status::Unsupported,
             "delta.version",
@@ -550,7 +538,9 @@ fn delta_verified(
     let metadata = serde_json::to_value(&descriptor).unwrap();
     let bytes = crate::creation::serialized_manifest(&metadata, limits.max_metadata_bytes)?;
     if bytes.len() as u64 > limits.max_entry_bytes {
-        return Err(Error::limit("Delta descriptor exceeds --max-entry-bytes"));
+        return Err(Error::limit(
+            "Delta descriptor exceeds the entry size limit",
+        ));
     }
     let changed_size = descriptor
         .changed
@@ -560,7 +550,7 @@ fn delta_verified(
         })
         .ok_or_else(|| Error::limit("Delta size overflows"))?;
     if changed_size > limits.max_total_bytes {
-        return Err(Error::limit("Delta exceeds --max-total-bytes"));
+        return Err(Error::limit("Delta exceeds the total size limit"));
     }
     let names: Vec<_> = std::iter::once("delta.json".into())
         .chain((0..descriptor.changed.len()).map(|i| format!("files/{i}")))
@@ -597,7 +587,7 @@ fn delta_verified(
     )?;
     target.source.check_retained(end)?;
     let mut report = target.report;
-    report.scope = "delta_creation";
+    report.scope = crate::Scope::DeltaCreation;
     report.checks.push("delta.base_and_target");
     report.note("delta.base_required", "This incremental transfer requires its exact verified base; it is not a standalone Darkbox package");
     crate::container::check_deadline(end)?;
@@ -663,14 +653,14 @@ fn reconstruct(
         total = total
             .checked_add(file.size)
             .filter(|sum| *sum <= limits.max_total_bytes)
-            .ok_or_else(|| Error::limit("Delta target exceeds --max-total-bytes"))?;
+            .ok_or_else(|| Error::limit("Delta target exceeds the total size limit"))?;
         if file.size > limits.max_entry_bytes {
-            return Err(Error::limit("Delta target exceeds --max-entry-bytes"));
+            return Err(Error::limit("Delta target exceeds the entry size limit"));
         }
         expected.insert(file.path.clone(), file.clone());
     }
     if expected.len() + descriptor.folders.len() > limits.max_entries {
-        return Err(Error::limit("Delta target exceeds --max-entries"));
+        return Err(Error::limit("Delta target exceeds the entry count limit"));
     }
     let changed: Vec<_> = expected
         .iter()
@@ -816,6 +806,6 @@ pub fn verify_delta(
         end,
     )?;
     report.file = delta.as_ref().display().to_string();
-    report.scope = "delta_against_base";
+    report.scope = crate::Scope::DeltaAgainstBase;
     Ok(report)
 }

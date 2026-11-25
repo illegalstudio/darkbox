@@ -11,21 +11,16 @@ use rusqlite::Connection;
 use std::{fs, path::PathBuf};
 
 fn manifest(domain: &Domain) -> Result<serde_json::Value, darkbox::Error> {
-    ManifestBuilder::new("1.5.0", "org.example.sync-notes", "1")?
+    ManifestBuilder::new(notes::common_version(), "org.example.sync-notes", "1")?
         .package_id(&domain.root().package_id)
         .folder("data", "Authoritative application state")
-        .database(DatabaseDeclaration {
-            path: "data/project.sqlite".into(),
-            description: "Notes and retained conflict records".into(),
-            user_version: None,
-            tables: ["items", "item_conflicts"]
+        .database(DatabaseDeclaration::new(
+            "data/project.sqlite",
+            "Notes and retained conflict records",
+            ["items", "item_conflicts"]
                 .into_iter()
-                .map(|name| TableDeclaration {
-                    name: name.into(),
-                    description: "Documented application state".into(),
-                })
-                .collect(),
-        })
+                .map(|name| TableDeclaration::new(name, "Documented application state")),
+        ))
         .build()
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -51,7 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     limits.io.staging_directory = Some(staging);
     let objects_a = ObjectStore::open(root.join("objects-a"), limits.clone())?;
     let media = objects_a.put(&mut b"An immutable example attachment".as_slice())?;
-    let domain = Domain::generate(notes::mapping(), notes::profile())?;
+    let domain = Domain::generate(notes::protocol(), notes::mapping(), notes::profile())?;
     let origin = random_id()?;
     let record = Dot {
         replica_id: origin.clone(),
@@ -111,10 +106,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     let generation = repository.publish_initial(&checkpoint, &Notes, 100)?;
     let session_options = |label: &str| -> Result<SessionOptions, darkbox::Error> {
-        Ok(SessionOptions {
-            device_id: random_id()?,
-            label: label.into(),
-            limits: limits.clone(),
+        Ok({
+            let mut options = SessionOptions::new(random_id()?, label);
+            options.limits = limits.clone();
+            options
         })
     };
     let sa =
@@ -171,11 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let prepared = repository.prepare_rebase(
         &sb,
         &cb,
-        RebaseTarget {
-            destination: &rebased_path,
-            objects: &rebased_objects,
-            recovery_path: Some(&recovery_path),
-        },
+        RebaseTarget::new(&rebased_path, &rebased_objects).with_recovery_path(&recovery_path),
         &Notes,
         &options,
     )?;

@@ -1,0 +1,26 @@
+{
+  "extension": {
+    "namespace": "studio.illegal.darkbox.sync",
+    "version": "1.1.0"
+  },
+  "folders": [
+    "docs/darkbox/sync"
+  ],
+  "files": [
+    {
+      "path": "docs/darkbox/sync/1.1.0.md",
+      "size": 60974,
+      "sha256": "71208f126ff1f4e88668044adb6e6e528ae8b0563270ae1d9bc386fed956f559"
+    },
+    {
+      "path": "docs/darkbox/sync/1.1.0.schema.json",
+      "size": 41618,
+      "sha256": "29a050e56e894bc519c3a5244dbcb9a89b38321d60394e773ed5baaa4609713e"
+    },
+    {
+      "path": "docs/darkbox/sync/1.1.0.vectors.json",
+      "size": 195439,
+      "sha256": "6c148762844e269990e7df1920407862dfb9da26cde7d909177a55a8156c05ef"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "extension": {
+    "namespace": "studio.illegal.darkbox.protection",
+    "version": "1.0.0"
+  },
+  "folders": [
+    "docs/darkbox/protection"
+  ],
+  "files": [
+    {
+      "path": "docs/darkbox/protection/1.0.0.md",
+      "size": 14951,
+      "sha256": "76446eeea1536996b3355a4d204bbab80fe0a0ed72186f295821721973b5e419"
+    },
+    {
+      "path": "docs/darkbox/protection/1.0.0.schema.json",
+      "size": 5654,
+      "sha256": "e800ef5ec1e94044148dacecfade84f7482dba0a29bd8047bdac00548b1ded48"
+    },
+    {
+      "path": "docs/darkbox/protection/1.0.0.vectors.json",
+      "size": 4612,
+      "sha256": "e5b44a4eaf9ee083697eecc9e70c112f8b425f67646dd02d0ed3cdd8e59de39f"
+    }
+  ]
+}

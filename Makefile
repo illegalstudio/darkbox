@@ -9,6 +9,8 @@ test:
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
 	cargo test --all-targets --locked
 	cargo test --all-targets --no-default-features --locked
+	# Sync tests default to the newest protocol; repeat them on the one bound to common 1.5.0.
+	DARKBOX_SYNC_PROTOCOL=1.0.0 cargo test --test sync --test sync_retention --locked
 
 check:
 	$(PYTHON) scripts/bundle_catalog.py --check

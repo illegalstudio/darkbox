@@ -10,10 +10,7 @@ use std::{collections::BTreeMap, fs, io::Read, path::Path};
 mod notes;
 use notes::Notes;
 fn assert_wire_schema(bytes: &[u8]) {
-    let schema: Value = serde_json::from_str(include_str!(
-        "../archive/1.5.0/docs/darkbox/sync/1.0.0.schema.json"
-    ))
-    .unwrap();
+    let schema: Value = serde_json::from_str(notes::schema_json()).unwrap();
     let validator = jsonschema::draft202012::options().build(&schema).unwrap();
     let value: Value = serde_json::from_slice(bytes).unwrap();
     assert!(
@@ -27,10 +24,7 @@ fn assert_wire_schema(bytes: &[u8]) {
     );
 }
 fn vectors() -> Value {
-    serde_json::from_str(include_str!(
-        "../archive/1.5.0/docs/darkbox/sync/1.0.0.vectors.json"
-    ))
-    .unwrap()
+    serde_json::from_str(notes::vectors_json()).unwrap()
 }
 fn history(name: &str) -> History {
     let v = vectors();
@@ -55,22 +49,17 @@ fn history(name: &str) -> History {
     .unwrap()
 }
 fn manifest(domain: &Domain) -> Value {
-    ManifestBuilder::new("1.5.0", "org.example.sync-notes", "1")
+    ManifestBuilder::new(notes::common_version(), "org.example.sync-notes", "1")
         .unwrap()
         .package_id(&domain.root().package_id)
         .folder("data", "Application state")
-        .database(DatabaseDeclaration {
-            path: "data/project.sqlite".into(),
-            description: "Notes".into(),
-            user_version: None,
-            tables: ["items", "item_conflicts"]
+        .database(DatabaseDeclaration::new(
+            "data/project.sqlite",
+            "Notes",
+            ["items", "item_conflicts"]
                 .into_iter()
-                .map(|name| TableDeclaration {
-                    name: name.into(),
-                    description: "Notes state".into(),
-                })
-                .collect(),
-        })
+                .map(|name| TableDeclaration::new(name, "Notes state")),
+        ))
         .build()
         .unwrap()
 }
@@ -128,10 +117,7 @@ fn policy() -> RetentionPolicy {
 #[test]
 fn compact_seeds_match_independent_python_vectors() {
     let vectors = vectors();
-    let schema: Value = serde_json::from_str(include_str!(
-        "../archive/1.5.0/docs/darkbox/sync/1.0.0.schema.json"
-    ))
-    .unwrap();
+    let schema: Value = serde_json::from_str(notes::schema_json()).unwrap();
     let validator = jsonschema::draft202012::options().build(&schema).unwrap();
     for vector in vectors["compactVectors"].as_array().unwrap() {
         let compact = history(vector["name"].as_str().unwrap()).compact().unwrap();
@@ -441,11 +427,7 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
             .prepare_rebase(
                 &old,
                 &connection,
-                RebaseTarget {
-                    destination: &destination,
-                    objects: &fresh_objects,
-                    recovery_path: None
-                },
+                RebaseTarget::new(&destination, &fresh_objects),
                 &Notes,
                 &options
             )
@@ -460,11 +442,7 @@ fn generations_prune_after_grace_and_stale_peer_preserves_local_edits_before_reb
         .prepare_rebase(
             &old,
             &connection,
-            RebaseTarget {
-                destination: &destination,
-                objects: &fresh_objects,
-                recovery_path: Some(&recovery_path),
-            },
+            RebaseTarget::new(&destination, &fresh_objects).with_recovery_path(&recovery_path),
             &Notes,
             &options,
         )
@@ -724,11 +702,7 @@ fn resolution_rechecks_branches_after_slow_checkpoint_preparation() {
             .resolve_with_checkpoint(
                 &a,
                 &selected,
-                ResolutionTarget {
-                    objects: &objects,
-                    recovery_directory: &archive,
-                    now: 5,
-                },
+                ResolutionTarget::new(&objects, &archive, 5),
                 &adapter,
                 &options,
             )
@@ -791,11 +765,7 @@ fn concurrent_compactions_stop_pruning_and_require_archived_explicit_resolution(
         .resolve_with_checkpoint(
             &a,
             &selected,
-            ResolutionTarget {
-                objects: &objects,
-                recovery_directory: &archive,
-                now: 4,
-            },
+            ResolutionTarget::new(&objects, &archive, 4),
             &Notes,
             &options,
         )

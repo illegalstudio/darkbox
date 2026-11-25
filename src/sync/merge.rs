@@ -7,10 +7,15 @@ use std::{
 
 /// Reader-owned resource limits. Hitting a limit never drops history or dependencies.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct SyncLimits {
+    /// Limits for package and file operations.
     pub io: crate::Limits,
+    /// Largest accepted history, in bytes.
     pub max_history_bytes: u64,
+    /// Largest accepted number of transactions.
     pub max_transactions: usize,
+    /// Largest number of files examined by one scan.
     pub max_scan_files: usize,
 }
 impl Default for SyncLimits {
@@ -26,6 +31,8 @@ impl Default for SyncLimits {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// One competing value of a register.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct RegisterCandidate {
     pub dot: Dot,
     pub lamport: Counter,
@@ -35,6 +42,8 @@ pub struct RegisterCandidate {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// One competing placement of a record in a sequence.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct PositionCandidate {
     pub dot: Dot,
     pub lamport: Counter,
@@ -44,14 +53,18 @@ pub struct PositionCandidate {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// A register field with every maximal concurrent candidate.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct RegisterField {
     pub field: String,
     pub candidates: Vec<RegisterCandidate>,
 }
 impl RegisterField {
+    /// The deterministic winner among the candidates.
     pub fn selected(&self) -> Option<&RegisterCandidate> {
         self.candidates.iter().max_by_key(|c| (c.lamport, &c.dot))
     }
+    /// Whether more than one candidate is retained.
     pub fn conflicted(&self) -> bool {
         self.candidates.first().is_some_and(|first| {
             self.candidates
@@ -62,18 +75,23 @@ impl RegisterField {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// One observed addition to a set.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct AddTag {
     pub dot: Dot,
     pub value: SyncValue,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// An observed-remove set field.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct SetField {
     pub field: String,
     pub adds: Vec<AddTag>,
     pub removed: BTreeSet<Dot>,
 }
 impl SetField {
+    /// The distinct values currently present.
     pub fn values(&self) -> Result<Vec<SyncValue>> {
         let mut values = BTreeMap::new();
         for add in &self.adds {
@@ -83,6 +101,7 @@ impl SetField {
         }
         Ok(values.into_values().collect())
     }
+    /// The addition tags of a value that a removal can cancel.
     pub fn observed_tags(&self, value: &SyncValue) -> Vec<Dot> {
         self.adds
             .iter()
@@ -93,17 +112,22 @@ impl SetField {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// A position field with every maximal concurrent placement.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct PositionField {
     pub field: String,
     pub candidates: Vec<PositionCandidate>,
 }
 impl PositionField {
+    /// The deterministic winner among the placements.
     pub fn selected(&self) -> Option<&PositionCandidate> {
         self.candidates.iter().max_by_key(|c| (c.lamport, &c.dot))
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The complete replicated state of one record.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct RecordState {
     pub id: Dot,
     pub collection: String,
@@ -113,21 +137,27 @@ pub struct RecordState {
     pub positions: Vec<PositionField>,
 }
 impl RecordState {
+    /// Whether the record has not been deleted.
     pub fn live(&self) -> bool {
         self.deleted_by.is_empty()
     }
+    /// The register with this field name.
     pub fn register(&self, field: &str) -> Option<&RegisterField> {
         self.registers.iter().find(|f| f.field == field)
     }
+    /// The set with this field name.
     pub fn set(&self, field: &str) -> Option<&SetField> {
         self.sets.iter().find(|f| f.field == field)
     }
+    /// The position with this field name.
     pub fn position(&self, field: &str) -> Option<&PositionField> {
         self.positions.iter().find(|f| f.field == field)
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+/// One node of an ordered sequence.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct PositionNode {
     pub id: Dot,
     pub record: Dot,
@@ -139,6 +169,8 @@ pub struct PositionNode {
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+/// The deterministic logical state of a domain at a frontier.
+#[allow(missing_docs)] // Members mirror the normative record one to one.
 pub struct LogicalState {
     pub kind: String,
     pub protocol_version: String,
@@ -149,6 +181,7 @@ pub struct LogicalState {
     pub nodes: Vec<PositionNode>,
 }
 impl LogicalState {
+    /// The record with this identifier.
     pub fn record(&self, id: &Dot) -> Option<&RecordState> {
         self.records.iter().find(|r| &r.id == id)
     }
@@ -540,9 +573,14 @@ impl Core {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+/// What accepting a transaction did.
 pub enum ApplyStatus {
+    /// The transaction was applied.
     Applied,
+    /// The identical transaction had already been applied.
     Duplicate,
+    /// The transaction waits for these dependencies.
     Pending(Frontier),
 }
 #[derive(Clone, Debug)]
@@ -561,6 +599,7 @@ pub struct History {
     limits: SyncLimits,
 }
 impl History {
+    /// An empty history for a domain.
     pub fn new(domain: Domain, limits: SyncLimits) -> Self {
         let core = domain
             .baseline()
@@ -593,9 +632,11 @@ impl History {
         let domain = self.domain.with_baseline(base)?;
         Ok(Self::new(domain, self.limits.clone()))
     }
+    /// The domain of this history.
     pub fn domain(&self) -> &Domain {
         &self.domain
     }
+    /// The limits in force.
     pub fn limits(&self) -> &SyncLimits {
         &self.limits
     }
@@ -604,18 +645,23 @@ impl History {
             .get(&(transaction.replica_id.clone(), transaction.sequence))
             .is_some_and(|entry| entry.tx == *transaction)
     }
+    /// How many transactions have been accepted.
     pub fn len(&self) -> usize {
         self.entries.len()
     }
+    /// Whether no transaction has been accepted.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
+    /// The accepted transactions, ordered by replica and sequence.
     pub fn transactions(&self) -> impl Iterator<Item = &SyncTransaction> {
         self.entries.values().map(|e| &e.tx)
     }
+    /// The exact canonical bytes of the accepted transactions.
     pub fn transaction_bytes(&self) -> impl Iterator<Item = &[u8]> {
         self.entries.values().map(|e| e.bytes.as_slice())
     }
+    /// Every object the accepted transactions reference.
     pub fn blobs(&self) -> Result<BTreeSet<Blob>> {
         let mut blobs = self
             .domain
@@ -628,6 +674,7 @@ impl History {
         }
         Ok(blobs)
     }
+    /// The latest accepted transaction of each replica.
     pub fn frontier(&self) -> Frontier {
         let mut tips = BTreeMap::new();
         for e in self.entries.values() {
@@ -642,10 +689,11 @@ impl History {
         }
         tips.into_values().collect()
     }
+    /// Materialize the logical state at the current frontier.
     pub fn state(&self) -> LogicalState {
         LogicalState {
             kind: "darkbox-sync-state".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: self.domain.root().protocol_version.clone(),
             sync_id: self.domain.root().sync_id.clone(),
             root_sha256: self.domain.root_hash().into(),
             frontier: self.frontier(),
@@ -653,6 +701,7 @@ impl History {
             nodes: self.core.nodes.values().cloned().collect(),
         }
     }
+    /// Build the next transaction of a replica on top of everything accepted so far.
     pub fn prepare(&self, replica_id: &str, operations: Vec<Operation>) -> Result<SyncTransaction> {
         if self
             .core
@@ -680,7 +729,7 @@ impl History {
             .ok_or_else(|| unsupported("Logical clock exhausted"))?;
         let tx = SyncTransaction {
             kind: "darkbox-sync-transaction".into(),
-            protocol_version: VERSION.into(),
+            protocol_version: self.domain.root().protocol_version.clone(),
             sync_id: self.domain.root().sync_id.clone(),
             root_sha256: self.domain.root_hash().into(),
             replica_id: replica_id.into(),
@@ -706,6 +755,7 @@ impl History {
         }
         Ok(tx)
     }
+    /// The dependencies of a transaction that have not been accepted yet.
     pub fn missing_dependencies(&self, tx: &SyncTransaction) -> Result<Frontier> {
         tx.shape(&self.domain)?;
         self.check_known_hashes(tx)?;
@@ -735,6 +785,7 @@ impl History {
         }
         Ok(())
     }
+    /// Validate and apply a transaction, or report that it is a duplicate or must wait.
     pub fn accept(&mut self, tx: SyncTransaction) -> Result<ApplyStatus> {
         tx.shape(&self.domain)?;
         if self
@@ -808,6 +859,7 @@ impl History {
         self.core = core;
         Ok(ApplyStatus::Applied)
     }
+    /// Rebuild a history from transactions in any order, applying them as they become causally ready.
     pub fn replay(
         domain: Domain,
         transactions: Vec<SyncTransaction>,
