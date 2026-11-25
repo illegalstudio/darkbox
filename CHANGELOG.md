@@ -30,13 +30,21 @@ Publishes common specification **1.6.0**, the separate extension bundles **prote
 - `zip` is updated to 9.8, which resolves seven advisories in its extraction, stream-reading, legacy-compression and AES code (RUSTSEC-2026-0367, 0368, 0369, 0429, 0545, 0547 and 0548). Darkbox does not use those code paths: it reads entries by index after its own structural checks.
 - Both were found by the new `cargo deny` check. Because `rusqlite` is re-exported, its upgrade is part of the breaking changes of this release.
 
+### Fixed
+
+Found by the first test runs on Windows:
+
+- Published files are flushed through a writable handle. Flushing a read-only handle fails on Windows, which made sync publication, checkpoint sealing and rebase fail with access denied.
+- `save` closes its source archive before replacing it in place.
+- Sync scanning, recovery export and retention build protocol paths with `/` on every platform. With native separators, records were ignored or rejected on Windows.
+
 ### Added
 
 - `supported_extensions()`, and extension bundles in the output of `darkbox versions`.
 - `Report::from_failure`, `Domain::protocol`, and documentation for every public item (`missing_docs` is enforced).
 - A language-neutral [conformance corpus](conformance/README.md) of 48 packages with their expected outcome.
 - Fuzz targets in `fuzz/`, a dependency policy in `deny.toml`, Dependabot configuration and a [security policy](SECURITY.md).
-- Windows is tested in CI. It is not a release target yet.
+- Windows is tested in CI and the whole suite runs there. It is not a release target yet: one sync concurrency test still fails intermittently with a locked database, so the job does not block.
 
 ### Changed
 
