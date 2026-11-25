@@ -26,9 +26,9 @@ required-features = ["cli"]
 
 [dependencies]
 # Enable expanded AES key zeroization through feature unification.
-aes = { version = "0.8.4", features = ["zeroize"] }
-aes-gcm = { version = "0.10.3", features = ["zeroize"] }
-ed25519-dalek = "2.2.0"
+aes = { version = "0.9.4", features = ["zeroize"] }
+aes-gcm = { version = "0.11.1", features = ["zeroize"] }
+ed25519-dalek = "3.0.0"
 zeroize = { version = "1.8", features = ["serde"] }
 clap = { version = "4.6.7", features = ["derive"], optional = true }
 crc32fast = "1.5"
@@ -36,13 +36,13 @@ jsonschema = { version = "0.58.6", default-features = false, features = [] }
 rusqlite = { version = "0.43.0", features = ["bundled", "hooks", "limits", "load_extension", "backup"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
-sha2 = "0.10.9"
+sha2 = "0.11.1"
 tempfile = "3.23"
 zip = { version = "9.8.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [build-dependencies]
 serde_json = "1.0"
-sha2 = "0.10.9"
+sha2 = "0.11.1"
 
 [profile.release]
 lto = "thin"
