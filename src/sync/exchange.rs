@@ -1240,7 +1240,9 @@ mod verified_object_tests {
                 let mut bytes = Vec::new();
                 reader.read_to_end(&mut bytes).map_err(crate::io_failure)?;
                 fs::write(&path, vec![b'x'; original.len()]).map_err(crate::io_failure)?;
-                File::open(&path)
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(&path)
                     .map_err(crate::io_failure)?
                     .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1))
                     .map_err(crate::io_failure)?;

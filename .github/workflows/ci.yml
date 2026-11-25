@@ -51,6 +51,7 @@ jobs:
           rustup default stable
       - name: Test the library and command-line tool
         run: |
-          cargo test --all-targets --locked
-          cargo test --all-targets --no-default-features --locked
-          DARKBOX_SYNC_PROTOCOL=1.0.0 cargo test --test sync --test sync_retention --locked
+          # Report every failing suite of a run, not only the first one.
+          cargo test --all-targets --locked --no-fail-fast
+          cargo test --all-targets --no-default-features --locked --no-fail-fast
+          DARKBOX_SYNC_PROTOCOL=1.0.0 cargo test --test sync --test sync_retention --locked --no-fail-fast
