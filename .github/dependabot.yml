@@ -7,12 +7,17 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
-  - package-ecosystem: cargo
-    directory: /fuzz
-    schedule:
-      interval: monthly
-    commit-message:
-      prefix: "chore(deps)"
+    groups:
+      # These crates share traits and features. Updating one alone can leave two
+      # versions in the graph, which silently disables the feature unification
+      # that zeroizes expanded AES keys, so they move together or not at all.
+      rustcrypto:
+        patterns:
+          - "aes"
+          - "aes-gcm"
+          - "sha2"
+          - "ed25519-dalek"
+          - "zeroize"
   - package-ecosystem: github-actions
     directory: /
     schedule:
