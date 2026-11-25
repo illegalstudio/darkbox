@@ -7,3 +7,5 @@ LICENSE text eol=lf
 *.gif binary
 # Preserve captured upstream documentation byte-for-byte.
 archive/*/docs/sqlite/** -text
+# Conformance packages are binary test vectors.
+conformance/**/*.zip binary
