@@ -961,9 +961,7 @@ impl SyncSnapshot {
             return Err(invalid("Rebuilt bootstrap database integrity failed"));
         }
         connection.close().map_err(|(_, e)| sql(e))?;
-        File::open(database)
-            .and_then(|f| f.sync_all())
-            .map_err(crate::io_failure)?;
+        crate::locks::sync_file(database.as_ref()).map_err(crate::io_failure)?;
         drop(library);
         crate::DirectoryLibrary::adopt_prepared(&candidate, &destination)
     }
@@ -1010,9 +1008,7 @@ fn publish_package(
                 .is_file()
                 && hash == reference.sha256
             {
-                File::open(&target)
-                    .and_then(|file| file.sync_all())
-                    .map_err(crate::io_failure)?;
+                crate::locks::sync_file(&target).map_err(crate::io_failure)?;
                 super::exchange::sync_dir(target.parent().unwrap())
             } else {
                 Err(super::pending_bytes(

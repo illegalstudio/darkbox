@@ -405,6 +405,8 @@ pub fn save(
     let parent_handle = File::open(parent).map_err(crate::io_failure)?;
     #[cfg(unix)]
     parent_handle.sync_all().map_err(crate::io_failure)?;
+    // Windows cannot replace a file that this process still holds open.
+    drop(archive);
     if replace_source {
         candidate
             .persist(destination)

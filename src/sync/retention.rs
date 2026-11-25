@@ -914,9 +914,7 @@ impl SyncRepository {
         super::journal::set_meta(&transaction, "repository_generation", &canonical(&binding)?)?;
         transaction.commit().map_err(sql)?;
         local.close().map_err(|(_, error)| sql(error))?;
-        fs::File::open(database)
-            .and_then(|file| file.sync_all())
-            .map_err(crate::io_failure)?;
+        crate::locks::sync_file(database.as_ref()).map_err(crate::io_failure)?;
         session.check_rebase_revision(connection, revision)?;
         self.check_generation(&generation.id()?)?;
         drop(library);
@@ -967,9 +965,7 @@ impl SyncRepository {
         self.check_generation(&prepared.generation.id()?)?;
         transaction.commit().map_err(sql)?;
         local.close().map_err(|(_, error)| sql(error))?;
-        fs::File::open(database)
-            .and_then(|file| file.sync_all())
-            .map_err(crate::io_failure)?;
+        crate::locks::sync_file(database.as_ref()).map_err(crate::io_failure)?;
         session.check_rebase_revision(connection, prepared.source_revision)?;
         self.check_generation(&prepared.generation.id()?)
     }

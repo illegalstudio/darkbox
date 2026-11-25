@@ -21,6 +21,17 @@ pub(crate) fn try_shared(file: &File) -> io::Result<()> {
     outcome(file.try_lock_shared())
 }
 
+/// Flush an already published regular file to disk. Windows flushes only
+/// through a handle opened for writing; Unix-like systems accept a read-only
+/// descriptor, which also works for files without write permission.
+pub(crate) fn sync_file(path: &std::path::Path) -> io::Result<()> {
+    #[cfg(windows)]
+    let file = std::fs::OpenOptions::new().write(true).open(path)?;
+    #[cfg(not(windows))]
+    let file = File::open(path)?;
+    file.sync_all()
+}
+
 /// Release before closing: another descriptor of the same open file description
 /// (for example one inherited across fork) would otherwise keep the lock alive.
 pub(crate) fn unlock(file: &File) {

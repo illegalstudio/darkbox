@@ -183,9 +183,7 @@ pub(crate) fn publish_bytes(
         Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
             let existing = read_regular(root, relative, bytes.len());
             if existing.as_ref().is_ok_and(|actual| actual == bytes) {
-                File::open(&path)
-                    .and_then(|file| file.sync_all())
-                    .map_err(crate::io_failure)?;
+                crate::locks::sync_file(&path).map_err(crate::io_failure)?;
                 sync_dir(path.parent().unwrap())
             } else if advertised(relative.rsplit('/').next().unwrap_or("")).is_some() {
                 Err(super::pending_bytes("Existing content-addressed publication is incomplete or mismatched; retry without replacing it").at(relative))
@@ -360,9 +358,7 @@ impl ObjectStore {
                         "Existing immutable object is damaged",
                     ));
                 }
-                File::open(&target)
-                    .and_then(|file| file.sync_all())
-                    .map_err(crate::io_failure)?;
+                crate::locks::sync_file(&target).map_err(crate::io_failure)?;
                 sync_dir(target.parent().unwrap())?;
             }
             Err(e) => return Err(super::publication::error(e.error)),
