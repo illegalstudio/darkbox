@@ -1,6 +1,6 @@
 [package]
 name = "darkbox"
-version = "2.0.0"
+version = "3.0.0"
 edition = "2024"
 rust-version = "1.89"
 description = "Read, edit, verify and atomically write Darkbox project archives"
