@@ -4,6 +4,14 @@ Software versions (the `darkbox` crate and command-line tool) and specification 
 
 ## Unreleased
 
+### Fixed
+
+- Release preparation titles the changelog section with the software version and date, and writes the version into the dependency examples of the README and the SDK guide. Software 3.0.0 was published with its changelog section still titled "Unreleased" and with examples naming 2.0.0, because those texts were edited by hand. The release tag check and the test suite now refuse them when they do not match the software version.
+
+## Software 3.0.0 (2026-11-26)
+
+Publishes no new specification version. The major number changes because new packages can no longer be created in specification versions 1.0.0 to 1.4.0; reading, verifying and saving existing packages is unchanged.
+
 ### Changed
 
 - Specification versions 1.0.0 to 1.4.0 are read-only for new packages. Every version is still read and verified, and existing packages of those versions are still saved in place or as a copy. `PackageWriter`, `PackageEditor` and `DirectoryLibrary::initialize` refuse to start a new package in them with the unsupported error `version.retired`. New packages use 1.6.0, or 1.5.0 for existing sync 1.0.0 domains. This changes behavior for callers that created packages in the retired versions; `VerificationOptions::with_retired_versions(true)` restores it for package writers.

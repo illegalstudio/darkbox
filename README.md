@@ -99,9 +99,9 @@ They never imply one another: software 1.6.0 and specification 1.6.0 are unrelat
 | 1.3.0, 1.3.1 | 1.0.0 to 1.3.0 | 1.0.0 | |
 | 1.4.0 to 1.4.2 | 1.0.0 to 1.4.0 | 1.0.0 | |
 | 1.5.0 to 1.6.2 | 1.0.0 to 1.5.0 | 1.0.0 | 1.0.0 |
-| 2.0.0 | 1.0.0 to 1.6.0 | 1.0.0 | 1.0.0 and 1.1.0 |
+| 2.0.0 and later | 1.0.0 to 1.6.0 | 1.0.0 | 1.0.0 and 1.1.0 |
 
-Reading and writing are separate. Every release keeps reading and verifying all published specification versions, and keeps saving packages that already use them. From the software release after 2.0.0, new packages are created only in the current versions: **1.6.0**, and **1.5.0** for existing sync 1.0.0 domains. Versions 1.0.0 to 1.4.0 are read-only for new packages, so an application starting today deals with one version, not seven.
+Reading and writing are separate. Every release keeps reading and verifying all published specification versions, and keeps saving packages that already use them. From software 3.0.0, new packages are created only in the current versions: **1.6.0**, and **1.5.0** for existing sync 1.0.0 domains. Versions 1.0.0 to 1.4.0 are read-only for new packages, so an application starting today deals with one version, not seven.
 
 Protection 1.0.0 can be declared with specification 1.1.0 and later. Sync 1.0.0 requires specification 1.5.0 exactly; sync 1.1.0 requires specification 1.6.0 or later. `darkbox versions` prints what an installed binary supports.
 
@@ -128,7 +128,7 @@ Add the published [darkbox crate](https://crates.io/crates/darkbox) to your proj
 
 ```toml
 [dependencies]
-darkbox = { version = "2.0.0", default-features = false }
+darkbox = { version = "3.0.0", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable

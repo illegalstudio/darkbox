@@ -4,7 +4,7 @@ The `darkbox` crate covers the supported container lifecycle: verified and diagn
 
 ```toml
 [dependencies]
-darkbox = { version = "2.0.0", default-features = false }
+darkbox = { version = "3.0.0", default-features = false }
 ```
 
 Releases are available on [crates.io](https://crates.io/crates/darkbox).

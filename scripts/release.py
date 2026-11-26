@@ -2,6 +2,7 @@
 """Prepare an interactive software release and publish its commit and tag."""
 
 import argparse
+import datetime
 import json
 from pathlib import Path
 import re
@@ -11,7 +12,12 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
-OWNED = ("Cargo.toml", "Cargo.lock", "versions.json")
+CHANGELOG = "CHANGELOG.md"
+# Documents whose dependency example names the software version.
+EXAMPLES = ("README.md", "docs/sdk.md")
+OWNED = ("Cargo.toml", "Cargo.lock", "versions.json", CHANGELOG, *EXAMPLES)
+PENDING = r"(?m)^## Unreleased[ \t]*$"
+EXAMPLE = r'(?m)^(darkbox = \{ version = ")[^"]*(")'
 
 
 def version_tuple(value):
@@ -75,7 +81,46 @@ def publication_versions(registry, selected, extensions=False):
     return frozen
 
 
-def prepare(version, selected, extensions=True):
+def entry_heading(version):
+    return rf"(?m)^## Software {re.escape(version)} \(\d{{4}}-\d{{2}}-\d{{2}}\)[ \t]*$"
+
+
+def publish_changelog(text, version, date):
+    """Title the Unreleased section with the software version and date.
+    An entry already written for this version is kept as it is."""
+    pending = list(re.finditer(PENDING, text))
+    if re.search(entry_heading(version), text):
+        if pending:
+            raise ValueError(f"{CHANGELOG} has both an Unreleased section and an entry for {version}; merge them")
+        return text
+    if len(pending) != 1:
+        raise ValueError(f"{CHANGELOG} needs one '## Unreleased' section describing software {version}")
+    following = re.search(r"(?m)^## ", text[pending[0].end():])
+    body = text[pending[0].end():pending[0].end() + following.start()] if following else text[pending[0].end():]
+    if not body.strip():
+        raise ValueError(f"The Unreleased section of {CHANGELOG} is empty; describe software {version} first")
+    return text[:pending[0].start()] + f"## Software {version} ({date})" + text[pending[0].end():]
+
+
+def check_texts(version, tagged=False):
+    """Versioned prose must name the software version. Between releases an
+    Unreleased section may precede the newest entry; a release tag has none."""
+    text = (ROOT / CHANGELOG).read_text()
+    if not re.search(entry_heading(version), text):
+        raise ValueError(f"{CHANGELOG} has no dated entry for software {version}")
+    if tagged:
+        if re.search(PENDING, text):
+            raise ValueError(f"{CHANGELOG} still has an Unreleased section at the release tag")
+        first = re.search(r"(?m)^## .*$", text)
+        if not re.fullmatch(entry_heading(version), first[0]):
+            raise ValueError(f"The first entry of {CHANGELOG} is not software {version}")
+    for name in EXAMPLES:
+        found = [match[0] for match in re.finditer(EXAMPLE, (ROOT / name).read_text())]
+        if not found or any(f'"{version}"' not in example for example in found):
+            raise ValueError(f"The dependency example in {name} does not name software {version}")
+
+
+def prepare(version, selected, extensions=True, date=None):
     version_tuple(version)
     manifest = ROOT / "Cargo.toml"
     text = manifest.read_text()
@@ -90,9 +135,19 @@ def prepare(version, selected, extensions=True):
         raise ValueError("Cannot locate the Darkbox package in Cargo.lock")
     registry = json.loads((ROOT / "versions.json").read_bytes())
     publication_versions(registry, selected, extensions)
+    changelog = publish_changelog((ROOT / CHANGELOG).read_text(), version,
+                                  date or datetime.date.today().isoformat())
+    examples = {}
+    for name in EXAMPLES:
+        examples[name], count = re.subn(EXAMPLE, lambda m: m[1] + version + m[2], (ROOT / name).read_text())
+        if not count:
+            raise ValueError(f"Cannot locate the dependency example in {name}")
     manifest.write_text(text)
     lock.write_text(lock_text)
     (ROOT / "versions.json").write_text(json.dumps(registry, indent=2) + "\n")
+    (ROOT / CHANGELOG).write_text(changelog)
+    for name, content in examples.items():
+        (ROOT / name).write_text(content)
 
 
 def check_tag(tag):
@@ -107,6 +162,7 @@ def check_tag(tag):
         raise ValueError("Release tags must be annotated")
     if run("git", "rev-parse", f"{tag}^{{commit}}", capture=True) != run("git", "rev-parse", "HEAD", capture=True):
         raise ValueError("The checkout does not match the exact release tag")
+    check_texts(tag[1:], tagged=True)
     publication_versions(json.loads((ROOT / "versions.json").read_bytes()), [])
     previous = latest_tag(exclude=tag)
     if previous and version_tuple(previous[1:]) >= version_tuple(tag[1:]):
@@ -148,10 +204,12 @@ def release(args):
         selected = [row["version"] for row in registry["versions"] if not row["released"]]
         print(f"Unpublished specifications: {', '.join(selected) or 'none'}")
     frozen = publication_versions(registry, selected, extensions)
+    # Fail before any change, and in previews, when the changelog cannot be published.
+    publish_changelog((ROOT / CHANGELOG).read_text(), version, "0000-00-00")
     print(f"Software release: {tag}")
     print(f"Specification versions to freeze: {', '.join(selected) or 'none'}")
     print(f"Extension bundles to freeze: {', '.join(frozen) or 'none'}")
-    print("Preparation files: Cargo.toml, Cargo.lock, versions.json")
+    print(f"Preparation files: {', '.join(OWNED)}")
     print("Publish: release commit and annotated tag to origin/main (one atomic push)")
     if args.dry_run:
         return
