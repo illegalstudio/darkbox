@@ -2,7 +2,7 @@
 
 Software versions (the `darkbox` crate and command-line tool) and specification versions are independent. Each entry names the specification versions it publishes. Published specification versions are never changed afterwards.
 
-## Unreleased
+## Software 3.0.1 (2026-11-26)
 
 ### Fixed
 

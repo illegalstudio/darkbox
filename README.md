@@ -128,7 +128,7 @@ Add the published [darkbox crate](https://crates.io/crates/darkbox) to your proj
 
 ```toml
 [dependencies]
-darkbox = { version = "3.0.0", default-features = false }
+darkbox = { version = "3.0.1", default-features = false }
 ```
 
 This selects the SDK without the CLI or extended JSON precision. Enable
