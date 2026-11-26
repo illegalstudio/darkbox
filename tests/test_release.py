@@ -121,6 +121,9 @@ class InteractiveRelease(unittest.TestCase):
         self.write("Cargo.toml", '[package]\nname = "darkbox"\nversion = "1.0.0"\nedition = "2024"\n\n[dependencies]\n')
         self.write("Cargo.lock", 'version = 4\n\n[[package]]\nname = "darkbox"\nversion = "1.0.0"\n\n[[package]]\nname = "dependency"\nversion = "9.9.9"\n')
         self.write("versions.json", json.dumps({"versions": [{"version": "1.0.0", "released": False, "rules": "v1"}]}))
+        self.write("CHANGELOG.md", "# Changelog\n\n## Unreleased\n\n- Fixture change.\n\n## Software 0.9.0 (2020-01-01)\n\n- Earlier.\n")
+        for name in release.EXAMPLES:
+            self.write(name, 'Guide\n\n```toml\ndarkbox = { version = "1.0.0", default-features = false }\n```\n')
         self.git("add", ".")
         self.git("commit", "-qm", "Initial fixture")
         self.git("remote", "add", "origin", str(self.origin))
@@ -281,6 +284,55 @@ class InteractiveRelease(unittest.TestCase):
         self.assertEqual({line.split()[0] for line in refs.splitlines()}, {self.git("rev-parse", "HEAD")})
         release.check_tag("v1.0.1")
 
+    def test_release_titles_the_changelog_and_updates_dependency_examples(self):
+        with patch("builtins.input", return_value="y"):
+            release.release(self.args())
+        changelog = (self.root / "CHANGELOG.md").read_text()
+        self.assertRegex(changelog, r"\n## Software 1\.0\.1 \(\d{4}-\d{2}-\d{2}\)\n\n- Fixture change\.\n")
+        self.assertNotIn("Unreleased", changelog)
+        self.assertIn("## Software 0.9.0 (2020-01-01)", changelog)
+        for name in release.EXAMPLES:
+            self.assertIn('darkbox = { version = "1.0.1", default-features = false }', (self.root / name).read_text())
+
+    def test_release_needs_a_described_unreleased_section(self):
+        for text, message in (("# Changelog\n\n## Software 0.9.0 (2020-01-01)\n\n- Earlier.\n", "needs one"),
+                              ("# Changelog\n\n## Unreleased\n\n## Software 0.9.0 (2020-01-01)\n\n- Earlier.\n", "is empty"),
+                              ("# Changelog\n\n## Unreleased\n\n- New.\n\n## Software 1.0.1 (2020-01-01)\n\n- Same.\n", "merge them")):
+            with self.subTest(message=message):
+                self.write("CHANGELOG.md", text)
+                self.git("commit", "-qam", "Changelog fixture")
+                self.original = {name: (self.root / name).read_bytes() for name in release.OWNED}
+                self.original_head = self.git("rev-parse", "HEAD")
+                for dry_run in (True, False):
+                    with self.assertRaisesRegex(ValueError, message):
+                        release.release(self.args(dry_run=dry_run))
+                    self.assert_restored()
+
+    def test_an_entry_written_for_the_version_is_kept(self):
+        written = "# Changelog\n\n## Software 1.0.1 (2020-02-02)\n\n- Written by hand.\n"
+        self.write("CHANGELOG.md", written)
+        self.git("commit", "-qam", "Changelog fixture")
+        with patch("builtins.input", return_value="y"):
+            release.release(self.args())
+        self.assertEqual((self.root / "CHANGELOG.md").read_text(), written)
+        release.check_tag("v1.0.1")
+
+    def test_release_tag_with_stale_texts_is_rejected(self):
+        with patch("builtins.input", return_value="y"):
+            release.release(self.args())
+        published = (self.root / "CHANGELOG.md").read_text()
+        self.write("CHANGELOG.md", published.replace("# Changelog\n", "# Changelog\n\n## Unreleased\n\n- Later.\n"))
+        release.check_texts("1.0.1")
+        with self.assertRaisesRegex(ValueError, "Unreleased section at the release tag"):
+            release.check_texts("1.0.1", tagged=True)
+        self.write("CHANGELOG.md", published.replace("Software 1.0.1", "Software 1.0.0"))
+        with self.assertRaisesRegex(ValueError, "no dated entry"):
+            release.check_texts("1.0.1")
+        self.write("CHANGELOG.md", published)
+        self.write("README.md", 'darkbox = { version = "1.0.0", default-features = false }\n')
+        with self.assertRaisesRegex(ValueError, "README.md does not name software 1.0.1"):
+            release.check_texts("1.0.1", tagged=True)
+
     def test_failed_push_retains_reviewable_commit_and_tag(self):
         def fail_push(*args, **kwargs):
             if args[:2] == ("git", "push"):
@@ -309,6 +361,12 @@ class InteractiveRelease(unittest.TestCase):
             release.check_tag("v1.0.1")
         with self.assertRaisesRegex(ValueError, "differs"):
             release.check_tag("v1.0.2")
+
+
+class RepositoryTexts(unittest.TestCase):
+    def test_changelog_and_dependency_examples_name_the_software_version(self):
+        # Holds between releases too: preparation rewrites these texts with the Cargo version.
+        release.check_texts(release.software_version())
 
 
 class FinalAssets(unittest.TestCase):
